@@ -100,6 +100,44 @@ class ServiceTests(unittest.TestCase):
         with self.assertRaises(ToolkitError): self.app.execute(plan)
         self.assertFalse(any('put' in c for c in self.adb.commands))
 
+    def test_google_status_reports_six_owner_states_without_verification_tools(self):
+        installed = {
+            'com.google.android.gsf', 'com.google.android.gms', 'com.android.vending',
+            'com.google.android.syncadapters.calendar', 'com.google.android.gsf.login.extra',
+        }
+        disabled = {'com.android.vending'}
+        known = installed | {'com.google.android.syncadapters.contacts'}
+        responses = {(): installed, ('-d',): disabled, ('-u',): known}
+
+        def shell(serial, args):
+            self.assertEqual(serial, 'SERIAL123')
+            self.assertEqual(tuple(args[:5]), ('pm', 'list', 'packages', '--user', '0'))
+            return '\n'.join('package:' + name for name in responses[tuple(args[5:])])
+
+        toolkit = Toolkit(ToolConfig('adb'), state_dir=self.root / 'status')
+        with patch.object(self.adb, 'shell', side_effect=shell):
+            report = toolkit.google_status('SERIAL123')
+        self.assertIn('owner user 0', report)
+        for package, state in (
+                ('com.google.android.gsf.login', 'not installed'),
+                ('com.google.android.gsf', 'installed, enabled'),
+                ('com.google.android.gms', 'installed, enabled'),
+                ('com.android.vending', 'installed, disabled'),
+                ('com.google.android.syncadapters.calendar', 'installed, enabled'),
+                ('com.google.android.syncadapters.contacts', 'not installed')):
+            with self.subTest(package=package):
+                self.assertIn(f'({package}) - {state}', report)
+        self.assertNotIn('.login.extra', report)
+        self.assertIn('signer', report)
+        self.assertIn('sign-in', report)
+        self.assertFalse(toolkit.state_dir.exists())
+
+    def test_google_status_propagates_inconsistent_inventory(self):
+        rows = ['', 'package:com.android.vending', 'package:com.android.vending']
+        with patch.object(self.adb, 'shell', side_effect=rows):
+            with self.assertRaisesRegex(ToolkitError, 'changed during inspection'):
+                self.app.google_status('SERIAL123')
+
     def test_linked_state_directory_is_refused_before_ads_write(self):
         destination = self.root / 'outside'
         destination.mkdir()
@@ -273,7 +311,7 @@ class ServiceTests(unittest.TestCase):
                 self.apply(plan)
         self.assertEqual((self.adb.value, self.adb.kso_mode), ('2', '1'))
         self.assertFalse(any(cmd[0] == 'pm' or 'put' in cmd for cmd in self.adb.commands))
-        self.assertNotIn(self.app._state_key('SERIAL123'), self.app._load_state().get('paired_ads', {}))
+        self.assertNotIn(self.adb.identity.state_key, self.app._load_state().get('paired_ads', {}))
 
     def test_paired_refuses_uninstalled_and_ambiguous_owner_records(self):
         for report in ('Unknown package', '  User 0: installed=false enabled=0',
@@ -293,7 +331,7 @@ class ServiceTests(unittest.TestCase):
         self.apply(self.paired())
         restore = self.paired(True)
         state = self.app._load_state()
-        state['paired_ads'][self.app._state_key('SERIAL123')]['value'] = '2'
+        state['paired_ads'][self.adb.identity.state_key]['value'] = '2'
         self.app._save_state(state)
         with self.assertRaises(ToolkitError):
             self.apply(restore)
@@ -341,6 +379,23 @@ class ServiceTests(unittest.TestCase):
             self.assertEqual(len(self.adb.installed),0)
             self.app.execute(plan,True,log=lambda x:None)
         self.assertEqual(len(self.adb.installed),3)
+
+    def test_google_install_reports_components_still_disabled_for_owner(self):
+        apks = self.make_apks()
+        store = 'com.android.vending'
+        self.adb.present.add(store)
+        self.adb.disabled.update((store, 'com.amazon.kindle'))
+        messages = []
+        with self.verifier(apks):
+            plan = self.app.plan_google_play('SERIAL123', [apk.path for apk in apks])
+            completed = self.app.execute(plan, True, log=messages.append)
+        warnings = [message for message in completed if 'disabled' in message]
+        self.assertEqual(len(warnings), 1)
+        self.assertIn(store, warnings[0])
+        self.assertNotIn('com.amazon.kindle', warnings[0])
+        self.assertIn(warnings[0], messages)
+        self.assertIn(store, self.adb.disabled)
+
     def test_google_play_sync_validates_dependencies_and_enables_only_selected_provider(self):
         core = self.make_apks()
         provider = 'com.android.providers.contacts'
@@ -467,7 +522,7 @@ class ServiceTests(unittest.TestCase):
     def test_restore_cannot_use_a_different_saved_target_than_preview(self):
         self.app.execute(self.app.plan_ads('SERIAL123'),True,log=lambda x:None)
         plan=self.app.plan_ads('SERIAL123',restore=True)
-        state=self.app._load_state();state['ads'][self.app._state_key('SERIAL123')]['value']='2'
+        state=self.app._load_state();state['ads'][self.adb.identity.state_key]['value']='2'
         self.app._save_state(state)
         with self.assertRaisesRegex(ToolkitError,'saved.*changed'):self.app.execute(plan,True)
         self.assertEqual(self.adb.value,'0')

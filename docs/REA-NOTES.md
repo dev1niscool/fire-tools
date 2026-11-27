@@ -12,6 +12,8 @@ The targeted review found no clear signs of password theft or hidden Windows sta
 | `FireToolbox.PlayServices` and `FireToolbox.RemoveAds` member inspection | `ev_d149bd46546e1af69b6168a97edad59e2dae5631c3e81a464905a5d42b80aa36` |
 | `FireToolbox.Utils` member inspection | `ev_d75a75c7191de63779456ee5500f730214d6de23b7860b6c15de650b4b2a7a48` |
 
+The [follow-up REA audit](REA-AUDIT.md) covers the original form inventory, device-locked backups, app inspection and Google setup.
+
 ## Observations
 
 - `FireToolbox.PlayServices.InstallGServices` (MethodDef `0x060000da`) constructs an Android-version-specific staging path and orders Google Account Manager, Google Services Framework, Google Play services and Google Play Store. It passes APKs to a helper one by one and checks the result. The inspected workflow also has additional sync adapter paths and a Store launch path.

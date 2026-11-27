@@ -37,6 +37,7 @@ class Tablet:
         self.home = STOCK + '/.Home'
         self.keyboard = 'com.android.inputmethod.latin/.Ime'
         self.updates = {A}
+        self.package_dumps = {}
         self.writes = []
         self.installs = []
         self.apk_files = {}
@@ -86,6 +87,8 @@ class Tablet:
         if args[:2] == ('pm', 'path'):
             return 'package:' + ('/data/app/' if package in self.updates else '/system/app/') + package + '/base.apk'
         if args[:2] == ('dumpsys', 'package'):
+            if package in self.package_dumps:
+                return self.package_dumps[package]
             return '    User 0: installed=true stopped=' + ('true' if package in self.stopped else 'false')
         self.writes.append(args)
         if package == self.denied:
@@ -218,6 +221,103 @@ class PackageWorkflowTests(unittest.TestCase):
             rows = self.tool.package_inventory(SERIAL, mode)
             self.assertEqual({row['package'] for row in rows}, expected)
             self.assertTrue(all(row['label'] and row['state'] for row in rows))
+
+    def test_package_info_reports_active_split_app_and_effective_owner_state(self):
+        self.adb.disabled.add(A)
+        self.adb.package_dumps[A] = """Activity Resolver Table:
+  Package [com.amazon.kindle] (ffff):
+    versionName=resolver noise
+Packages:
+  Package [com.amazon.kindle.store] (11ab):
+    versionName=other app
+  Package [com.amazon.kindle] (d181ae2):
+    codePath=/data/app/com.amazon.kindle
+    versionCode=4200000001 minSdk=23 targetSdk=33
+    versionName=5.4.1 Fire Edition
+    splits=[base, config.en, config.arm64_v8a]
+    User 0: installed=true hidden=false enabled=3
+    User 10: installed=true hidden=false enabled=1
+      versionName=other profile decoration
+Hidden system packages:
+  Package [com.amazon.kindle] (1c12):
+    versionCode=12 minSdk=15 targetSdk=19
+    versionName=factory build
+"""
+        report = self.tool.package_info(SERIAL, A)
+        for field in (A, 'Kindle', 'Owner user 0: installed, disabled', 'Type: system',
+                      'Version name: 5.4.1 Fire Edition', 'Version code: 4200000001',
+                      'Minimum SDK: 23', 'Target SDK: 33'):
+            self.assertIn(field, report)
+        for irrelevant in ('resolver noise', 'other app', 'other profile', 'factory build'):
+            self.assertNotIn(irrelevant, report)
+        self.assertEqual(self.adb.writes, [])
+        self.assertEqual(self.adb.installs, [])
+        self.assertEqual(list(self.root.iterdir()), [])
+
+    def test_package_info_reports_missing_oem_fields_without_using_external_stanzas(self):
+        self.adb.package_dumps[HOME] = """Packages:
+  Package [org.example.home] (1a):
+    targetSdk=30
+    versionName=null
+  Package [org.example.home.helper] (2a):
+    versionName=helper
+    versionCode=4 minSdk=20 targetSdk=34
+Disabled system packages:
+  Package [org.example.home] (3a):
+    versionName=factory
+    versionCode=1 minSdk=15 targetSdk=20
+"""
+        report = self.tool.package_info(SERIAL, HOME)
+        for field in ('Label: not reported', 'Owner user 0: installed, enabled', 'Type: third-party',
+                      'Version name: not reported', 'Version code: not reported',
+                      'Minimum SDK: not reported', 'Target SDK: 30'):
+            self.assertIn(field, report)
+
+    def test_package_info_does_not_report_version_from_hidden_or_duplicate_packages(self):
+        stanza = '  Package [org.example.home] (7d3):\n    versionName=wrong version\n'
+        for dump in ('Hidden system packages:\n' + stanza, 'Packages:\n' + stanza * 2,
+                     'Packages:\n  Package [org.example.home.helper] (afa):\n    versionName=wrong version',
+                     'Package Changes:\n  Packages:\n' + stanza):
+            with self.subTest(dump=dump):
+                self.adb.package_dumps[HOME] = dump
+                report = self.tool.package_info(SERIAL, HOME)
+                self.assertIn('Version name: not reported', report)
+                self.assertNotIn('wrong version', report)
+
+    def test_package_info_rejects_control_characters_and_overlong_values(self):
+        for name in ('3\x1b[2J', '3\u202ebogus', '3\rspoof', '3\u2028    minSdk=777', 'x' * 1024):
+            with self.subTest(name=name[:30]):
+                self.adb.package_dumps[HOME] = 'Packages:\n  Package [org.example.home] (a):\n    versionName=' + name
+                report = self.tool.package_info(SERIAL, HOME)
+                self.assertIn('Version name: not reported', report)
+                self.assertIn('Minimum SDK: not reported', report)
+                self.assertNotIn(name, report)
+
+    def test_package_info_identifies_absent_or_removed_owner_app_without_reading_global_version(self):
+        for package, expected in [('org.example.removed', 'uninstalled'), ('org.example.absent', 'not found')]:
+            with self.subTest(package=package), patch.object(self.adb, 'shell', wraps=self.adb.shell) as shell:
+                report = self.tool.package_info(SERIAL, package)
+                self.assertIn(package, report)
+                self.assertIn(expected, report)
+                for (serial, args), _ in shell.call_args_list:
+                    self.assertEqual(serial, SERIAL)
+                    self.assertEqual(tuple(args[:5]), ('pm', 'list', 'packages', '--user', '0'))
+                self.assertEqual(list(self.root.iterdir()), [])
+
+    def test_package_info_validates_identifier_before_queries(self):
+        with patch.object(self.adb, 'shell') as shell, self.assertRaisesRegex(ToolkitError, 'identifier'):
+            self.tool.package_info(SERIAL, HOME + ' extra')
+        shell.assert_not_called()
+
+    def test_package_info_fails_clearly_if_owner_inventory_changes_or_dump_exceeds_limit(self):
+        self.adb.known.remove(HOME)
+        with self.assertRaisesRegex(ToolkitError, 'lists changed'):
+            self.tool.package_info(SERIAL, HOME)
+        self.adb.known.add(HOME)
+        self.adb.package_dumps[HOME] = 'X' * (1024 * 1024 + 1)
+        with self.assertRaisesRegex(ToolkitError, 'limit'):
+            self.tool.package_info(SERIAL, HOME)
+        self.assertFalse(self.adb.writes)
 
     def test_invalid_and_protected_selections(self):
         for name in ('x.y;reboot', 'com.android.settings', 'com.android.systemui', 'com.android.shell',
@@ -437,7 +537,7 @@ class PackageWorkflowTests(unittest.TestCase):
                 record = {'model': 'Fire', 'states': {A: 'enabled'}, 'restore_source': source}
                 if pending:
                     record = {'model': 'Fire', 'states': {}, 'pending': {A: 'enabled'}, 'pending_source': source}
-                data = {'schema': 1, 'devices': {self.tool._state_key(SERIAL): record}}
+                data = {'schema': 1, 'devices': {self.adb.device.state_key: record}}
                 (self.root / 'packages-state.json').write_text(json.dumps(data))
                 retry = self.plan('debloat', profile=profile)
                 self.assertEqual(retry.packages, (B,))

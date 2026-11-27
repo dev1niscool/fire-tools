@@ -60,18 +60,21 @@ def parser() -> argparse.ArgumentParser:
     return p
 
 
+def _print_report(report):
+    try:
+        print(report)
+    except UnicodeEncodeError as error:
+        # Windows pipes can use a legacy code page even with a Unicode-capable console.
+        readable = report.replace('→', '->')
+        encoding = sys.stdout.encoding or error.encoding
+        print(readable.encode(encoding, 'backslashreplace').decode(encoding))
+
+
 def _show_plan(plan):
     lines = [plan.title, f'Device: {plan.device.model} ({plan.serial})']
     lines.extend('  ' + item for item in plan.details)
     lines.extend('Note: ' + warning for warning in plan.warnings)
-    preview = '\n'.join(lines)
-    try:
-        print(preview)
-    except UnicodeEncodeError as error:
-        # Windows pipes can use a legacy code page even with a Unicode-capable console.
-        readable = preview.replace('→', '->')
-        encoding = sys.stdout.encoding or error.encoding
-        print(readable.encode(encoding, 'backslashreplace').decode(encoding))
+    _print_report('\n'.join(lines))
 
 
 def _confirm_plan(toolkit, plan, args, demo):
@@ -146,9 +149,9 @@ def main(argv=None) -> int:
             if feature.read_only:
                 if isinstance(result, list):
                     for row in result:
-                        print('\t'.join(f'{key}={value}' for key, value in row.items()))
+                        _print_report('\t'.join(f'{key}={value}' for key, value in row.items()))
                 else:
-                    print(result)
+                    _print_report(result)
                 return 0
             return _confirm_plan(toolkit, result, args, demo)
         if args.command == 'devices':
@@ -159,8 +162,9 @@ def main(argv=None) -> int:
                 print(f'{device.serial}\t{device.state}\t{device.model}')
             return 0
         if args.command == 'info':
-            for key, value in asdict(toolkit.device_info(args.serial)).items():
-                print(f'{key}: {value}')
+            info = toolkit.device_info(args.serial)
+            for key in ('serial', 'model', 'manufacturer', 'fire_os', 'android_release', 'sdk', 'abis', 'user_id'):
+                _print_report(f'{key}: {getattr(info, key)}')
             return 0
         if args.command == 'apps' and not args.disable and not args.enable:
             for package in toolkit.packages(args.serial, args.disabled_only):

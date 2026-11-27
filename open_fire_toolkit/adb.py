@@ -1,6 +1,9 @@
 """Explicit, serial-scoped access to a local ADB server."""
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
+import hashlib
 import math
 import os
 from pathlib import Path
@@ -21,6 +24,7 @@ class Device:
     serial: str
     state: str
     model: str = ""
+    transport_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -33,6 +37,16 @@ class DeviceInfo:
     sdk: int
     abis: tuple[str, ...]
     user_id: int
+    hardware_serial_sha256: str = ""
+
+    @property
+    def state_key(self) -> str:
+        # Previous releases keyed USB state by SHA-256 of its serial. When
+        # that serial matches the reported hardware ID, both transports can
+        # open those records without migrating or exporting the raw ID.
+        if self.hardware_serial_sha256:
+            return self.hardware_serial_sha256
+        return "" if is_network_selector(self.serial) else _serial_digest(self.serial)
 
 
 _SERIAL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
@@ -43,6 +57,20 @@ _ADB_OVERRIDES = {
     "ANDROID_SERIAL",
 }
 _MAX_OUTPUT_BYTES = 1024 * 1024
+
+
+def is_network_selector(serial: str) -> bool:
+    # TCP endpoints and ADB's wireless mDNS service names can be reassigned.
+    return ":" in serial or "." in serial or serial.lower().startswith(("adb-", "emulator-"))
+
+
+def _serial_digest(value: str) -> str:
+    if (is_network_selector(value) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}", value)
+            or value.casefold() in {"unknown", "null", "none", "unavailable", "restricted",
+                                    "default", "0123456789abcdef", "1234567890abcdef"}
+            or len(set(value.casefold())) == 1):
+        return ""
+    return hashlib.sha256(value.encode("ascii")).hexdigest()
 
 
 def _windows_pipe_availability():
@@ -135,6 +163,7 @@ class AdbClient:
         except (OSError, RuntimeError, TypeError, ValueError) as exc:
             raise AdbError(f"Cannot use the configured adb executable: {exc}") from exc
         self._path = resolved
+        self._bound_transport: ContextVar[tuple[str, int] | None] = ContextVar("adb_transport", default=None)
 
     def _run(self, args: Sequence[str], timeout: float = 30) -> subprocess.CompletedProcess[str]:
         if not math.isfinite(timeout) or timeout <= 0:
@@ -157,6 +186,7 @@ class AdbClient:
         if not lines or lines[0].strip() != "List of devices attached":
             raise AdbError("ADB did not return a recognizable device list.")
         devices = []
+        transport_ids = set()
         for line in lines[1:]:
             if not line.strip():
                 continue
@@ -169,12 +199,20 @@ class AdbClient:
                 state = "no permissions"
             model = next((part.removeprefix("model:") for part in details.split()
                           if part.startswith("model:")), "")
-            devices.append(Device(serial, state, model))
+            ids = [part.removeprefix("transport_id:") for part in details.split()
+                   if part.startswith("transport_id:")]
+            transport_id = None
+            if ids:
+                if len(ids) != 1 or not re.fullmatch(r"[1-9][0-9]{0,19}", ids[0]):
+                    raise AdbError("ADB reported a malformed transport ID. Update Platform-Tools and scan again.")
+                transport_id = int(ids[0])
+                if transport_id >= 2**64 or transport_id in transport_ids:
+                    raise AdbError("ADB reported an invalid or duplicate transport ID. Scan again.")
+                transport_ids.add(transport_id)
+            devices.append(Device(serial, state, model, transport_id))
         return devices
 
-    def _run_device(
-        self, serial: str, args: Sequence[str], timeout: float = 30,
-    ) -> subprocess.CompletedProcess[str]:
+    def _online_device(self, serial: str) -> Device:
         if not isinstance(serial, str) or not _SERIAL.fullmatch(serial):
             raise AdbError("Specify a valid ADB device serial.")
         matches = [device for device in self.devices() if device.serial == serial]
@@ -182,6 +220,33 @@ class AdbClient:
             raise AdbError(f"Expected one connection for {serial}, found {len(matches)}. Scan again.")
         if matches[0].state != "device":
             raise AdbError(f"Device {serial} is {matches[0].state}. Check the USB debugging prompt and connection.")
+        return matches[0]
+
+    @contextmanager
+    def bind_transport(self, serial: str):
+        """Keep every device command in this operation on the same live ADB transport."""
+        if self._bound_transport.get() is not None:
+            raise AdbError("An ADB transport is already bound to this operation.")
+        transport_id = self._online_device(serial).transport_id
+        if transport_id is None:
+            raise AdbError("ADB did not report a transport ID. Update Platform-Tools or use USB for changes.")
+        token = self._bound_transport.set((serial, transport_id))
+        try:
+            yield
+        finally:
+            self._bound_transport.reset(token)
+
+    def _run_device(
+        self, serial: str, args: Sequence[str], timeout: float = 30,
+    ) -> subprocess.CompletedProcess[str]:
+        device = self._online_device(serial)
+        bound = self._bound_transport.get()
+        if bound is not None:
+            if (serial, device.transport_id) != bound:
+                raise AdbError("The bound ADB transport changed. Reconnect and review the action again.")
+            # Address the connection by ID even after checking the current list.
+            # A new connection at the same network address receives a new ID.
+            return self._run(["-t", str(bound[1]), *args], timeout)
         return self._run(["-s", serial, *args], timeout)
 
     def shell(self, serial: str, args: Sequence[str], timeout: float = 30) -> str:
@@ -226,6 +291,8 @@ class AdbClient:
             sdk=int(sdk),
             abis=tuple(abi.strip() for abi in abis.split(",") if abi.strip()),
             user_id=int(user),
+            hardware_serial_sha256=(_serial_digest(properties.get("ro.boot.serialno", ""))
+                                    or _serial_digest(properties.get("ro.serialno", ""))),
         )
 
     def install(self, serial: str, apk: Path) -> str:

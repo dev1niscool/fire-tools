@@ -1,4 +1,5 @@
 import contextlib
+from dataclasses import replace
 import io
 import json
 import os
@@ -24,6 +25,16 @@ class CliTests(unittest.TestCase):
         with patch('subprocess.run',side_effect=AssertionError('No subprocess permitted')):
             code,out,err=self.call(['--demo','devices'])
         self.assertEqual(code,0);self.assertIn('DEMO_FIRE_HD10',out);self.assertIn('SIMULATED',out)
+    def test_info_keeps_the_hardware_digest_out_of_support_output(self):
+        serial = 'DEMO_FIRE_HD10'
+        info = replace(DemoToolkit().device_info(serial), hardware_serial_sha256='ab' * 32)
+        with patch.object(DemoToolkit, 'device_info', return_value=info):
+            code, output, _ = self.call(['--demo', 'info', '--serial', serial])
+        self.assertEqual(code, 0)
+        self.assertIn(f'serial: {serial}', output)
+        self.assertNotIn(info.hardware_serial_sha256, output)
+        self.assertNotIn('hardware_serial_sha256', output)
+
     def test_mutation_defaults_to_preview(self):
         with patch.object(DemoToolkit,'execute',side_effect=AssertionError('must preview')):
             code,out,err=self.call(['--demo','ads','--serial','DEMO_FIRE_HD10'])

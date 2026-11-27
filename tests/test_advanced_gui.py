@@ -1,6 +1,7 @@
 """Headless tests for the advanced tool dispatch and review boundary."""
 
 from types import SimpleNamespace
+from dataclasses import replace
 import unittest
 
 from open_fire_toolkit.adb import DeviceInfo
@@ -97,6 +98,23 @@ class AdvancedToolDispatchTests(unittest.TestCase):
         )
         self.assertEqual(self.app.review[1].serial, "fire-one")
         self.assertEqual(self.app.toolkit.writes, [])
+
+    def test_new_physical_tablet_at_selected_address_invalidates_selection_before_review(self):
+        app = DeviceSelectionApp()
+        app._sync_controls = lambda: None
+        address = '192.0.2.10:5555'
+        selected = replace(DEVICE, serial=address, hardware_serial_sha256='1' * 64)
+        app.device = selected
+        replacement = replace(selected, hardware_serial_sha256='2' * 64)
+        plan = Plan("Restart tablet", address, (), (), "reboot", replacement)
+        # Exercise the review gate used by both the dedicated tabs and catalog tools.
+        App._review_plan(app, app.toolkit, plan)
+        self.assertIsNone(app.review)
+        self.assertIsNone(app.device)
+        self.assertEqual(app.device_table, [])
+        self.assertEqual(app.app_table, [])
+        self.assertIn('scan', app.error[1].lower())
+        self.assertEqual(app.toolkit.writes, [])
 
     def test_device_review_freezes_fields_before_dispatch(self):
         tool = BY_KEY["settings-set"]

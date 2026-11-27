@@ -187,7 +187,7 @@ class ExtraWorkflows:
         if operation != 'network-info':
             _fail('Unknown utility read operation.')
         from .service import ToolkitError
-        device = self._writable_device(serial)
+        device = self._owner_device(serial)
         sections = []
         for label, separator, read in (
             ('Private DNS settings', '=', lambda: self._read_private_dns(device)),

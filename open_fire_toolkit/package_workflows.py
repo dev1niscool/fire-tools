@@ -46,6 +46,41 @@ def _package(name):
     return name
 
 
+def _installed_version_fields(dump, package):
+    """Read direct fields of the active package. A system update can also have a factory stanza."""
+    if len(dump) > 1024 * 1024:
+        raise _error('Package details exceed the 1 MiB limit.')
+    header = re.compile(r'  Package \[' + re.escape(package) + r'\](?: \([0-9a-fA-F]+\))?: *')
+    fields = {}
+    in_packages = in_target = seen_target = False
+    # splitlines() would turn control characters inside a version name into apparent fields.
+    for line in dump.replace('\r\n', '\n').split('\n'):
+        if not line or line.isspace():
+            continue
+        if not line.startswith(' '):
+            in_packages = line.rstrip(' ') == 'Packages:'
+            in_target = False
+        elif in_packages and not line.startswith('    '):
+            in_target = bool(header.fullmatch(line))
+            if in_target and seen_target:
+                return {}  # Ambiguous active package record.
+            seen_target |= in_target
+        elif in_target:
+            field = line[4:].rstrip(' ')
+            if not field.isprintable():
+                continue
+            if field.startswith('versionName='):
+                value = field.removeprefix('versionName=').strip(' ')
+                if value and value != 'null' and len(value) <= 256:
+                    fields.setdefault('versionName', set()).add(value)
+            elif field.startswith(('versionCode=', 'minSdk=', 'targetSdk=')):
+                for token in field.split():
+                    match = re.fullmatch(r'(versionCode|minSdk|targetSdk)=([0-9]{1,20})', token)
+                    if match:
+                        fields.setdefault(match[1], set()).add(match[2])
+    return {key: next(iter(values)) for key, values in fields.items() if len(values) == 1}
+
+
 def _selection(values):
     if not isinstance(values, (list, tuple)) or len(values) > 256:
         raise _error('Select at most 256 packages.')
@@ -166,10 +201,10 @@ class PackageWorkflows:
             names.add(_package(line.removeprefix('package:')))
         return names
 
-    def _pkg_states(self, serial):
-        installed = self._pkg_list(serial)
-        disabled = self._pkg_list(serial, '-d')
-        known = self._pkg_list(serial, '-u')
+    def _pkg_states(self, serial, *filters):
+        installed = self._pkg_list(serial, *filters)
+        disabled = self._pkg_list(serial, '-d', *filters)
+        known = self._pkg_list(serial, '-u', *filters)
         if not disabled <= installed <= known:
             raise _error('Package lists changed during inspection. Refresh and review again.')
         return {p: ('disabled' if p in disabled else 'enabled' if p in installed else 'uninstalled') for p in known}
@@ -185,10 +220,35 @@ class PackageWorkflows:
             names = {p for p, state in states.items() if state == mode}
         return [dict(package=p, label=APP_LABELS.get(p, p), state=states[p]) for p in sorted(names)]
 
+    def package_info(self, serial, package):
+        """Inspect one owner app through Android's package manager."""
+        package = _package(package)
+        missing = 'not reported'
+        state = self._pkg_states(serial, package).get(package)
+        lines = [f'Package: {package}', f'Label: {APP_LABELS.get(package, missing)}']
+        if state not in {'enabled', 'disabled'}:
+            lines.append('Owner user 0: ' + (state or 'not found in the package inventory'))
+            return '\n'.join(lines)
+
+        lines.append(f'Owner user 0: installed, {state}')
+        if package in self._pkg_list(serial, '-s', package):
+            kind = 'system'
+        elif package in self._pkg_list(serial, '-3', package):
+            kind = 'third-party'
+        else:
+            kind = missing
+        lines.append(f'Type: {kind}')
+        dump = self.adb.shell(serial, ('dumpsys', 'package', package))
+        fields = _installed_version_fields(dump, package)
+        for label, key in (('Version name', 'versionName'), ('Version code', 'versionCode'),
+                           ('Minimum SDK', 'minSdk'), ('Target SDK', 'targetSdk')):
+            lines.append(f'{label}: {fields.get(key, missing)}')
+        return '\n'.join(lines)
+
     def _pkg_undo_record(self, device):
         from .device_workflows import _read_file
         path = self.state_dir / 'packages-state.json'
-        key = self._state_key(device.serial)
+        key = device.state_key
         try:
             with self._journal_directory() as directory:
                 _, encoded = _read_file(directory / path.name, _STATE_LIMIT, content=True)
@@ -239,7 +299,7 @@ class PackageWorkflows:
         return hashlib.sha256(json.dumps(record, sort_keys=True).encode()).hexdigest()
 
     def _pkg_save_undo(self, device, data, states, pending=None, *, source=None, pending_source=None):
-        key = self._state_key(device.serial)
+        key = device.state_key
         if states or pending:
             record = {'model': device.model, 'states': states}
             if source:
@@ -354,7 +414,7 @@ class PackageWorkflows:
                 raise _error('Select one or more known Fire OS update packages.')
             warnings.append('Disabling the updater can block security updates. Fire OS may protect these packages.')
         if OFFERS in requested and op in {'ads-disable', 'ads-restore', 'undo'}:
-            if self._state_key(plan.serial) in self._load_state().get('paired_ads', {}):
+            if plan.device.state_key in self._load_state().get('paired_ads', {}):
                 raise _error('Restore the paired ad controls before changing the Special Offers package separately.')
         if op == 'clear-data':
             warnings.append('This permanently deletes the selected apps’ owner data, preferences and sign-ins.')

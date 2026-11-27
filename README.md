@@ -1,6 +1,6 @@
 # Fire Tools
 
-An independent, MIT-licensed desktop and command-line toolkit for Amazon Fire tablets. Version 0.3.2 lets you compare Fire Toolbox v46’s Recommended and Complete debloat presets before connecting a tablet. It also provides Google Play installation, lock-screen ad controls, backups, file transfers, screen capture and wireless ADB.
+An independent, MIT-licensed desktop and command-line toolkit for Amazon Fire tablets. Install Google Play, manage lock-screen ads, compare debloat presets, and back up settings and files. Version 0.3.3 adds Google component status, per-app details and stronger device checks for Wi-Fi ADB. [What the REA review found in Fire Toolbox v46](docs/REA-AUDIT.md)
 
 [Read the Fire tablet field guide](https://dev1niscool.github.io/fire-tools/) for setup, model compatibility and step-by-step tool guides.
 
@@ -8,7 +8,7 @@ This release is designed for Fire tablets running Android API 23 or later. Devic
 
 ## Checking your download
 
-Fire Tools runs from Python source on your computer. Extract the folder containing the launchers. The optional Android helper ships as Java source, and Google apps are separate downloads. ClamAV reported zero detections for the linked 0.3.2 source ZIP. [Download Fire Tools 0.3.2](https://github.com/dev1niscool/fire-tools/archive/43eaeac695623313fc5ba8afbd6c3a1751854633.zip) · [Checksums and scan record](docs/TESTING.md#fire-toolbox-debloat-preset-checks-032-2026-11-27)
+Fire Tools runs from Python source on your computer. Extract the folder containing the launchers. The optional Android helper ships as Java source, and Google apps are separate downloads. Compare your ZIP with the published SHA-256. [Download Fire Tools 0.3.3](https://github.com/dev1niscool/fire-tools/releases/download/v0.3.3/fire-tools-0.3.3.zip) · [ZIP checksum](https://github.com/dev1niscool/fire-tools/releases/download/v0.3.3/fire-tools-0.3.3.zip.sha256) · [Verification record](https://github.com/dev1niscool/fire-tools/blob/main/docs/TESTING.md#rea-audit-release-033)
 
 **Before connecting the tablet**, open **Google Play → Choose APKs → Check scan records**. This reads the files locally and shows whether their SHA-256 hashes match files examined in the project audit. The command-line equivalent is `./launch-linux.sh check-apks file.apk` or `.\launch-windows.cmd check-apks "C:\Downloads\file.apk"` in PowerShell. For Google components, use the **Google Play** tab. It checks Google’s signing identity and verifies the installed bytes. The general **sideload** tool also accepts apps from other publishers. [Links to the six scanned builds](docs/GOOGLE-APKS.md#files-with-a-local-scan-record) · [Audit and scan results](docs/TESTING.md)
 
@@ -31,6 +31,8 @@ The command line uses the same catalog:
 ```sh
 python -m open_fire_toolkit tools
 python -m open_fire_toolkit tools --feature debloat
+python -m open_fire_toolkit --demo tool google-status --serial DEMO_FIRE_HD10
+python -m open_fire_toolkit --demo tool package-info --serial DEMO_FIRE_HD10 --param package=com.amazon.kindle
 python -m open_fire_toolkit tool debloat-presets
 python -m open_fire_toolkit --demo tool debloat --serial DEMO_FIRE_HD10 --param profile=recommended
 python -m open_fire_toolkit tool source-catalog
@@ -38,7 +40,7 @@ python -m open_fire_toolkit tool source-catalog
 
 For a real tablet, put the tool paths before `tool`, include `--serial` from `devices`, and provide the listed `--param key=value` arguments. Mutations default to preview. Review the preview and repeat the command with its printed `--yes --confirm-token TOKEN` arguments. Each token binds the tablet, inputs, targets and state shown by that plan. Source links and Wi-Fi endpoint connection do not require a selected tablet; connecting does not automatically select it.
 
-See [feature coverage and remaining differences](docs/FEATURES.md), [original Toolbox comparison](docs/PARITY-RESEARCH.md), and [verification](docs/TESTING.md). **This is not a verified drop-in replacement for every Fire Toolbox 46 option.** The original's privileged exploits, several companion-assisted workarounds, automatic version-selected APK downloads, split APK bundle installation and some device-profile options are not reproduced. A settings-page shortcut is labeled as a shortcut, not as successful device configuration.
+Some v46 workflows still differ. For example, Fire Tools extracts installed split APKs and accepts standalone APKs for installation. Google APK selection is manual. [REA comparison and remaining differences](docs/REA-AUDIT.md) · [Feature coverage](docs/FEATURES.md) · [Verification](docs/TESTING.md)
 
 ## Try the offline demo
 
@@ -46,7 +48,7 @@ Extract the source ZIP. From the extracted directory, run the command for your p
 
 | Windows | Linux |
 | --- | --- |
-| `launch-windows.cmd gui --demo` | `./launch-linux.sh gui --demo` |
+| `launch-windows.cmd gui --demo` | `sh launch-linux.sh gui --demo` |
 
 In PowerShell, prefix the Windows launcher with `.\`. You can also run `python -m open_fire_toolkit gui --demo` using your Python 3.11+ interpreter. On Linux the interpreter is typically named `python3`. Start the regular interface by running the launcher with no arguments.
 
@@ -80,7 +82,8 @@ Start with the **[Google APK download and verification guide](docs/GOOGLE-APKS.m
 
 1. On the **Google Play** tab, choose the files and review the install plan. The toolkit checks APK structure, package IDs, minimum Android API level, ABI compatibility and signatures. It verifies Google’s signing certificate for the selected Android API. For Play services it also recognizes the verified signing-key rotation found in v46’s Android 11 package. Signer verification establishes signing identity. APK behavior and compatibility with Fire OS still depend on the selected release. [AndroidX certificate reference](https://android.googlesource.com/platform/frameworks/support/+/7be3a623dfcf461ff6e2004799ac2e652c8d23a8)
 2. Confirm the plan for the displayed tablet. The toolkit rechecks the tablet and verifies the privately staged copies before installation. Installation targets Android user 0 and uses Android’s replace mode to preserve existing app data when updating a package. Installation stops at the first failure and reports completed packages. Earlier successful installs remain in place.
-3. After a successful install, use **Review reboot** in **Connection** if you want the toolkit to restart the tablet. Then open Play Store on the tablet and sign in there. Amazon does not officially support Google Play on Fire OS. Some apps, sign-in flows, or notifications may fail.
+3. Choose **Google Play → Component status** to see which of the six packages are installed and enabled for the owner. The installer also reports if an updated package is still disabled.
+4. After a successful install, use **Review reboot** in **Connection** if you want the toolkit to restart the tablet. Then open Play Store on the tablet and sign in there. Amazon does not officially support Google Play on Fire OS. Some apps, sign-in flows, or notifications may fail.
 
 ## Lock-screen ads and optional apps
 
@@ -97,6 +100,8 @@ For the **Fire HD 10 (13th generation)**, Amazon’s downloadable update page li
 ## Debloat Amazon apps
 
 Open **Apps → Compare debloat presets** to see every app name and package ID offline. **Standard Debloat (Recommended)** lists 22 packages, including Kindle books, Prime Video, Amazon Music, Amazon Photos and the Mopria Print Service. **Complete Debloat** adds 13, including Silk, Amazon Appstore, Camera, Email and Device Setup. Fire Tools protects Device Setup, so Complete can change at most 34 packages. [All 13 additions and the original v46 evidence](docs/REA-NOTES.md#debloating-amazon-apps)
+
+Select an app in **Apps** and choose **App details** to read its owner state, package type and available version and SDK fields. For any other package ID, use **Tools → Inspect an app**.
 
 In **Apps → Debloat Amazon apps**, choose a preset and select **Review**. Fire Tools uses ordinary ADB on the primary adult profile. Check the installed targets, skipped packages and proposed action before confirming. The default action disables built-in preset apps and keeps their data. To keep an app on the list, use **Tools → Disable selected apps** to pick individual packages. For a custom Toolbox `.debloat` file, **auto** follows `ListType=debloat` (disable) or `ListType=restore` (enable). The CLI accepts `profile=recommended` and `profile=standard` for the same preset. Legacy lists remain available as `standard-v0.2` and `complete-v0.2`.
 

@@ -383,7 +383,7 @@ def _destination(value, directory, on_publish=None):
 
 def _identity(device):
     return dict(model=device.model, sdk=device.sdk,
-                serial_sha256=hashlib.sha256(device.serial.encode()).hexdigest())
+                serial_sha256=device.state_key)
 
 
 def _command(args):
@@ -456,7 +456,7 @@ class DeviceWorkflows:
         return path
 
     def read_device_tool(self, serial, operation, **parameters):
-        self._writable_device(serial)
+        self._owner_device(serial)
         p = parameters
         commands = {
             'users': ['pm', 'list', 'users'], 'keyboards': ['ime', 'list', '-s', '-a'],

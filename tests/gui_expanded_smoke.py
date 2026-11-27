@@ -15,6 +15,7 @@ from open_fire_toolkit.adb import Device, DeviceInfo
 from open_fire_toolkit.feature_catalog import FEATURES
 from open_fire_toolkit.gui import App
 from open_fire_toolkit.package_catalog import DEBLOAT_TITLES
+from open_fire_toolkit.service import Plan
 from open_fire_toolkit.workflows import TransportPlan
 
 
@@ -96,8 +97,28 @@ def smoke(root):
     wait(root, lambda: app.device is not None and not app.worker.busy, "tablet selection")
     serial = app.device.serial
 
+    app.tabs.select(1)
+    root.update()
+    click(root, "Component status")
+    status = wait(root, lambda: displayed_window(root, "Google Play component status"), "Google status")
+    status_text = text_box(status).get("1.0", "end")
+    assert "com.android.vending) - installed, enabled" in status_text
+    assert "com.google.android.gsf) - not installed" in status_text
+    assert not app.review
+    click(status, "Close")
+
     app.tabs.select(3)
     root.update()
+    assert button(root, "App details").instate(["disabled"])
+    click(root, "Read app states")
+    wait(root, lambda: not app.worker.busy, "app list")
+    app.app_table.selection_set("0")
+    root.update()
+    click(root, "App details")
+    details = wait(root, lambda: displayed_window(root, "Inspect an app"), "selected app details")
+    assert app.loaded_apps[0][0] in text_box(details).get("1.0", "end")
+    assert not app.review
+    click(details, "Close")
     click(root, "Debloat Amazon apps...")
     assert app.tabs.tab(app.tabs.select(), "text") == "Tools"
     assert app.advanced.feature.key == "debloat"
@@ -326,7 +347,12 @@ def connection_layout(root):
 
 def tools_without_tablet(root):
     app = App(root)
+    root.geometry("680x660")
+    app.tabs.select(1)
     root.update()
+    status = button(root, "Component status")
+    assert status.instate(["disabled"])
+    assert status.winfo_width() >= status.winfo_reqwidth()
     app.tabs.select(3)
     root.update()
     click(root, "Compare debloat presets...")
@@ -360,6 +386,7 @@ def tools_without_tablet(root):
     class RecordingToolkit:
         connected = False
         connections = 0
+        hardware_digest = '1' * 64
 
         def plan_extra_action(self, serial, operation, **params):
             assert serial == "" and operation in ("wireless-connect", "wireless-disconnect")
@@ -378,7 +405,10 @@ def tools_without_tablet(root):
         def device_info(self, serial):
             assert self.connected and serial == endpoint
             model = f"Fire tablet {self.connections}"
-            return DeviceInfo(serial, model, "Amazon", "8", "11", 30, ("arm64-v8a",), 0)
+            return DeviceInfo(serial, model, "Amazon", "8", "11", 30, ("arm64-v8a",), 0, self.hardware_digest)
+
+        def plan_reboot(self, serial):
+            return Plan("Restart tablet", serial, (), (), "reboot", self.device_info(serial))
 
     toolkit = RecordingToolkit()
     app.Toolkit = lambda config: toolkit
@@ -449,6 +479,22 @@ def tools_without_tablet(root):
     assert not tablet_actions_enabled()
     select_tablet("Fire tablet 2")
     assert tablet_actions_enabled()
+    app.tabs.select(0)
+    root.update()
+    click(root, "Review reboot...")
+    click(wait(root, lambda: app.review, "original tablet reboot preview"), "Cancel")
+    errors = []
+    app.dialog = SimpleNamespace(showerror=lambda title, text, parent: errors.append(text))
+    toolkit.hardware_digest = '2' * 64
+    before = len(executions)
+    click(root, "Review reboot...")
+    wait(root, lambda: errors, "changed selection warning")
+    assert app.review is None and app.device is None and not app.device_table.get_children()
+    assert "scan" in errors[0].lower() and len(executions) == before
+    scan()
+    select_tablet("Fire tablet 2")
+    click(root, "Review reboot...")
+    click(wait(root, lambda: app.review, "reselected tablet reboot preview"), "Cancel")
 
 
 if __name__ == "__main__":

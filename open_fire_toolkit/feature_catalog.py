@@ -53,6 +53,8 @@ def _extra(key, label, operation, fields=(), description='', category='Additiona
 
 FEATURES = (
     _package('packages-inventory', 'Browse installed and system apps', 'inventory', (Field('mode', 'Filter', 'all', ('all', 'system', 'third-party', 'disabled', 'uninstalled')),), read_only=True),
+    _package('package-info', 'Inspect an app', 'info', (PACKAGE,),
+             'Read the owner installation state, package type, version and Android SDK requirements.', read_only=True),
     Feature('debloat-presets', 'Compare debloat presets', 'Amazon apps', 'local', 'debloat-presets',
             description='See all 22 Standard packages and the 13 additions in Complete. Works offline.',
             read_only=True, requires_device=False),
@@ -108,6 +110,9 @@ FEATURES = (
     _device('lockscreen', 'Open tablet security settings', 'lockscreen', (Field('mode', 'Action', 'settings', ('settings',)),), 'Change lock credentials on the tablet. No credential bypass.', 'Settings'),
     _device('parental-settings', 'Open Settings for parental controls', 'parental-settings', (), 'Find parental controls and authenticate on the tablet. Fire OS determines which options are available.', 'Settings'),
     _device('assistant', 'Configure installed voice assistant', 'assistant', (COMPONENT,), 'Requires a compatible installed voice interaction service. Online assistant support is separate.', 'Google and assistants'),
+    _package('google-status', 'Google Play component status', 'google-status',
+             description='Read which Google components are installed and enabled for the tablet owner.',
+             category='Google and assistants', read_only=True),
     _device('accessibility', 'Configure an accessibility service', 'accessibility', (COMPONENT, Field('enable', 'Enable', 'true', ('true', 'false'))), 'Enabling opens the tablet settings for your consent. Accessibility can read screen content and act on your behalf. Disabling retains other service bindings.', 'Settings'),
     _device('users', 'List tablet profiles', 'users', category='Profiles', read_only=True),
     _device('user-create', 'Create a tablet profile', 'user-create', (Field('name', 'Profile name'),), 'Amazon parental controls may remove unsupported profiles on reboot.', 'Profiles'),
@@ -190,8 +195,12 @@ def run_feature(toolkit, serial: str, feature: Feature, values: dict[str, str]):
         from .extra_workflows import source_catalog_text
         return source_catalog_text()
     if feature.backend == 'package':
-        if feature.read_only:
+        if feature.operation == 'inventory':
             return toolkit.package_inventory(serial, **params)
+        if feature.operation == 'info':
+            return toolkit.package_info(serial, **params)
+        if feature.operation == 'google-status':
+            return toolkit.google_status(serial)
         if feature.key == 'debloat-restore':
             params = {'profile': 'complete', 'mode': 'enable'}
         packages = package_values(params.pop('packages', ''))

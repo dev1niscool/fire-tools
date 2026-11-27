@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from contextlib import ExitStack
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -13,7 +12,7 @@ import threading
 from dataclasses import dataclass, replace
 from typing import Callable, Sequence
 
-from .adb import AdbClient, AdbError, DeviceInfo
+from .adb import AdbClient, AdbError, DeviceInfo, is_network_selector
 from .apk import (
     ApkInfo, ApkVerifier, ApkError, MAX_APK_BYTES, PLAY_CORE, PLAY_PACKAGES, SYNC_PROVIDERS,
     file_sha256, google_play_order, google_signer_is_trusted,
@@ -94,6 +93,25 @@ def _setting_value(raw: str) -> str | None:
     raise ToolkitError('Cannot read the ad setting reliably. ' + value[:180])
 
 
+def google_status_text(states: dict[str, str]) -> str:
+    labels = {
+        'com.google.android.gsf.login': 'Google Account Manager (legacy)',
+        'com.google.android.gsf': 'Google Services Framework',
+        'com.google.android.gms': 'Google Play services',
+        'com.android.vending': 'Google Play Store',
+        'com.google.android.syncadapters.calendar': 'Google Calendar Sync (optional)',
+        'com.google.android.syncadapters.contacts': 'Google Contacts Sync (optional)',
+    }
+    lines = ['Google Play components for owner user 0', '']
+    for package in PLAY_PACKAGES:
+        state = states.get(package)
+        status = f'installed, {state}' if state in {'enabled', 'disabled'} else 'not installed'
+        lines.append(f'{labels[package]} ({package}) - {status}')
+    lines.extend(['', 'Package Manager reports installation and enabled state. '
+                  'APK signer verification and Google account sign-in are separate checks.'])
+    return '\n'.join(lines)
+
+
 class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
     def __init__(self, config: ToolConfig, state_dir: Path | None = None):
         self.config = config
@@ -113,7 +131,7 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
     def packages(self, serial: str, disabled_only: bool = False) -> list[str]:
         return self.adb.packages(serial, disabled_only)
 
-    def _writable_device(self, serial: str) -> DeviceInfo:
+    def _owner_device(self, serial: str) -> DeviceInfo:
         device = self.adb.info(serial)
         if device.serial != serial:
             raise ToolkitError('The selected device identity changed. Refresh and review again.')
@@ -128,10 +146,19 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
         self._require_execution_directory()
         return device
 
+    def _writable_device(self, serial: str) -> DeviceInfo:
+        device = self._owner_device(serial)
+        if not device.state_key:
+            raise ToolkitError('The tablet did not report a usable hardware serial. Reconnect over USB and review again.')
+        return device
+
     def _verifier(self, device_sdk: int | None = None) -> ApkVerifier:
         if not all((self.config.aapt_path, self.config.apksigner_jar, self.config.java_path)):
             raise ToolkitError('Select official aapt, apksigner.jar and Java paths before verifying APKs.')
         return ApkVerifier(self.config.aapt_path, self.config.apksigner_jar, self.config.java_path, device_sdk=device_sdk)
+
+    def google_status(self, serial: str) -> str:
+        return google_status_text(self._pkg_states(serial))
 
     def plan_google_play(self, serial: str, paths: Sequence[str | Path]) -> Plan:
         device = self._writable_device(serial)
@@ -206,9 +233,6 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
         if self._writable_device(device.serial) != device or self._apk_paths(device.serial, package) != paths:
             raise ToolkitError(f'Installed {package} or the tablet changed during inspection. Review again.')
 
-    def _state_key(self, serial: str) -> str:
-        return hashlib.sha256(serial.encode('utf-8')).hexdigest()
-
     def _load_state(self) -> dict:
         path = self.state_dir / 'state.json'
         try:
@@ -260,9 +284,9 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
         current = self._read_ads(serial)
         if paired:
             return self._plan_paired_ads(device, state, current, restore)
-        if self._state_key(serial) in state.get('paired_ads', {}):
+        if device.state_key in state.get('paired_ads', {}):
             raise ToolkitError('Restore the paired ad controls first so the two undo operations apply in order.')
-        record = state['ads'].get(self._state_key(serial))
+        record = state['ads'].get(device.state_key)
         if record and record['model'] != device.model:
             raise ToolkitError('Saved undo state belongs to a different device model. No changes made.')
         if restore and record is None:
@@ -291,7 +315,7 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
         return modes[0]
 
     def _plan_paired_ads(self, device, state, current, restore):
-        key = self._state_key(device.serial)
+        key = device.state_key
         record = state.get('paired_ads', {}).get(key)
         if record and record['model'] != device.model:
             raise ToolkitError('Saved paired ad undo belongs to a different tablet model.')
@@ -365,6 +389,8 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
                 for message in completed:
                     log(message)
                 return completed
+            if is_network_selector(plan.serial):
+                pinned_handles.enter_context(self.adb.bind_transport(plan.serial))
             if plan.serial != plan.device.serial or self._writable_device(plan.serial) != plan.device:
                 raise ToolkitError('Device details changed after preview. Refresh and review the action again.')
             if plan.action == 'play':
@@ -457,6 +483,15 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
                 provider = SYNC_PROVIDERS.get(apk.package)
                 if provider:
                     self._finish_sync_provider(plan, provider, completed, log)
+            self._device_guard(plan)
+            disabled = set(self.adb.packages(plan.serial, disabled_only=True))
+            self._device_guard(plan)
+            for apk in staged_order:
+                if apk.package not in disabled:
+                    continue
+                message = f'{apk.package} is installed and disabled for owner user 0.'
+                completed.append(message)
+                log(message)
 
     def _finish_sync_provider(self, plan, provider, completed, log):
         self._device_guard(plan)
@@ -481,7 +516,7 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
             raise ToolkitError('The paired ad setting, package or undo state changed since preview. Review again.')
 
         self._device_guard(plan)
-        key = self._state_key(plan.serial)
+        key = plan.device.state_key
         saved = {'model': plan.device.model, 'value': plan.restore_value, 'mode': plan.saved_package_mode}
         if not plan.saved_pair_exists:
             state.setdefault('paired_ads', {})[key] = saved
@@ -516,7 +551,7 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
         if self._read_ads(plan.serial) != plan.old_value:
             raise ToolkitError('The ad setting changed since preview. Review a fresh plan.')
         state = self._load_state()
-        key = self._state_key(plan.serial)
+        key = plan.device.state_key
         if key in state.get('paired_ads', {}):
             raise ToolkitError('Paired ad undo was saved since preview. Restore the paired ad controls first.')
         record = state['ads'].get(key)

@@ -23,9 +23,17 @@ Run `python3 -m open_fire_toolkit gui --demo` in a desktop session with Tk. On L
 
 ## Release archive
 
-Compare the source ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c fire-tools-0.3.2.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\fire-tools-0.3.2.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `fire-tools-0.3.2.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
+Compare the source ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c fire-tools-0.3.3.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\fire-tools-0.3.3.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `fire-tools-0.3.3.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
+
+On Linux, use an archive utility that preserves executable permissions, such as `unzip`, when running launcher tests. To start Fire Tools from a folder extracted without Unix permissions, use `sh launch-linux.sh`.
 
 The checksum verifies that the ZIP matches the checksum you obtained. Obtain both files from a source you trust.
+
+## REA audit release 0.3.3
+
+On Linux with JDK 21, all 285 application tests, five handbook checks and both rendered desktop smoke scripts passed. They covered selection, preview and confirmation when a Wi-Fi address changes hands, same-tablet recovery across USB and Wi-Fi, owner-scoped Google status and package inspection. A read-only ADB fixture also exercised the CLI with a disabled Play Store and an updated system app. Tests used simulated tablet responses. Physical installation, account sign-in and ad visibility remain unverified.
+
+The [comparison with Fire Toolbox v46](REA-AUDIT.md) identifies the reviewed original by SHA-256 and gives the REA commands and method references. For the downloadable source ZIP, compare its SHA-256 with the checksum on the [0.3.3 release](https://github.com/dev1niscool/fire-tools/releases/tag/v0.3.3).
 
 ## Fire Toolbox debloat preset checks (0.3.2, 2026-11-27)
 

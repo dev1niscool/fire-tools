@@ -20,6 +20,40 @@ class FeatureCliTests(unittest.TestCase):
         self.assertIn('settings-set', output)
         self.assertIn('screenshot', output)
 
+    def test_package_and_google_inspection_are_read_only_and_device_scoped(self):
+        for key, params, expected in (
+                ('package-info', ['--param', 'package=com.android.calendar'], 'installed, disabled'),
+                ('google-status', [], 'Google Play Store (com.android.vending) - installed, enabled')):
+            with self.subTest(key=key):
+                code, help_text = self.run_cli(['tools', '--feature', key])
+                self.assertEqual(code, 0)
+                self.assertIn('Read only', help_text)
+                code, text = self.run_cli(['--demo', 'tool', key, *params])
+                self.assertEqual(code, 1)
+                self.assertIn('--serial', text)
+                with patch('subprocess.Popen', side_effect=AssertionError('hardware')):
+                    code, text = self.run_cli(['--demo', 'tool', key, '--serial', 'DEMO_FIRE_HD10', *params])
+                self.assertEqual(code, 0, text)
+                self.assertIn(expected, text)
+                self.assertNotIn('Preview only', text)
+
+    def test_demo_package_details_rejects_empty_package_id(self):
+        code, text = self.run_cli(['--demo', 'tool', 'package-info', '--serial', 'DEMO_FIRE_HD10'])
+        self.assertEqual(code, 1)
+        self.assertIn('package identifier', text)
+
+    def test_package_details_unicode_version_in_windows_redirection(self):
+        report = 'Version name: 版本3'
+        buffer = io.BytesIO()
+        output = io.TextIOWrapper(buffer, encoding='cp1252')
+        with patch('open_fire_toolkit.cli.Toolkit') as constructor, \
+                contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+            constructor.return_value.package_info.return_value = report
+            code = cli.main(['tool', 'package-info', '--serial', 'tablet', '--param', 'package=com.example.app'])
+            output.flush()
+        self.assertEqual(code, 0)
+        self.assertEqual(buffer.getvalue().decode('cp1252').strip(), report.encode('ascii', 'backslashreplace').decode())
+
     def test_demo_bulk_change_defaults_to_preview(self):
         with patch('subprocess.Popen', side_effect=AssertionError('hardware execution')):
             result, output = self.run_cli(['--demo', 'tool', 'debloat', '--serial', 'DEMO_FIRE_HD10', '--param', 'profile=standard'])

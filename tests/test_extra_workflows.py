@@ -158,6 +158,9 @@ class Tablet:
 
 
 class Harness(DeviceWorkflows, ExtraWorkflows):
+    def _owner_device(self, serial):
+        return self._writable_device(serial)
+
     def _writable_device(self, serial):
         device = self.adb.info(serial)
         if device.user_id != 0 or device.manufacturer != 'Amazon':

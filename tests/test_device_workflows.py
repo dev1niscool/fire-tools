@@ -170,6 +170,9 @@ class Tablet:
 
 
 class Harness(DeviceWorkflows, PackageWorkflows):
+    def _owner_device(self, serial):
+        return self._writable_device(serial)
+
     def _writable_device(self, serial):
         if self.adb.info.user_id:
             raise ToolkitError('owner profile changed')

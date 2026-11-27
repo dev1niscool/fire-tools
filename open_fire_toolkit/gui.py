@@ -260,6 +260,8 @@ class App:
         )
 
     def _play_tab(self):
+        from .feature_catalog import BY_KEY
+
         tab = self._panel(
             "Google Play", "Install Google Play",
             "For a fresh Android 11 ARM64 setup, choose standalone APKs for Google Account Manager, "
@@ -284,7 +286,7 @@ class App:
         guides = self.ttk.Frame(tab, style="Panel.TFrame")
         guides.pack(fill="x", pady=(0, 8))
         self._button(
-            guides, "Find Google APK sources", lambda: self.advanced.show_feature("source-catalog"),
+            guides, "Google APK sources", lambda: self.advanced.show_feature("source-catalog"),
         ).pack(side="left")
         if not self.demo:
             self._button(
@@ -293,7 +295,11 @@ class App:
             ).pack(side="left", padx=6)
         self._button(
             guides, "Battery exemption...", lambda: self.advanced.show_feature("battery-exemption"),
-        ).pack(side="left", padx=6)
+        ).pack(side="left", padx=(6, 0))
+        self._button(
+            guides, "Component status", lambda: self._run_tool(BY_KEY["google-status"], dict),
+            condition=self._connected,
+        ).pack(side="left", padx=(6, 0))
         self._description(
             tab, "Use APKs from a source you trust. If one install fails, earlier packages "
                  "may remain installed. Reboot is a separate action on the Connection tab.",
@@ -388,6 +394,10 @@ class App:
             actions, "Review enable...", lambda: self._plan_app(enable=True),
             condition=lambda: self._selected_app_state() == "Disabled",
         ).pack(side="left")
+        self._button(
+            actions, "App details", self._read_selected_app_info,
+            condition=lambda: self._selected_app_state() is not None,
+        ).pack(side="left", padx=(6, 0))
         packages = self.ttk.Frame(tab, style="Panel.TFrame")
         packages.pack(fill="x")
         self._button(
@@ -522,11 +532,14 @@ class App:
         self.firmware.set("Select a scanned tablet to see firmware and Android details.")
         self._forget_apps()
 
-    def _paths_changed(self, *_):
-        self.toolkit = None
+    def _forget_device_list(self):
         self.devices = []
         self._clear_table(self.device_table)
         self._forget_device()
+
+    def _paths_changed(self, *_):
+        self.toolkit = None
+        self._forget_device_list()
         self._sync_controls()
 
     def _configured_tools(self, title):
@@ -548,9 +561,7 @@ class App:
             if config is None:
                 return
 
-        self.devices = []
-        self._clear_table(self.device_table)
-        self._forget_device()
+        self._forget_device_list()
 
         def scan(log):
             active = toolkit if toolkit is not None else self.Toolkit(config)
@@ -736,6 +747,14 @@ class App:
             return self.loaded_apps[int(selected[0])][1]
         return None
 
+    def _read_selected_app_info(self):
+        from .feature_catalog import BY_KEY
+
+        selected = self.app_table.selection()
+        if selected:
+            package, _ = self.loaded_apps[int(selected[0])]
+            self._run_tool(BY_KEY["package-info"], lambda: {"package": package})
+
     def _plan_app(self, enable):
         selected = self.app_table.selection()
         if selected:
@@ -744,6 +763,13 @@ class App:
                        lambda toolkit, serial: toolkit.plan_package(serial, package, enable=enable))
 
     def _review_plan(self, toolkit, plan: Plan | WorkflowPlan | TransportPlan):
+        if plan.serial and (self.device != plan.device or plan.serial != plan.device.serial):
+            self._forget_device_list()
+            self._sync_controls()
+            self._show_error("Review plan", ValueError(
+                "The connected tablet or its details changed since selection. Scan and select the tablet again.",
+            ))
+            return
         window = self.tk.Toplevel(self.root)
         self.review = window
         self._sync_controls()
@@ -808,9 +834,7 @@ class App:
             or (plan.action == "device_workflow" and plan.operation in ("reboot", "shutdown", "user-switch"))
             or (plan.action == "extra_workflow" and plan.operation in ("wireless-enable", "wireless-usb"))
         ):
-            self._forget_device()
-            self.devices = []
-            self._clear_table(self.device_table)
+            self._forget_device_list()
         else:
             self._forget_apps()
 

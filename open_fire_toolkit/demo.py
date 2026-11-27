@@ -2,9 +2,10 @@
 from dataclasses import replace
 
 from .adb import Device, DeviceInfo
+from .apk import PLAY_CORE
 from .package_catalog import APP_LABELS, STOCK_HOME
-from .package_workflows import PackageWorkflows, _guard_selection, _state_after
-from .service import OPTIONAL_APPS, Plan, ToolkitError
+from .package_workflows import PackageWorkflows, _guard_selection, _package, _state_after
+from .service import OPTIONAL_APPS, Plan, ToolkitError, google_status_text
 from .workflows import TransportPlan, WorkflowPlan
 
 
@@ -73,10 +74,16 @@ class DemoToolkit:
     def plan_google_play(self, serial, paths):
         return self._plan('Google Play installation preview', serial, 'play', (
             'SIMULATED: verify package identities and Google signing certificates.',
-            'SIMULATED: sample core order is Account Manager → Framework → Play services → Play Store.',
+            'SIMULATED: install the four sample packages in order: Account Manager → Framework → Play services → Play Store.',
             'Selected Calendar and Contacts sync adapters follow the core packages in a real installation.',
             'The real workflow requires locally selected genuine APKs and Google build-tools.',
         ))
+
+    def google_status(self, serial):
+        self._check(serial)
+        return 'SIMULATED\n' + google_status_text({
+            package: self._package_state(package) for package in self.demo_packages
+        })
 
     def plan_ads(self, serial, restore=False, *, paired=False):
         if paired:
@@ -109,6 +116,18 @@ class DemoToolkit:
         items = self.disabled if mode == 'disabled' else self.removed if mode == 'uninstalled' else self.demo_packages - self.removed
         return [{'package': package, 'state': 'removed' if package in self.removed else self._package_state(package),
                  'label': APP_LABELS.get(package, package)} for package in sorted(items)]
+
+    def package_info(self, serial, package):
+        self._check(serial)
+        package = _package(package)
+        if package not in self.demo_packages:
+            state = 'not found in the package inventory'
+        elif package in self.removed:
+            state = 'uninstalled'
+        else:
+            state = f'installed, {self._package_state(package)}'
+        return (f'SIMULATED\nPackage: {package}\nLabel: {APP_LABELS.get(package, "not reported")}\n'
+                f'Owner user 0: {state}\nVersion and SDK metadata are omitted in demo mode.')
 
     def _package_state(self, package):
         if package in self.removed:
@@ -251,7 +270,11 @@ class DemoToolkit:
             self.disabled.add(plan.package)
         elif plan.action == 'enable':
             self.disabled.discard(plan.package)
-        elif plan.action not in ('play', 'reboot'):
+        elif plan.action == 'play':
+            sample_packages = ('com.google.android.gsf.login', *PLAY_CORE)
+            self.demo_packages.update(sample_packages)
+            self.removed.difference_update(sample_packages)
+        elif plan.action != 'reboot':
             raise ToolkitError('Unknown simulated action.')
         result = ['SIMULATED: action completed in memory. No hardware was accessed.']
         for message in result:

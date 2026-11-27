@@ -78,16 +78,24 @@ assert "DEMO_FIRE_HD10" in app.status.get()
 assert "SDK 30" in app.firmware.get()
 
 
+def framework_status():
+    report = app.toolkit.google_status(app.device.serial)
+    return next(line for line in report.splitlines() if '(com.google.android.gsf)' in line)
+
+
 tab(1)
 click("Use demo sample")
 assert len(app.apk_table.get_children()) == 4
+assert 'not installed' in framework_status()
 window = review("Verify and review...")
 preview = next(item for item in widgets(window) if isinstance(item, tk.Text))
 assert "SIMULATED" in preview.get("1.0", "end")
 click("Cancel", window)
 assert "Simulation finished" not in app.log_box.get("1.0", "end")
+assert 'not installed' in framework_status()
 confirm(review("Verify and review..."))
 assert "Simulation finished" in app.log_box.get("1.0", "end")
+assert 'installed, enabled' in framework_status()
 
 tab(2)
 errors = []
