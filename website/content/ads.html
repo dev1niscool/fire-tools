@@ -1,0 +1,30 @@
+<section id="amazon">
+  <h2>Remove Special Offers through Amazon</h2>
+  <ol class="steps">
+    <li><strong>Open Lock-screen ads → Open Amazon device settings</strong> or visit <a href="https://www.amazon.com/hz/mycd/digital-console/alldevices">Manage Your Devices</a>. USB is optional.</li>
+    <li><strong>Select your Fire tablet.</strong> Choose <strong>Special Offers → Remove offers</strong> to see its one-time price, if available.</li>
+    <li><strong>Choose End Offers and Pay the Fee</strong> to accept Amazon’s charge. <a href="https://digprjsurvey.amazon.com/csad/help/node/GJHYWUURJ5A6YMBU">Amazon’s removal instructions</a>.</li>
+  </ol>
+</section>
+<section id="firmware">
+  <h2>What to expect on Fire OS 8</h2>
+  <p>Amazon listed <strong>8.3.3.8</strong> for Fire HD 10 (13th generation) on November 27, 2026. Fire Toolbox v46 treats Fire OS 8 builds above 8.3.3.7 as restricted. Firmware may block package changes, ignore the setting or reset it. Check <strong>Settings → Device Options → System Updates</strong>. <a href="https://digprjsurvey.amazon.com/csad/help/node/G2JXLC4L34GX73TE">Amazon’s update list</a> · <a href="https://github.com/dev1niscool/fire-tools/blob/main/docs/REA-NOTES.md#suppressing-and-restoring-lock-screen-offers">v46 firmware comparison</a>.</p>
+  <p class="note">Lock and wake the tablet to check actual ad visibility. The project tested state changes in simulation. Ad suppression and persistence after updates remain unverified on hardware.</p>
+</section>
+<section id="desktop-controls">
+  <h2>Try a desktop control and undo it</h2>
+  <p>Follow the <a href="setup.html">USB setup guide</a>, select the owner tablet and open <strong>Lock-screen ads</strong>. Check the serial before choosing <strong>Confirm and run</strong>.</p>
+  <div class="table-scroll"><table>
+    <thead><tr><th scope="col">Method</th><th scope="col">Apply</th><th scope="col">Undo</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">Setting only</th><td><strong>Review setting change</strong> writes <code>LOCKSCREEN_AD_ENABLED</code> once.</td><td><strong>Review restore</strong> restores the prior value or deletes an originally absent entry.</td></tr>
+      <tr><th scope="row">Setting and package</th><td><strong>Suppress with setting and package</strong> changes the setting and tries to disable Special Offers for the owner.</td><td><strong>Undo setting and package</strong> restores both originals. Use it after partial changes too.</td></tr>
+      <tr><th scope="row">Package only</th><td><strong>Disable Special Offers package</strong> targets <code>com.amazon.kindle.kso</code>.</td><td><strong>Restore Special Offers package</strong> enables it. Undo an active paired change first.</td></tr>
+    </tbody>
+  </table></div>
+  <p>Keep <code>state.json</code> for setting and paired undo. <a href="https://github.com/dev1niscool/fire-tools/blob/main/SECURITY.md#undo-state-and-operation-lock">Local state locations</a>.</p>
+</section>
+<section id="helper">
+  <h2>Optional on-tablet helper</h2>
+  <p>On API 24+, the helper reapplies the setting with a visible notification. Verify the local build and signer before granting secure-settings permission. Use <strong>Stop</strong> before desktop undo or <strong>Restore</strong> to recover the saved value before clearing data or uninstalling. <a href="https://github.com/dev1niscool/fire-tools/blob/main/companion/README.md">Build, install and restore the helper</a>.</p>
+</section>

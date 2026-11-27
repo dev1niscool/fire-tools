@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1422">
+  <meta name="description" content="$description">
+  <title>$browser_title</title>
+  <link rel="icon" type="image/svg+xml" href="assets/mark.svg">
+  <link rel="preload" href="assets/dm-sans.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/site.css">
+  <script defer src="assets/site.js"></script>
+</head>
+<body>
+<a href="#main" class="skip">Skip to content</a>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a href="index.html" class="brand"><img src="assets/mark.svg" width="32" height="36" alt=""><span>Fire Tools</span></a>
+    <span class="brand-section">Documentation</span>
+    <div class="header-actions">
+      <button class="search-trigger" type="button" aria-label="Search guides" aria-haspopup="dialog" hidden>$search<span>Search guides</span><kbd>Ctrl K</kbd></button>
+      <a class="github-link" href="$repo" aria-label="Fire Tools on GitHub">$github<span>GitHub</span>$external</a>
+      <details class="mobile-menu"><summary aria-label="Navigation menu">$menu</summary><div class="mobile-drawer">$mobile_nav</div></details>
+    </div>
+  </div>
+</header>
+<div class="frame">
+  <aside class="rail">
+    $desktop_nav
+    <div class="rail-foot"><span class="version-dot"></span>v$version<span class="rail-sep">/</span><a href="$repo/blob/main/LICENSE">MIT license</a></div>
+  </aside>
+  <main id="main" tabindex="-1">
+    <div class="main-inner">
+      <div class="crumb"><a href="index.html" aria-label="Guide overview">$book</a><span>$chevron</span>$group<span>$chevron</span><strong>$title</strong></div>
+      $contents
+      <footer class="page-foot"><span>Fire Tools documentation</span><a href="$repo/tree/main/website">Site source $external</a></footer>
+    </div>
+  </main>
+</div>
+<dialog id="search-dialog" aria-labelledby="search-title">
+  <div class="search-head"><h2 id="search-title">Search guides</h2><button type="button" class="close-search" aria-label="Close search">$close</button></div>
+  <div class="search-input">$search<input type="search" id="guide-search" aria-label="Search by topic or tool" placeholder="Search by topic or tool" autocomplete="off"></div>
+  <div class="search-results">$search_links</div>
+  <p class="empty-result" role="status" hidden>No matching guides. Try a tool or tablet model.</p>
+</dialog>
+</body>
+</html>

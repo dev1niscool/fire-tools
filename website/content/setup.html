@@ -1,0 +1,43 @@
+<section id="desktop">
+  <h2>Start Fire Tools on your computer</h2>
+  <ol class="steps">
+    <li><strong>Extract the ZIP</strong> and open the folder containing the launchers. <a href="https://github.com/dev1niscool/fire-tools/archive/312709c2bc93df00500232a5c8aa02e43cd46b4e.zip">Download the audited 0.3.1 source</a>.</li>
+    <li><strong>Install Python 3.11+ with Tk.</strong> Select Tcl/Tk on Windows or install <code>python3-tk</code> on Debian/Ubuntu. <a href="https://www.python.org/downloads/">Python downloads</a>.</li>
+    <li><strong>Run a launcher</strong> from the extracted folder. The offline demo works without a tablet.</li>
+  </ol>
+  <div class="table-scroll"><table>
+    <thead><tr><th scope="col">Computer</th><th scope="col">Regular app</th><th scope="col">Offline demo</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">Windows PowerShell</th><td><code>.\launch-windows.cmd</code></td><td><code>.\launch-windows.cmd gui --demo</code></td></tr>
+      <tr><th scope="row">Linux terminal</th><td><code>sh launch-linux.sh</code></td><td><code>sh launch-linux.sh gui --demo</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+<section id="android-tools">
+  <h2>Select the Android tools</h2>
+  <p>Extract Google’s Platform-Tools. In <strong>Connection → ADB → Browse</strong>, select <code>platform-tools/adb.exe</code> (Windows) or <code>platform-tools/adb</code> (Linux). <a href="https://developer.android.com/tools/releases/platform-tools">Get SDK Platform-Tools</a>.</p>
+  <p>For APK installation, install Android SDK Build-Tools under <strong>Tools → SDK Manager → SDK Tools</strong> in Android Studio. Set three more fields in Fire Tools. <a href="https://developer.android.com/studio/intro/update#sdk-manager">Using SDK Manager</a>.</p>
+  <ul>
+    <li><strong>AAPT</strong> — <code>aapt.exe</code> or <code>aapt</code> in your Build-Tools version folder.</li>
+    <li><strong>APK signer</strong> — <code>lib/apksigner.jar</code> in that folder.</li>
+    <li><strong>Java</strong> — <code>bin/java.exe</code> or <code>bin/java</code> from a JDK. Android Studio includes Java in <code>jbr/bin</code>. The project tested Build-Tools 36.0.0 with JDK 21.</li>
+  </ul>
+</section>
+<section id="usb">
+  <h2>Authorize the USB connection</h2>
+  <ol class="steps">
+    <li><strong>Switch to the primary adult profile.</strong> In <strong>Settings → Device Options → About Fire Tablet</strong>, tap <strong>Serial Number</strong> seven times.</li>
+    <li><strong>Return to Device Options → Developer Options.</strong> Turn on Developer Options and <strong>USB debugging</strong> (sometimes <strong>Enable ADB</strong>). Windows may need Amazon’s driver. <a href="https://developer.amazon.com/docs/fire-tablets/connecting-adb-to-device">Amazon’s Fire tablet USB and driver guide</a>.</li>
+    <li><strong>Unlock the tablet and connect a USB data cable.</strong> Choose <strong>Connection → Scan devices</strong>, then approve your computer’s RSA fingerprint on the tablet.</li>
+    <li><strong>Scan again.</strong> Highlight your serial with state <code>device</code> and choose <strong>Use selected tablet</strong>. Note the model, Fire OS, SDK and ABIs.</li>
+  </ol>
+  <p>Changes require owner user 0 and API 23 or newer. <a href="https://xdaforums.com/t/windows-linux-tool-fire-toolbox-v46-0.3889604/#post-78664542">Original XDA guide</a> · <a href="https://web.archive.org/web/20261108011721/https://xdaforums.com/t/windows-linux-tool-fire-toolbox-v46-0.3889604/">Archived XDA guide</a>.</p>
+</section>
+<section id="troubleshooting">
+  <h2>If the tablet does not appear</h2>
+  <ul>
+    <li><strong>Unauthorized.</strong> Unlock, reconnect, accept the debugging prompt and scan again.</li>
+    <li><strong>Offline or missing.</strong> Try another data cable or port. Check Windows Device Manager for Android Composite ADB Interface, or Linux USB permissions and udev rules. <a href="https://developer.android.com/studio/run/device">Android’s hardware device setup</a>.</li>
+  </ul>
+  <p>Afterward, Developer Options lets you turn off USB debugging and revoke saved authorizations.</p>
+</section>

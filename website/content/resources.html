@@ -1,0 +1,38 @@
+<section id="source">
+  <h2>Get the source</h2>
+  <p>Download the MIT-licensed Python source from GitHub with <strong>Code → Download ZIP</strong>, then extract it. The optional helper ships as Java source. <a href="https://github.com/dev1niscool/fire-tools">GitHub repository</a> · <a href="setup.html">Setup guide</a></p>
+  <ul>
+    <li><a href="https://github.com/dev1niscool/fire-tools/blob/main/README.md">Project README</a> covers the offline demo and command line.</li>
+    <li><a href="https://github.com/dev1niscool/fire-tools/blob/main/docs/FEATURES.md">Feature matrix</a> lists tools and firmware limits.</li>
+    <li><a href="https://xdaforums.com/t/windows-linux-tool-fire-toolbox-v46-0.3889604/#post-78664542">Datastream33’s original Fire Toolbox thread on XDA</a>. <a href="https://github.com/dev1niscool/fire-tools/blob/main/docs/PARITY-RESEARCH.md">Read the v46 comparison</a></li>
+  </ul>
+</section>
+
+<section id="downloads">
+  <h2>Find the required downloads</h2>
+  <ul>
+    <li>The desktop app needs Python 3.11+ with Tk. <a href="https://www.python.org/downloads/">Python downloads</a></li>
+    <li>Get ADB from Platform-Tools. APK verification needs Build Tools and Java. <a href="https://developer.android.com/tools/releases/platform-tools">Platform-Tools</a> · <a href="https://developer.android.com/tools/releases/build-tools">Build Tools</a> · <a href="https://developer.android.com/studio/command-line/sdkmanager">SDK Manager</a></li>
+    <li>Choose a standalone APK for the Android API and architectures under <strong>Connection</strong>. <a href="https://github.com/dev1niscool/fire-tools/blob/main/docs/GOOGLE-APKS.md">Google APK download and verification guide</a></li>
+  </ul>
+</section>
+
+<section id="audit">
+  <h2>Check the audit evidence</h2>
+  <p>ClamAV found zero detections in two copies of the 0.3.1 source. Use <strong>Google Play → Choose APKs... → Check scan records</strong> to compare local files with six scanned APKs by SHA-256. One legacy check timed out on Play services and Play Store.</p>
+  <p>The installer verifies Google’s signature and the installed bytes. Tests used a simulated tablet. Physical-tablet installation and sign-in remain unverified. <a href="https://github.com/dev1niscool/fire-tools/blob/main/docs/TESTING.md">Audit, checksums and test results</a> · <a href="https://github.com/dev1niscool/fire-tools/blob/main/SECURITY.md">Security and local state</a></p>
+</section>
+
+<section id="undo-files">
+  <h2>Keep your undo files</h2>
+  <p>Keep this folder on your computer to restore ad, package and settings changes.</p>
+  <ul>
+    <li><strong>Windows</strong> uses <code>%LOCALAPPDATA%\open-fire-toolkit</code>, with the home folder as fallback.</li>
+    <li><strong>Linux</strong> uses <code>$XDG_STATE_HOME/open-fire-toolkit</code> or <code>~/.local/state/open-fire-toolkit</code>.</li>
+  </ul>
+</section>
+
+<section id="support">
+  <h2>Report a problem</h2>
+  <p>Include your tablet model and generation, Fire OS, computer OS, tool name, exact error and any completed steps. Remove serial numbers, account details and private paths before posting. <a href="https://github.com/dev1niscool/fire-tools/issues">Fire Tools issue tracker</a></p>
+</section>

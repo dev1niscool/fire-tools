@@ -1,0 +1,40 @@
+<section class="guide-section" id="identify">
+  <h2>Find your model and version</h2>
+  <p>In <strong>Settings → Device Options</strong>, open <strong>About Fire Tablet</strong> for the generation and <strong>System Updates</strong> for the installed Fire OS version. After <a href="setup.html">USB setup</a>, the <strong>Connection</strong> tab also shows your Android API level (SDK), supported processor architectures (ABIs) and active user.</p>
+</section>
+
+<section class="guide-section" id="model-table">
+  <h2>Find the guide for your tablet</h2>
+  <div class="table-scroll" role="region" aria-label="Fire tablet models and applicable guides" tabindex="0">
+    <table style="min-width: 0">
+      <thead>
+        <tr><th scope="col">Model and generation</th><th scope="col">Operating system</th><th scope="col">Where to start</th></tr>
+      </thead>
+      <tbody>
+        <tr><th scope="row">Fire HD 10<br>2023 · 13th gen</th><td>Fire OS 8<br>Android 11 · API 30</td><td><a href="google-play.html">Reference Play APKs</a></td></tr>
+        <tr><th scope="row">Fire HD 10<br>2021 · 11th gen</th><td>Fire OS 7<br>Android 9 · API 28</td><td><a href="apps.html">Manage apps</a></td></tr>
+        <tr><th scope="row">Fire Max 11<br>2023 · 13th gen</th><td>Fire OS 8<br>Android 11 · API 30</td><td><a href="google-play.html">Choose Play APKs</a></td></tr>
+        <tr><th scope="row">Fire HD 8<br>2022 or 2024 · 12th gen</th><td>Fire OS 8<br>Android 11 · API 30</td><td><a href="google-play.html">Choose Play APKs</a></td></tr>
+        <tr><th scope="row">Fire HD 8<br>2020 · 10th gen</th><td>Fire OS 7<br>Android 9 · API 28</td><td><a href="apps.html">Manage apps</a></td></tr>
+        <tr><th scope="row">Fire 7<br>2022 · 12th gen</th><td>Fire OS 8<br>Android 11 · API 30</td><td><a href="google-play.html">Choose Play APKs</a></td></tr>
+        <tr><th scope="row">Fire 7<br>2019 · 9th gen</th><td>Fire OS 6 (Android 7.1 · API 25) or Fire OS 7 (Android 9 · API 28)</td><td><a href="apps.html">Manage apps</a></td></tr>
+        <tr><th scope="row">Fire HD 10, HD 8, Fire 7<br>2017 · 7th gen</th><td>Fire OS 5<br>Android 5.1 · API 22</td><td><a href="setup.html">Read device info</a> only, if ADB connects</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>The 2019 Fire 7 shipped with Fire OS 6. Use the version installed on yours. <a href="https://developer.amazon.com/docs/device-specs/ft-identify-tablet-devices.html">Amazon’s full model list</a> · <a href="https://developer.amazon.com/docs/fire-tablets/fire-os-7">Fire OS 7 guide</a>.</p>
+</section>
+
+<section class="guide-section" id="supported-actions">
+  <h2>Check your API level and architecture</h2>
+  <p>Tablet changes require authorized ADB, Amazon as the reported manufacturer, a model name, API 23 or newer, and the primary adult profile (<strong>User 0</strong>). Firmware may still refuse individual changes.</p>
+  <p>The 2023 HD 10 reference Play services APK requires <strong>API 30 and <code>arm64-v8a</code></strong>. For Fire OS 6 or 7, choose standalone APKs compatible with your tablet’s ABI and a minimum API at or below its installed level. <a href="google-play.html">Choose Google Play files</a>.</p>
+  <p class="note">Fire Tools verified signatures and install order on a computer for four v46 core APKs and two separate sync adapters. ADB installation was simulated. Installation, sign-in and ad visibility on physical tablets remain unverified. <a href="https://github.com/dev1niscool/fire-tools/blob/main/docs/TESTING.md#fire-toolbox-v46-workflow-checks-03-2026-11-27">Project test record</a>.</p>
+</section>
+
+<section class="guide-section" id="firmware">
+  <h2>Lock-screen ads on recent firmware</h2>
+  <p>On November 27, 2026, Amazon listed <strong>8.3.3.8</strong> for the 13th-generation HD 10 and Max 11 and the 12th-generation HD 8 and Fire 7. The 11th-generation HD 10 listing showed <strong>7.3.3.1</strong>. <a href="https://digprjsurvey.amazon.com/csad/help/node/G2JXLC4L34GX73TE">Check Amazon’s current listings</a>.</p>
+  <p>Fire Toolbox v46 treats Fire OS 8 builds above <strong>8.3.3.7</strong> as restricted. Firmware may protect Special Offers or reset the ad setting. Check the lock screen after waking the tablet. Amazon’s account-based removal is the reliable option where available. <a href="ads.html">Lock-screen ads guide</a>.</p>
+  <p><a href="https://xdaforums.com/t/windows-linux-tool-fire-toolbox-v46-0.3889604/#post-78664542">Original XDA Fire Toolbox guide</a> · <a href="https://web.archive.org/web/20261108011721/https://xdaforums.com/t/windows-linux-tool-fire-toolbox-v46-0.3889604/">Archived thread</a> · <a href="https://github.com/dev1niscool/fire-tools/blob/main/docs/REA-NOTES.md#suppressing-and-restoring-lock-screen-offers">v46 firmware check</a>.</p>
+</section>

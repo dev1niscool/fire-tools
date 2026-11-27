@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 .superpowers/
 dist/
+_site/
 *.egg-info/
 *.apk
 *.apkm

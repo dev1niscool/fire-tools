@@ -2,6 +2,8 @@
 
 An independent, MIT-licensed desktop and command-line toolkit for Amazon Fire tablets. Version 0.3 adds the Google sync adapters, Fire Toolbox v46 debloat lists and combined lock-screen ad controls. It also includes launcher and keyboard controls, backups, file transfers, screen capture and wireless ADB.
 
+[Read the Fire tablet field guide](https://dev1niscool.github.io/fire-tools/) for setup, model compatibility and step-by-step tool guides.
+
 This release is designed for Fire tablets running Android API 23 or later. Device changes require the primary adult (owner) profile. Compatibility on a physical tablet, including the Fire HD 10, remains unverified.
 
 ## Checking your download

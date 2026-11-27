@@ -1,0 +1,27 @@
+<section id="choose-files">
+  <h2>Choose APKs for your tablet</h2>
+  <p>These scanned builds target the 2023 Fire HD 10 (13th generation, <code>KFTUWI</code>), Android 11/API 30. Play services requires ARM64. In <strong>Connection</strong>, check your tablet’s SDK and ABIs before choosing files. <a href="compatibility.html">Check tablet compatibility</a>.</p>
+  <p>Select the three core files. Add Account Manager for the four-file v46 setup and either adapter for optional sync.</p>
+  <div class="table-scroll"><table>
+    <thead><tr><th scope="col">Component</th><th scope="col">When to select it</th><th scope="col">Exact scanned build</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">Google Account Manager</th><td>Legacy login component for the four-file setup</td><td><a href="https://www.apkmirror.com/apk/google-inc/google-account-manager/google-account-manager-7-1-2-release/google-account-manager--7-1-2-android-apk-download/">7.1.2 · APKMirror</a></td></tr>
+      <tr><th scope="row">Google Services Framework</th><td>Core</td><td><a href="https://www.apkmirror.com/apk/google-inc/google-services-framework/google-services-framework-10-6494331-release/google-services-framework-10-6494331-android-apk-download/">10-6494331 · APKMirror</a></td></tr>
+      <tr><th scope="row">Google Play services</th><td>Core</td><td><a href="https://www.apkmirror.com/apk/google-inc/google-play-services/google-play-services-25-20-37-release/google-play-services-25-20-37-150400-766884605-android-apk-download/">25.20.37 (150400) · APKMirror</a></td></tr>
+      <tr><th scope="row">Google Play Store</th><td>Core</td><td><a href="https://www.apkmirror.com/apk/google-inc/google-play-store/google-play-store-36-3-12-release/google-play-store-36-3-12-21-0-pr-542033711-2-android-apk-download/">36.3.12-21 · APKMirror</a></td></tr>
+      <tr><th scope="row">Google Calendar Sync</th><td>Optional calendar events</td><td><a href="https://gitlab.opengapps.org/opengapps/all/-/blob/b458223777512c97639cb6bb54bfad93047406d7/app/com.google.android.syncadapters.calendar/30/nodpi/2017005136.apk">2021.23.3 · Open GApps</a></td></tr>
+      <tr><th scope="row">Google Contacts Sync</th><td>Optional contacts</td><td><a href="https://gitlab.opengapps.org/opengapps/all/-/blob/b458223777512c97639cb6bb54bfad93047406d7/app/com.google.android.syncadapters.contacts/30/nodpi/30.apk">11 · Open GApps</a></td></tr>
+    </tbody>
+  </table></div>
+  <p>Save standalone <code>.apk</code> files on your computer. Choose <strong>Download APK</strong> on APKMirror or the download button on Open GApps. Split <code>.apkm</code> and <code>.xapk</code> bundles are unsupported.</p>
+</section>
+<section id="verify-install">
+  <h2>Verify the files and install</h2>
+  <ol class="steps">
+    <li><strong>Check the file hashes.</strong> Use <strong>Google Play → Choose APKs → Check scan records</strong> before connecting. A SHA-256 match identifies the exact scanned bytes.</li>
+    <li><strong>Check the signatures.</strong> Complete the <a href="setup.html">USB and Android tools setup</a> and choose <strong>Verify and review</strong>. Fire Tools checks package ID, API, ABI and Google’s pinned signer, including the verified key rotation for Play services.</li>
+    <li><strong>Read the plan.</strong> Check the model, serial and install order. For sync alone, select just the adapters. Fire Tools verifies the installed core packages.</li>
+    <li><strong>Choose Confirm and run.</strong> Fire Tools checks installed bytes for owner user 0. Failure stops the batch after any successful installs. After success, optionally restart via <strong>Connection → Review reboot</strong>, then sign in on the tablet.</li>
+  </ol>
+  <p class="note">The November 27, 2026 scan reported zero detections. One legacy check timed out on Play services and Play Store. The project tested installation in simulation. Sign-in, sync and certification still need a physical tablet test. <a href="https://github.com/dev1niscool/fire-tools/blob/main/docs/TESTING.md">Scan and test results</a> · <a href="https://support.google.com/android/answer/7165974">Google’s certification guidance</a>.</p>
+</section>

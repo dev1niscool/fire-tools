@@ -1,0 +1,26 @@
+<section id="one-app">
+  <h2>Disable or enable one Amazon app</h2>
+  <ol class="steps">
+    <li><strong><a href="setup.html">Connect the tablet</a></strong> in the primary adult profile. Open <strong>Apps → Read app states</strong> to see which common Amazon apps are installed, including Audible and Kindle books.</li>
+    <li><strong>Select an app and choose Review disable.</strong> Check its package ID and tablet serial, then choose <strong>Confirm and run</strong>. A disabled app stays installed and keeps its data.</li>
+    <li><strong>Choose Read app states</strong> again. To restore the app, select its disabled row, choose <strong>Review enable</strong> and confirm.</li>
+  </ol>
+</section>
+<section id="debloat">
+  <h2>Review a debloat preset</h2>
+  <p><strong>Standard</strong> lists 22 packages, including Kindle books and Prime Video. <strong>Complete</strong> lists 35, adding Silk, Amazon Appstore and Camera among others.</p>
+  <ol class="steps">
+    <li><strong>Open Apps → Debloat Amazon apps.</strong> Under <strong>Debloat list</strong>, choose <code>standard</code>, <code>complete</code> or <code>custom</code>. Custom accepts a Toolbox <code>.debloat</code> file or plain package list.</li>
+    <li><strong>Choose the action.</strong> <code>auto</code> disables built-in presets and <code>ListType=debloat</code> entries, or enables <code>ListType=restore</code> entries. <code>uninstall</code> removes apps for the owner.</li>
+    <li><strong>Choose Review.</strong> Inspect the owner’s before/after states and skipped items. Absent and protected apps, including Amazon Device Setup, are skipped. If a preset includes apps you still use, cancel and use <strong>Tools → Disable selected apps</strong> to pick individual packages.</li>
+    <li><strong>Choose Confirm and run.</strong> In <strong>Apps → Package inventory</strong>, select <code>disabled</code> and choose <strong>Read</strong> to verify.</li>
+  </ol>
+</section>
+<section id="restore">
+  <h2>Restore your apps</h2>
+  <ul>
+    <li><strong>Undo a batch, including a partial one.</strong> On the same computer and tablet, choose <strong>Tools → Undo saved package changes → Review</strong>, then <strong>Confirm and run</strong>. Check the saved target states before confirming. Undo before another batch replaces those states.</li>
+    <li><strong>Choose Tools → Restore apps removed for owner</strong> and review the package. Built-in apps retain their system image. If a third-party package has disappeared from storage, restoring it may require the original signed APK.</li>
+    <li><strong>Keep <code>packages-state.json</code></strong> for batch undo. Fire Tools saves the file in the desktop user’s state directory. Undo restores package states. Clearing app data is irreversible. <a href="https://github.com/dev1niscool/fire-tools/blob/main/SECURITY.md#undo-state-and-operation-lock">Find the state directory</a>.</li>
+  </ul>
+</section>
