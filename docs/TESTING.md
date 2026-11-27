@@ -23,7 +23,7 @@ Run `python3 -m open_fire_toolkit gui --demo` in a desktop session with Tk. On L
 
 ## Release archive
 
-Compare the source ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c fire-tools-0.3.3.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\fire-tools-0.3.3.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `fire-tools-0.3.3.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
+The GitHub release page provides the checksum for GitHub’s tagged source ZIP. If you build the separate source-only distribution using `scripts/package_release.py`, compare that ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c fire-tools-0.3.3.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\fire-tools-0.3.3.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `fire-tools-0.3.3.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
 
 On Linux, use an archive utility that preserves executable permissions, such as `unzip`, when running launcher tests. To start Fire Tools from a folder extracted without Unix permissions, use `sh launch-linux.sh`.
 
@@ -33,7 +33,15 @@ The checksum verifies that the ZIP matches the checksum you obtained. Obtain bot
 
 On Linux with JDK 21, all 285 application tests, five handbook checks and both rendered desktop smoke scripts passed. They covered selection, preview and confirmation when a Wi-Fi address changes hands, same-tablet recovery across USB and Wi-Fi, owner-scoped Google status and package inspection. A read-only ADB fixture also exercised the CLI with a disabled Play Store and an updated system app. Tests used simulated tablet responses. Physical installation, account sign-in and ad visibility remain unverified.
 
-The [comparison with Fire Toolbox v46](REA-AUDIT.md) identifies the reviewed original by SHA-256 and gives the REA commands and method references. For the downloadable source ZIP, compare its SHA-256 with the checksum on the [0.3.3 release](https://github.com/dev1niscool/fire-tools/releases/tag/v0.3.3).
+The [comparison with Fire Toolbox v46](REA-AUDIT.md) identifies the reviewed original by SHA-256 and gives the REA commands and method references. GitHub’s Windows and Linux [source checks](https://github.com/dev1niscool/fire-tools/actions/runs/46074238406) passed on Python 3.11 and 3.13. At the implementation commit, ClamAV 1.5.5 loaded 3,628,228 official signatures and reported zero detections or warnings on the [repository ZIP](https://github.com/dev1niscool/fire-tools/archive/bde8cc83f5dc84155fc2da8f6b470f1775405d45.zip) (SHA-256 `5680787dd05ec5757cd1934ca3c2478e74da0120749196e376b6e038d06fc871`). All 109 files matched Git. The separate source-only ZIP built from the same commit also had zero detections or warnings (SHA-256 `a172f8ce6b99a09716e83ddd10172089368051b1b6350cfdd3880c8481892351`). All 285 application tests passed from the extracted source-only ZIP.
+
+For the user-facing tagged GitHub source ZIP, compare its SHA-256 with the checksum on the [0.3.3 release](https://github.com/dev1niscool/fire-tools/releases/tag/v0.3.3).
+
+### Original Windows download
+
+We rehashed both previously downloaded v46 mirror copies. The Google Drive and MEGA archives had the same SHA-256, `6425d9bb6e1ae231d6bf14865790bd8846075795ac334b6d9f05b5f53cbd47af`. Their Windows executables both matched `34be37dff0c3bf40cb34155896e92b70d9dfdff5cb969c780cade88f13f74079`. REA inspected that executable as data.
+
+ClamAV 1.5.5 and 3,628,228 official signatures returned zero malware detections on the ZIP and on the executable scanned separately. With limit alerts enabled, 200,000 nested files, 32 archive levels, 512 MiB per inner file and 2 GiB per target, the earlier nested-file warning did not recur. One legacy Android bytecode check exceeded its 60-second allowance on each scan. The outcome covers these specific downloads. Future updater payloads and behavior on a physical tablet were outside the scan. [Mirror provenance](PARITY-RESEARCH.md#xda-setup-and-download-provenance) · [Original updater observations](REA-NOTES.md)
 
 ## Fire Toolbox debloat preset checks (0.3.2, 2026-11-27)
 
