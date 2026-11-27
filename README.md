@@ -1,8 +1,35 @@
-# Open Fire Toolkit
+# Fire Tools
 
-An independent, open-source desktop and command-line toolkit for Amazon Fire tablets. It verifies and installs locally supplied Google Play APKs, previews a reversible lock-screen setting change, and provides device diagnostics, optional-app controls and a normal restart.
+An independent, MIT-licensed desktop and command-line toolkit for Amazon Fire tablets. Version 0.2 expands the original focused release with bulk Amazon app management, reversible debloat presets, launcher and keyboard controls, settings, backups, shared files, screen capture, diagnostics, wireless ADB, and an optional source-built ad helper.
 
 This release is designed for Fire tablets running Android API 23 or later. Device changes require the primary adult (owner) profile. Compatibility on a physical tablet, including the Fire HD 10, remains unverified.
+
+## The three main workflows
+
+| Goal | Where to find it | What it does |
+| --- | --- | --- |
+| Install Google Play | **Google Play** | Verifies locally selected Google components against the pinned Google signing certificate, checks compatibility and installs them in dependency order. |
+| Debloat Amazon apps | **Apps → Debloat presets** or **Tools → Amazon apps** | Standard, complete or custom package lists; disable or remove for the owner; preview the exact installed targets; save prior states for undo. Core infrastructure is protected. |
+| Disable lock-screen ads | **Lock-screen ads** | Temporary setting, Special Offers package disable/restore, or optional [source-built helper](companion/README.md). All depend on firmware; no mode guarantees that ads disappear. |
+
+Removing a system package for the owner does not erase its read-only system image. Restoring it uses the existing package image; a removed third-party app may need its original APK. Debloat previews disclose skipped packages and potential dependencies. Do not select an app you still need.
+
+## More tools
+
+The searchable **Tools** tab exposes installed-app inventory, batch app controls, verified standalone APK sideloading, system-app update/rollback, launcher and keyboard selection, permissions, app operations, settings editing and undo, privacy/display/sound options, configuration backups, APK extraction, file copy, screenshots, recording, logs, profiles, power and connection utilities.
+
+The command line uses the same catalog:
+
+```sh
+python -m open_fire_toolkit tools
+python -m open_fire_toolkit tools --feature debloat
+python -m open_fire_toolkit --demo tool debloat --serial DEMO_FIRE_HD10 --param profile=standard
+python -m open_fire_toolkit tool source-catalog
+```
+
+For a real tablet, put the tool paths before `tool`, include `--serial` from `devices`, and provide the listed `--param key=value` arguments. Mutations default to preview. Add `--yes` only after reviewing the action. Source links and Wi-Fi endpoint connection do not require a selected tablet; connecting does not automatically select it.
+
+See [feature coverage and remaining differences](docs/FEATURES.md), [original Toolbox comparison](docs/PARITY-RESEARCH.md), and [verification](docs/TESTING.md). **This is not a verified drop-in replacement for every Fire Toolbox 46 option.** The original's privileged exploits, several companion-assisted workarounds, automatic version-selected APK downloads, split APK bundle installation and some device-profile options are not reproduced. A settings-page shortcut is labeled as a shortcut, not as successful device configuration.
 
 ## Try the offline demo
 
@@ -51,9 +78,11 @@ Obtain standalone APKs you are legally entitled to use from a source you trust. 
 
 For official Special Offers removal, open **Lock-screen ads** and choose **Open Amazon device settings**. Select your Fire tablet and follow Amazon's paid removal process where available. [Amazon device settings](https://www.amazon.com/mycd)
 
-The experimental option writes `LOCKSCREEN_AD_ENABLED=0` once. The firmware may ignore the value or reset it. The toolkit saves the prior value locally before writing and can restore it, including deleting the setting if it was originally absent. This feature has no persistent automation. Keep the local undo file until you have finished experimenting. [Security and local state](SECURITY.md)
+The basic experimental option writes `LOCKSCREEN_AD_ENABLED=0` once. The firmware may ignore the value or reset it. The toolkit saves the prior value locally before writing and can restore it, including deleting the setting if it was originally absent. Keep the local undo file until you have finished experimenting. [Security and local state](SECURITY.md)
 
-The **Apps** tab reads the current state of a small set of optional Amazon apps. Select one and review a disable or enable plan. Disabling leaves the package and its data on the tablet.
+Package mode disables or enables `com.amazon.kindle.kso` and confirms its package state. Firmware may protect it. The optional **Fire Tools Ads Helper** is original Java source, built locally with official Android tools. It needs Android API 24 or later and an explicit secure-settings permission grant. Its visible foreground service reapplies the setting and can stop or restore the original value. Build, verify and install it using the [helper guide](companion/README.md); use the printed signer fingerprint in the desktop helper setup. The helper's setting readback still does not establish actual ad visibility.
+
+The **Apps** tab retains quick controls for common Amazon apps and links to the full inventory and debloat tools. The full package picker supports multiple targets. Disabling leaves the package and its data on the tablet. Package undo retains the recorded target states even when a batch stops partway through; read its preview before restoring.
 
 ## CLI examples
 

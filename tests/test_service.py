@@ -77,6 +77,30 @@ class ServiceTests(unittest.TestCase):
         plan=self.app.plan_ads('SERIAL123')
         with self.assertRaises(ToolkitError): self.app.execute(plan)
         self.assertFalse(any('put' in c for c in self.adb.commands))
+
+    def test_linked_state_directory_is_refused_before_ads_write(self):
+        destination = self.root / 'outside'
+        destination.mkdir()
+        try:
+            self.app.state_dir.symlink_to(destination, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest('Directory symlinks unavailable')
+        with self.assertRaises((ToolkitError, OSError)):
+            plan = self.app.plan_ads('SERIAL123')
+            self.app.execute(plan, True)
+        self.assertEqual(self.adb.value, '1')
+        self.assertEqual(list(destination.iterdir()), [])
+
+    def test_lock_recovery_message_names_persistent_state_path(self):
+        self.app.state_dir.mkdir()
+        lock = self.app.state_dir / 'operation.lock'
+        lock.write_text('old process')
+        plan = self.app.plan_ads('SERIAL123')
+        with self.assertRaises(ToolkitError) as error:
+            self.app.execute(plan, True)
+        self.assertIn(str(lock), str(error.exception))
+        self.assertNotIn('/proc/', str(error.exception))
+        self.assertTrue(lock.exists())
     def test_ads_suppress_repeat_restore_keeps_original(self):
         for _ in range(2): self.app.execute(self.app.plan_ads('SERIAL123'),True,log=lambda x:None)
         self.assertEqual(self.adb.value,'0')

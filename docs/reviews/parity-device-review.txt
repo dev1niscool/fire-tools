@@ -1,0 +1,132 @@
+Device workflow review
+======================
+
+Verdict. Changes required before release.
+
+High — The ordinary permission workflow omits helper signer verification.
+open_fire_toolkit/device_workflows.py lines 675–687 and 880–886. The dedicated
+helper flow inspects the installed APK and matches the signer before requesting
+WRITE_SECURE_SETTINGS. The general grant flow accepts the same helper package
+and permission and checks only package presence. Both reach _permission_step.
+Require the verified workflow for this grant at the shared grant boundary. The
+signer test at tests/test_device_workflows.py line 358 covers helper-start only.
+
+High — A first undo snapshot can follow a symlinked state directory.
+open_fire_toolkit/device_workflows.py lines 313–318 and 332–344. The code checks
+path components only when the undo file already exists. For a first save it
+creates staging under path.parent and publishes there with os.replace. A linked
+ancestor therefore redirects the new private undo file. Validate and pin the
+state directory before both the initial save and replacement. This also matters
+for user-selected export destinations at lines 219–236, where validation and
+publication resolve the parent by pathname in separate operations. Use a stable
+directory handle for staging and publication, or fail closed where unavailable.
+
+High — Failed readbacks can hide a mutation that already happened.
+open_fire_toolkit/device_workflows.py lines 853–858, 866–871, 892–901 and
+942–961. Package restore, display, app-op and permission commands record the
+change only after a second device call returns. A disconnect during readback
+omits the current accepted command from Toolkit.execute's partial-progress
+message. For the helper this can leave a broad permission granted with only a
+readback error reported. Record the accepted request before querying state and
+upgrade that entry after verification, as the settings path does at lines
+838–843. Likewise, a completed push is recorded only after remote cleanup at
+lines 859–861 and 989–999, so a cleanup failure hides an already published file.
+
+Medium — Diagnostic reads omit the requested Amazon owner boundary.
+open_fire_toolkit/device_workflows.py lines 280–310. Serial selection occurs in
+the ADB runner, but read_device_tool never checks manufacturer or active user.
+The normal feature dispatcher calls it directly. It can therefore return owner
+settings, logs and user lists while a secondary profile is active. Check the
+selected tablet and owner before reading. The logcat test uses an owner tablet
+and does not exercise refusal on a secondary profile.
+
+Medium — Permission and app-op previews do not bind the previous grant or mode.
+open_fire_toolkit/device_workflows.py lines 675–688, 810–813 and 885–893.
+The generated step contains only the requested state and package name. A grant
+or app-op change made on the tablet after preview leaves the plan equal, so
+execution can overwrite the intervening change. Capture the owner state where
+Android exposes it, show it in the preview and recheck before the write. When
+the firmware cannot expose that state, disclose the limitation in the preview.
+
+Verification
+------------
+Reviewed the device brief, device change set, current module and focused tests,
+and the service dispatch and ADB runner they call. Ran the following command
+against the current files. All 24 tests passed in the simulated tablet harness.
+
+  python -m unittest discover -s tests -p test_device_workflows.py -q
+
+The full suite and physical tablet behavior were outside this scoped review.
+
+Round-one re-review
+-------------------
+
+Verdict. Changes required. The helper grant, first-save undo protection,
+accepted-command reporting and owner-only diagnostic reads now address their
+original findings. Permission previews capture the owner grant. App-op
+previews still miss an Android output form. The new staging and lock code also
+introduces the following cleanup and recovery issues.
+
+High — Temporary staging cleanup can remove an unrelated directory.
+open_fire_toolkit/device_workflows.py lines 253–265. _private_stage pins the
+staging directory for writes, then closes its descriptor before the surrounding
+TemporaryDirectory exits. TemporaryDirectory recursively removes the entry now
+at its original name. A concurrent rename in a writable shared parent can
+leave a different ordinary directory at that name. Its contents then become
+the cleanup target. The existing rename test moves an ancestor and leaves the
+staging entry intact. Keep cleanup anchored to the held staging directory and
+avoid recursive removal of any replacement entry. Verify replacement contents
+are preserved as part of the regression coverage.
+
+Medium — Explicit UID app-op modes remain outside the stale-state check.
+open_fire_toolkit/device_workflows.py lines 1029–1043 and 1104–1110. Android
+can report a UID-level mode on a line beginning with "Uid mode:". The parser
+only accepts lines beginning with the operation name. In a read-only parser
+check, "Uid mode: CAMERA: foreground" produced None. A change to another
+explicit UID mode in that form also maps to None, leaving the preview equal.
+Preserve the UID and package entries separately where both are returned, and
+check both on execution. An actual conflicting readback must surface as such.
+
+Medium — The Linux lock recovery message gives an expired path.
+open_fire_toolkit/service.py lines 225–233 and 285–288. When a lock already
+exists, the error now displays the path under /proc/<pid>/fd/<fd>. The finally
+block closes that descriptor before the user receives the message. A temporary
+lock-file check verified that the displayed path no longer resolved while the
+actual lock remained in the state directory. Keep descriptor-relative I/O and
+use self.state_dir / 'operation.lock' for the user-facing recovery path.
+
+Fresh verification. All 35 device tests passed with the same focused unittest
+command shown above. Two additional read-only checks covered the UID app-op
+parser and the lifetime of the Linux lock recovery path. This pass did not
+repeat the integrated suite or exercise Windows, macOS or a physical tablet.
+
+Round-two re-review
+-------------------
+
+Verdict. Approved for the scoped device workflow changes. All three outstanding
+findings are resolved. This closes the device review.
+
+Staging cleanup. _private_stage now cleans known output entries through the
+held directory, checks its identity, and uses nonrecursive rmdir for the
+staging name. The regression test preserves both top-level and nested files
+in a populated replacement. When a staging directory is renamed during the
+transfer, the cleanup intentionally leaves the moved tree in place.
+
+App-op state. _appop_state retains separate UID and package modes. The plan
+binds both before the write. Regressions cover a UID change with and without
+a package line, plus a post-write UID conflict when the package mode matches.
+The conflict reports the observed modes and retains the accepted request in
+the partial-progress record.
+
+Lock recovery. Toolkit.execute uses the persistent state directory in the
+recovery message. The regression verifies that the named lock still exists
+after the exception and that the message excludes the descriptor path.
+
+Independent Linux verification passed all 38 device tests and the targeted
+service recovery test. Commands run from the repository root were
+
+  python -m unittest discover -s tests -p test_device_workflows.py -q
+  python -m unittest discover -s tests -p test_service.py -k lock_recovery_message -q
+
+The integrated suite, native Windows and macOS filesystems, and physical
+tablet behavior were outside this round of verification.

@@ -1,0 +1,28 @@
+Optional Android ads helper review
+
+Implemented the independent Java app, local Android SDK builder, setup and removal instructions, and six focused host tests. The only exported component is org.firetools.adshelper/.MainActivity. Turning on enforcement, stopping it, and restoring require on-device interaction. The foreground notification has a Stop action. BOOT_COMPLETED can resume enforcement after normal boot only while the saved preference is enabled, the ADB grant is present, and notification visibility checks pass. The app enforces one Global setting on its foreground timer and after screen wake. Its persisted backup distinguishes an absent entry from a present null or text value. Restore reads back the original value and presence before clearing its backup.
+
+The initial build compiles against API 36 and targets Android 9 (API 28) for its foreground service and notification compatibility behavior. The current minimum API is recorded in the follow-up below. The manifest grants WRITE_SECURE_SETTINGS, FOREGROUND_SERVICE, RECEIVE_BOOT_COMPLETED, and POST_NOTIFICATIONS. The fourth permission covers Android 13+ notification consent. The manifest declares no network permission and disables Android backup. The SDK check confirmed the service and boot receiver are private and the app launcher is exported.
+
+Host verification
+
+- Official Android SDK Build Tools 36.0.0 and Platform 36 archives matched the SHA-1 values in Google's SDK repository manifest. OpenJDK 21.0.13 was verified using Debian signed repository metadata and package SHA-256.
+- Built and signed the latest helper using its locally generated key, then signed through the explicit keystore options with the same key and an APK output path containing spaces. javac 21 emitted its expected Java 8 target deprecation warnings. Both builds exited successfully.
+- apksigner verify --verbose --print-certs confirmed one signer and valid v1, v2, and v3 signatures. aapt2 confirmed package, SDK levels, launcher, and permissions. zipalign -c 4 and unzip -t both passed. The APK and private key are local build artifacts outside the release allowlist.
+- Test APK SHA-256 358ea391e2e0386d5067999703ef32b49dd85a50c850387f590c7e5347a8f1d3. Local test signer certificate SHA-256 c1d6a57d46c25e365898e368fcd482587b56a08fdfb30f3ff098fea7351e2d2d. Signer fingerprints depend on the user's key.
+- All six tests in test_companion.py passed with JAVA_HOME set to OpenJDK 21. The Java core test exercises persistence across new state instances, refusal to write if the backup cannot be saved, stop without restore, failed restore retry, and exact restore including absent and present null settings.
+- During concurrent development, the full test suite first passed all 132 tests. The later run after the final helper change ran 151 tests and reported 16 failures in test_extra_workflows.ExtraWorkflowTests.setUp because the separate extra workflows had yet to be installed on its Harness. The companion tests passed in that run. Integration verification is tracked separately.
+
+No Android tablet or emulator was attached. Installation, the ADB grant, notification and boot handling, and ads behavior on Fire OS remain unverified on hardware. The original program and bundled APKs were not executed.
+
+Follow-up for API 23 notification blocking
+
+- The app now requires Android API 24 (Android 7.0), where NotificationManager.areNotificationsEnabled is public. Android API 23 has no public preflight for the user notification switch. Its AppOps POST_NOTIFICATION operation has no public string mapping. The desktop toolkit still supports API 23 tablets.
+- The helper requires a positive app-level notification check before startup and each enforcement pass. On API 26 and newer it also requires an available, unblocked notification channel. A missing notification manager stops enforcement.
+- The new regression failed with the old minimum of 23 and passed after the manifest and D8 minimum were updated to 24. All seven companion host tests passed with OpenJDK 21. A concurrent run of all 172 tests showed four failures and six errors in test_device_workflows and test_extra_workflows as those implementations were being revised. No companion test failed.
+- The app rebuilt with official Android Platform 36 and Build Tools 36.0.0. aapt2 reported minimum 24 and target 28. The rebuilt APK verified with v2 and v3 signatures, passed alignment and ZIP checks, and had SHA-256 748557ca7c4120d83c100dc1543ae791d7d387a7b2c4418fefabdab127b9a563. ADB still showed no devices attached.
+
+Platform references
+
+https://android.googlesource.com/platform/frameworks/base/+/android-6.0.1_r1/core/java/android/app/AppOpsManager.java
+https://developer.android.com/reference/android/app/NotificationManager#areNotificationsEnabled()

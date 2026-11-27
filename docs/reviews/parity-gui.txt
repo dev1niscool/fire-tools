@@ -1,0 +1,70 @@
+Fire Tools desktop verification
+
+Implementation
+
+- The Tools tab presents the complete catalog with search, category filtering,
+  input forms and keyboard selection. Form scrolling preserves access to longer
+  forms at the minimum window size. The header identifies the selected tablet
+  during work.
+- Apps links to Amazon debloat and package inventory. Forms taking multiple
+  package IDs support both direct entry and a searchable package picker.
+  Lock-screen ads links to Special Offers package and on-tablet helper tools.
+- GUI and CLI use the same catalog dispatcher. Tk collects values and file
+  dialog results before the worker starts. Reads show a separate copyable result
+  window. The existing plan reviewer and confirmation path handle changes.
+- The Activity log and device selection table stay visible at 680 × 660.
+  Demo vendor links show their address in Activity without starting a browser.
+
+Verification
+
+- The five new controller tests first ran against the original GUI and detected
+  the missing advanced dispatch. The rendered test first failed on the
+  original window title. The minimum-size checks also detected the clipped
+  Activity log and hidden Connection table before the layout changes.
+- `python -m unittest discover -s tests -p 'test_*gui.py' -v` passed all
+  eight tests.
+- `DISPLAY=:63 python tests/gui_smoke.py` passed the legacy scan, selection,
+  Google Play, setting-based ads, optional apps and reboot flows.
+- `DISPLAY=:63 python tests/gui_expanded_smoke.py` passed at 680 × 660.
+  It rendered each catalog form and exercised navigation, a multi-package selection, bulk
+  debloat and settings previews, read-only output, cancellation, and a simulated
+  screenshot confirmation that left the selected destination absent. The
+  screenshot picker returned a fixture path on the Tk thread. Actual Tk controls,
+  app worker, plan reviewer and result windows were exercised.
+- Scoped Python compilation and `git diff --check` passed. The initial
+  integrated suite passed 113 tests with one Java-related skip. A later run
+  included the parallel extra-workflow tests and reported 16 setup failures from
+  their pending `plan_extra_action` implementation and one Java-related skip.
+
+The graphical checks used Tk under Xvfb. Hardware behavior and native file dialog
+interaction on other desktop platforms were outside the verified coverage.
+
+Review follow-up
+
+- The rendered regression held a package-inventory response while a regular
+  Treeview pointer click targeted another tool. Before the fix, Add selected
+  packages raised a TclError against the destroyed form. With the fix, the
+  original selection and form stay active until the picker closes. The picker
+  validates that its tablet and form are still current before opening or
+  applying the selection.
+- The source directory opens without a tablet or ADB. ADB endpoint connect and
+  disconnect use the configured ADB path without a selected tablet. The
+  rendered connection test displayed the exact endpoint and verified that Cancel
+  left the fake transport untouched. Confirm submitted one reviewed host plan.
+- Ten GUI unit tests and both Xvfb smoke tests passed. With the workspace JDK
+  configured in JAVA_HOME, the full unit suite passed 184 tests. Scoped
+  compilation and `git diff --check` passed.
+
+ADB transport review follow-up
+
+- Confirming endpoint connect or disconnect, legacy wireless ADB enable, or
+  return to USB clears the selected tablet and scan rows before dispatch.
+  Configured ADB tools remain available. A failed or uncertain operation leaves
+  the selection cleared.
+- The controller test reproduced stale selection for all four operations, then
+  passed with the fix and a simulated uncertain result. The rendered regression
+  selected a simulated network tablet, canceled one disconnect preview, and
+  confirmed disconnect and reconnect at the same endpoint. A second tablet at
+  that address became actionable only after a fresh scan and explicit selection.
+- Eleven GUI unit tests and both rendered Xvfb smoke tests passed. With the JDK
+  configured, the full unit suite passed 194 tests. No real endpoint was used.

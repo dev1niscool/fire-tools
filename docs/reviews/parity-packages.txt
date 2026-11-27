@@ -1,0 +1,134 @@
+Package workflow implementation and verification
+2026-11-27
+
+Scope
+Owner package administration uses ordinary serial-scoped Android commands through
+the existing Toolkit confirmation and operation lock. Every device mutation
+rechecks the Amazon model, identity and foreground owner profile.
+
+Inventory covers installed, system, third-party, disabled and removed-for-owner
+packages. Selected apps can be disabled, enabled, uninstalled with retained data,
+restored from an existing image, cleared, stopped and launched. Core platform,
+provider, settings, installer, shell and input infrastructure has protection.
+The 20-app standard preset and 29-app complete preset are original selections
+of optional package IDs observed in the static Toolbox inventory. The complete
+profile adds services including Appstore, metrics and messaging. Custom UTF-8
+lists accept comments and up to 256 unique IDs. Preview shows affected and
+skipped apps. Dedicated Special Offers and OTA operations report package state.
+
+The last state-changing batch is journaled before each attempted mutation, in a
+bounded atomic JSON file keyed by serial hash and model. Undo checks the preview
+against the current owner states and saved targets. If Android discarded an APK
+entirely, undo can restore the other apps and retain the missing app's record.
+Earlier successful actions are included in partial-failure diagnostics.
+
+Launcher selection validates HOME resolution before permitting stock disable.
+Stock restoration resolves an installed Fire HOME, enables it and checks the
+post-switch result. Keyboard selection looks up all installed IMEs, enables the
+requested service and checks the secure default. APK installation previews file
+and signer fingerprints, verifies SDK/ABI/signatures with configured official
+tools, stages and verifies the complete batch before the first owner install,
+and enforces the Google pin for Play identities. System updates additionally
+require exact selected installed system package and matching APK identity.
+Factory rollback requires package-specific command support and verifies a move
+from the updated data APK path to a factory APK location.
+
+Verification
+Initial RED: python -m unittest discover -s tests -p test_package_workflows.py
+11 tests failed on the missing public package workflow.
+First GREEN: python -m unittest discover -s tests -p test_package_workflows.py -v
+11 passed.
+Second RED: the same focused discovery with 18 cases found four failing
+protected-package subcases and one unavailable-APK undo error. All 18 passed
+after adding modular provider protections and preserving unavailable undo entries.
+Third RED: the focused run with 19 cases showed that a disabled IME could not be
+selected. Including all installed IMEs in discovery fixed it. All 19 passed.
+Focused tests use a stateful synthetic Android shell and isolated host directories.
+They cover hostile identifiers, permissions/readback, stale preview, changed device,
+partial uninstall/undo, owner flags, custom lists, HOME/IME safeguards, capability
+probes, signer pinning, and late staging failure before any installation.
+
+python -m unittest discover -s tests -v
+At an intermediate shared-workspace checkpoint, 120 tests ran, one Java test
+skipped because the JDK was outside the default PATH.
+JAVA_HOME=/workspace/android-test-tools/jdk/usr/lib/jvm/java-21-openjdk-amd64 python -m unittest discover -s tests -v
+132 tests passed at the subsequent checkpoint, including the Java test.
+
+An additional local smoke test exercised Toolkit.plan_package_action('sideload')
+and confirmed execution for the independently source-built org.firetools.adshelper
+APK, using actual aapt, Java and apksigner.jar. The temporary staged APK verified
+with the same signer and package. The Android installation endpoint was simulated.
+
+Limitations
+No physical Fire tablet was available. Fire OS may deny commands, ignore a
+default launcher, resurface lock-screen ads or continue updating by another route.
+Inventory labels for unrecognized IDs are the IDs themselves. Package undo
+restores the installed/disabled state; data clearing and factory rollback can
+lose data permanently. Android may require the original signed third-party APK.
+The install workflow accepts standalone local APKs. Split bundles, downloader
+catalogs, version downgrades, widget grants and alternate HOME interception
+methods remain outside this package implementation. Factory rollback is permitted
+only on firmware advertising a package-specific form; it can affect all profiles.
+
+Independent review round 1
+The five findings in parity-packages-review.txt were reproduced with the public
+Toolkit API and a synthetic Android command boundary. A pending first change is
+now journaled alongside the preceding batch. Readback after an ordinary failure
+retains the applicable batch. Interruption before or after the write can be
+resolved using the tablet state at the next preview. A confirmed install-existing
+substep of a multi-step undo is reported even if restoring disablement fails.
+
+Stock HOME recovery now recognizes Android's exact no-activity response, still
+requires a stock-specific HOME, and checks it again after enabling stock.
+Permission failures and malformed responses stop recovery. OTA enable/disable
+requires at least one explicitly selected, known updater. Generic and system APK
+installs now record Android's acceptance before readback, verify owner registration,
+pull the standalone installed APK into private staging with size and device checks,
+and compare its digest against the reviewed signed APK. Exact content equality
+establishes its version code, package identity and signing certificates. Firmware
+that denies this readback leaves the install accepted but unverified, and stops
+the remaining batch.
+
+Round-1 RED: python -m unittest discover -s tests -p test_package_workflows.py
+26 tests ran; six failures (including both OTA subcases) and one error reproduced
+the review findings. Additional RED after adding the owner registration test:
+27 tests ran; one failed because an APK path alone did not establish installation
+for user 0. Round-1 GREEN: the same 27 focused tests passed. A further source-built
+helper smoke passed with actual build-tools signature inspection and simulated
+Android registration, package-manager file paths, transfer and installed bytes.
+
+Full-suite intermediate checkpoint (same JAVA_HOME command as above): 170 ran,
+four failures and three errors, all in concurrently changing device review tests:
+test_general_permission_cannot_grant_helper_privilege
+test_new_undo_never_follows_symlinked_state_directory
+test_owner_boundary_for_diagnostic_logs
+test_stale_permission_and_appop_previews_are_refused
+test_output_staging_keeps_original_parent_if_renamed
+test_permission_readback_disconnect_reports_accepted_grant
+test_push_cleanup_failure_reports_published_file
+
+The round-1 implementation and tests were compared to the independent review's
+original diff, SHA-256 2bdda3d51ff469c277a8f56278fd697dff3272b341e2ffb10ac9beaa4d6c3c23.
+The fix-only diff SHA-256 is 5e02e87f179fc16e8de39c66036fff48a767254ce44b08a9349da9c5a96d9d19.
+
+Package journal directory hardening
+Package journal reads and atomic writes now use the shared pinned-directory
+helper. Reads reject a symlink or reparse point in the journal path, including
+the journal file itself. Saves retain the same directory handle during staging,
+atomic publication and cleanup. A rename of the original parent during a save
+therefore cannot redirect the journal to a replacement directory.
+
+RED: python -m unittest discover -s tests -p test_package_workflows.py
+30 tests ran; two failed and one errored on first write through a directory
+symlink, a final journal symlink, and an ancestor rename immediately before
+atomic replacement. GREEN: all 30 package tests passed with the pinned helpers.
+
+Full-suite intermediate checkpoint using the JDK command above: 180 tests ran.
+The seven device-review regressions from the previous checkpoint passed. Two
+tests in the concurrently changing GUI failed:
+test_source_directory_is_available_without_tablet_or_toolkit
+test_transport_review_loads_configured_adb_without_selecting_tablet
+
+The updated round-1 fix-only diff, including journal directory hardening, has
+SHA-256 17d7884c4d31f0e0a44ceb79f8fe2192985099bec07e47762e5bd21c48f60a3e.
+git apply --check succeeded against the reconstructed original reviewed files.

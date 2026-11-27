@@ -35,4 +35,19 @@ class ReleaseTests(unittest.TestCase):
             except (OSError,NotImplementedError):self.skipTest('symlinks unavailable')
             with self.assertRaises(ValueError):release.build_release(root,Path(d)/'out.zip')
 
+    def test_companion_source_is_shipped_without_keys_or_built_apks(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/'src';helper=root/'companion';helper.mkdir(parents=True)
+            (helper/'MainActivity.java').write_text('class MainActivity {}')
+            (helper/'AndroidManifest.xml').write_text('<manifest/>')
+            (helper/'README.md').write_text('Build instructions')
+            (helper/'debug.keystore').write_bytes(b'private signing key')
+            (helper/'output.apk').write_bytes(b'not source')
+            archive=release.build_release(root,Path(d)/'out.zip')
+            with zipfile.ZipFile(archive) as z:
+                self.assertIn('open-fire-toolkit/companion/MainActivity.java',z.namelist())
+                self.assertIn('open-fire-toolkit/companion/AndroidManifest.xml',z.namelist())
+                self.assertNotIn('open-fire-toolkit/companion/debug.keystore',z.namelist())
+                self.assertNotIn('open-fire-toolkit/companion/output.apk',z.namelist())
+
 if __name__=='__main__':unittest.main()

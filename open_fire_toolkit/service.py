@@ -1,6 +1,7 @@
 """Auditable, preview-first tablet operations. No network client or updater."""
 from __future__ import annotations
 
+from contextlib import ExitStack
 import hashlib
 import json
 import os
@@ -14,6 +15,10 @@ from typing import Callable, Sequence
 
 from .adb import AdbClient, AdbError, DeviceInfo
 from .apk import ApkInfo, ApkVerifier, ApkError, MAX_APK_BYTES, file_sha256, google_play_order
+from .package_workflows import PackageWorkflows
+from .device_workflows import DeviceWorkflows, _pinned_directory, _read_file
+from .extra_workflows import ExtraWorkflows
+from .workflows import TransportPlan
 
 OPTIONAL_APPS = {
     'com.amazon.kindle': 'Kindle books',
@@ -72,7 +77,7 @@ def _setting_value(raw: str) -> str | None:
     raise ToolkitError('Cannot read the ad setting reliably. ' + value[:180])
 
 
-class Toolkit:
+class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
     def __init__(self, config: ToolConfig, state_dir: Path | None = None):
         self.config = config
         try:
@@ -131,12 +136,10 @@ class Toolkit:
 
     def _load_state(self) -> dict:
         path = self.state_dir / 'state.json'
-        if not path.exists():
-            return {'schema': 1, 'ads': {}}
         try:
-            if path.stat().st_size > 1024 * 1024:
-                raise ValueError('state file too large')
-            data = json.loads(path.read_text(encoding='utf-8'))
+            with _pinned_directory(self.state_dir) as parent:
+                _, content = _read_file(parent / 'state.json', 1024 * 1024, content=True)
+            data = json.loads(content)
             if not isinstance(data, dict) or data.get('schema') != 1 or not isinstance(data.get('ads'), dict):
                 raise ValueError('unknown schema')
             for key, record in data['ads'].items():
@@ -148,22 +151,24 @@ class Toolkit:
                 if not isinstance(record.get('model'), str):
                     raise ValueError('missing device identity')
             return data
+        except FileNotFoundError:
+            return {'schema': 1, 'ads': {}}
         except (OSError, ValueError, TypeError, KeyError) as exc:
             raise ToolkitError(f'Undo state is unreadable: {path}. Preserve it and resolve the error before making changes.') from exc
 
     def _save_state(self, state: dict) -> None:
-        self.state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        fd, name = tempfile.mkstemp(prefix='.state-', suffix='.json', dir=self.state_dir)
-        try:
-            with os.fdopen(fd, 'w', encoding='utf-8') as stream:
-                json.dump(state, stream, indent=2, sort_keys=True)
-                stream.write('\n')
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.replace(name, self.state_dir / 'state.json')
-        finally:
-            if os.path.exists(name):
-                os.unlink(name)
+        with _pinned_directory(self.state_dir, create=True) as parent:
+            fd, name = tempfile.mkstemp(prefix='.state-', suffix='.json', dir=parent)
+            try:
+                with os.fdopen(fd, 'w', encoding='utf-8') as stream:
+                    json.dump(state, stream, indent=2, sort_keys=True)
+                    stream.write('\n')
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(name, parent / 'state.json')
+            finally:
+                if os.path.exists(name):
+                    os.unlink(name)
 
     def _read_ads(self, serial: str) -> str | None:
         return _setting_value(self.adb.shell(serial, ('settings', '--user', '0', 'get', 'global', ADS_KEY)))
@@ -213,21 +218,35 @@ class Toolkit:
         if not self._operation_lock.acquire(blocking=False):
             raise ToolkitError('An operation is already running. Wait for it to finish.')
         lock_path = self.state_dir / 'operation.lock'
+        pinned_handles = ExitStack()
         owns_file_lock = False
         completed: list[str] = []
         try:
-            self.state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+            pinned_state = pinned_handles.enter_context(_pinned_directory(self.state_dir, create=True))
+            lock_path = pinned_state / 'operation.lock'
             try:
                 fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
                 owns_file_lock = True
                 with os.fdopen(fd, 'w') as stream:
                     stream.write(str(os.getpid()))
             except FileExistsError as exc:
-                raise ToolkitError(f'Another toolkit process may be running. If all toolkit processes are closed, remove {lock_path} and retry.') from exc
+                recovery_path = self.state_dir / 'operation.lock'
+                raise ToolkitError(f'Another toolkit process may be running. If all toolkit processes are closed, remove {recovery_path} and retry.') from exc
+            if isinstance(plan, TransportPlan):
+                self._execute_transport(plan, completed, log)
+                for message in completed:
+                    log(message)
+                return completed
             if plan.serial != plan.device.serial or self._writable_device(plan.serial) != plan.device:
                 raise ToolkitError('Device details changed after preview. Refresh and review the action again.')
             if plan.action == 'play':
                 self._install_play(plan, completed, log)
+            elif plan.action == 'package_workflow':
+                self._execute_package_workflow(plan, completed, log)
+            elif plan.action == 'device_workflow':
+                self._execute_device_workflow(plan, completed, log)
+            elif plan.action == 'extra_workflow':
+                self._execute_extra_workflow(plan, completed, log)
             elif plan.action in ('ads', 'ads_restore'):
                 self._apply_ads(plan)
                 completed.append('Ad setting restored and read back.' if plan.action == 'ads_restore' else 'Ad setting set to 0 and read back. Actual ad visibility is not verified.')
@@ -264,7 +283,10 @@ class Toolkit:
                     lock_path.unlink()
                 except OSError:
                     pass
-            self._operation_lock.release()
+            try:
+                pinned_handles.close()
+            finally:
+                self._operation_lock.release()
 
     def _install_play(self, plan: Plan, completed: list[str], log: Callable[[str], None]) -> None:
         verifier = self._verifier()

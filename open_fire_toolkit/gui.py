@@ -10,6 +10,7 @@ import webbrowser
 
 if TYPE_CHECKING:
     from .service import Plan, Toolkit
+    from .workflows import TransportPlan, WorkflowPlan
 
 
 PLATFORM_TOOLS = "https://developer.android.com/tools/releases/platform-tools"
@@ -92,7 +93,7 @@ class App:
         self.review = None
         self.controls = []
 
-        root.title("Open Fire Toolkit" + (" · Demo" if demo else ""))
+        root.title("Fire Tools" + (" · Demo" if demo else ""))
         root.geometry("920x760")
         root.minsize(680, 660)
         root.protocol("WM_DELETE_WINDOW", self._close)
@@ -122,6 +123,7 @@ class App:
         self.activity_font.configure(weight="bold")
         style.configure("Heading.TLabel", background="#f7f9fc", font=self.heading_font)
         style.configure("TButton", padding=(10, 5))
+        style.configure("Compact.TButton", padding=(8, 1))
         style.configure("Primary.TButton", background="#205883", foreground="#ffffff")
         style.map(
             "Primary.TButton",
@@ -132,11 +134,14 @@ class App:
         style.configure("Treeview", rowheight=25, fieldbackground="#ffffff")
 
     def _layout(self):
+        from .advanced_gui import AdvancedTools
+        from .feature_catalog import FEATURES
+
         tk, ttk = self.tk, self.ttk
         header = tk.Frame(self.root, background="#17304a", padx=22, pady=13)
         header.pack(fill="x")
         tk.Label(
-            header, text="Open Fire Toolkit", font=self.title_font,
+            header, text="Fire Tools", font=self.title_font,
             background="#17304a", foreground="#ffffff", anchor="w",
         ).pack(side="left")
         self.status = tk.StringVar(value="No tablet selected")
@@ -150,11 +155,12 @@ class App:
         self._play_tab()
         self._ads_tab()
         self._apps_tab()
+        self.advanced = AdvancedTools(self, FEATURES)
 
         footer = ttk.Frame(self.root, padding=(16, 0, 16, 12))
-        footer.pack(fill="x")
+        footer.pack(side="bottom", fill="x", before=self.tabs)
         ttk.Label(footer, text="Activity", font=self.activity_font).pack(anchor="w")
-        self.log_box = self._text_box(footer, height=4)
+        self.log_box = self._text_box(footer, height=3)
         self._append_log(
             "Demo mode uses simulated devices and APK metadata. No device commands run."
             if self.demo else "Configure ADB, connect your Fire tablet, and scan for devices."
@@ -197,9 +203,8 @@ class App:
     def _connection_tab(self):
         tab = self._panel(
             "Connection", "Connect your Fire tablet",
-            "In Settings, open Device Options and choose About Fire Tablet. "
-            "Tap Serial Number seven times, then enable USB debugging under Developer Options. "
-            "Use a USB data cable, unlock the tablet, and approve the debugging prompt.",
+            "In Settings, open Device Options › About Fire Tablet and tap Serial Number seven times. "
+            "Under Developer Options, enable USB debugging. Connect by USB and approve the prompt.",
         )
         ttk = self.ttk
         config = ttk.Frame(tab, style="Panel.TFrame")
@@ -219,10 +224,12 @@ class App:
             entry.grid(row=row, column=1, sticky="ew", padx=(10, 8), pady=2)
             value.trace_add("write", self._paths_changed)
             self.controls.append((entry, lambda: not self.fixed_toolkit))
-            self._button(
+            browse = self._button(
                 config, "Browse...", lambda var=value, name=examples: self._browse_tool(var, name),
                 condition=lambda: not self.fixed_toolkit,
-            ).grid(row=row, column=2, pady=2)
+            )
+            browse.configure(style="Compact.TButton")
+            browse.grid(row=row, column=2, pady=2)
         guides = ttk.Frame(tab, style="Panel.TFrame")
         guides.pack(fill="x", pady=(5, 8))
         self._button(guides, "Google Platform-Tools", lambda: self._open(PLATFORM_TOOLS)).pack(side="left")
@@ -231,15 +238,12 @@ class App:
             self._description(guides, "Tool paths are managed by the active toolkit.").pack(side="left", padx=5)
         else:
             self._description(
-                tab, "ADB is enough to connect. For Google Play, also choose aapt and "
-                     "lib/apksigner.jar from Android SDK Build Tools and java from your Java installation.",
+                tab, "ADB is required. Google Play also needs aapt, lib/apksigner.jar, and Java.",
             ).pack(fill="x", pady=(0, 7))
-        self.device_table = self._table(
-            tab, (("serial", "Serial", 180), ("state", "ADB state", 110), ("model", "Model", 180)), 3,
-            self._sync_controls,
-        )
+        self.firmware = self.tk.StringVar(value="Select a scanned tablet to see firmware and Android details.")
+        self._description(tab, variable=self.firmware).pack(side="bottom", fill="x")
         choices = ttk.Frame(tab, style="Panel.TFrame")
-        choices.pack(fill="x", pady=(7, 6))
+        choices.pack(side="bottom", fill="x", pady=(7, 6))
         self._button(
             choices, "Scan devices", self._scan, primary=True,
         ).pack(side="left")
@@ -250,8 +254,10 @@ class App:
         self._button(
             choices, "Review reboot...", self._plan_reboot, condition=self._connected,
         ).pack(side="right")
-        self.firmware = self.tk.StringVar(value="Select a scanned tablet to see firmware and Android details.")
-        self._description(tab, variable=self.firmware).pack(fill="x")
+        self.device_table = self._table(
+            tab, (("serial", "Serial", 180), ("state", "ADB state", 110), ("model", "Model", 180)), 3,
+            self._sync_controls,
+        )
 
     def _play_tab(self):
         tab = self._panel(
@@ -305,6 +311,35 @@ class App:
             condition=self._connected,
         ).pack(side="left", padx=6)
 
+        self.ttk.Label(
+            tab, text="Package and helper controls", style="Heading.TLabel",
+        ).pack(anchor="w", pady=(16, 0))
+        self._description(
+            tab, "Fire OS may block Special Offers package changes. The optional helper "
+                 "requires installation, a settings permission, and a visible service on the tablet.",
+        ).pack(fill="x", pady=(4, 8))
+        packages = self.ttk.Frame(tab, style="Panel.TFrame")
+        packages.pack(fill="x", pady=(0, 6))
+        self._button(
+            packages, "Disable Special Offers package...",
+            lambda: self.advanced.show_feature("ads-package-disable"),
+        ).pack(side="left")
+        self._button(
+            packages, "Restore Special Offers package...",
+            lambda: self.advanced.show_feature("ads-package-restore"),
+        ).pack(side="left", padx=6)
+        helper = self.ttk.Frame(tab, style="Panel.TFrame")
+        helper.pack(fill="x")
+        self._button(
+            helper, "Set up ad helper...", lambda: self.advanced.show_feature("helper-start"),
+        ).pack(side="left")
+        self._button(
+            helper, "Stop ad helper...", lambda: self.advanced.show_feature("helper-stop"),
+        ).pack(side="left", padx=6)
+        self._button(
+            helper, "Restore helper setting...", lambda: self.advanced.show_feature("helper-restore"),
+        ).pack(side="left")
+
     def _apps_tab(self):
         tab = self._panel(
             "Apps", "Optional Amazon apps",
@@ -328,13 +363,22 @@ class App:
             actions, "Review enable...", lambda: self._plan_app(enable=True),
             condition=lambda: self._selected_app_state() == "Disabled",
         ).pack(side="left")
+        packages = self.ttk.Frame(tab, style="Panel.TFrame")
+        packages.pack(fill="x")
+        self._button(
+            packages, "Debloat Amazon apps...", lambda: self.advanced.show_feature("debloat"),
+        ).pack(side="left")
+        self._button(
+            packages, "Package inventory...",
+            lambda: self.advanced.show_feature("packages-inventory"),
+        ).pack(side="left", padx=6)
 
-    def _table(self, parent, columns, height, on_selection):
+    def _table(self, parent, columns, height, on_selection, *, selectmode="browse"):
         container = self.ttk.Frame(parent, style="Panel.TFrame")
         container.pack(fill="both", expand=True)
         table = self.ttk.Treeview(
             container, columns=[key for key, _, _ in columns], show="headings",
-            height=height, selectmode="browse",
+            height=height, selectmode=selectmode,
         )
         for key, label, width in columns:
             table.heading(key, text=label, anchor="w")
@@ -356,13 +400,14 @@ class App:
             widget.state(["!disabled"] if enabled else ["disabled"])
         for table in (self.device_table, self.apk_table, self.app_table):
             table.state(["disabled"] if blocked else ["!disabled"])
+        self.advanced.sync_controls()
         prefix = "Demo · " if self.demo else ""
-        if self.worker.busy:
-            detail = "Working..."
-        elif self.device is not None:
+        if self.device is not None:
             detail = f"{self.device.model or 'Fire tablet'} · {self.device.serial}"
         else:
             detail = "No tablet selected"
+        if self.worker.busy:
+            detail = f"Working · {detail}"
         self.status.set(prefix + detail)
 
     def _append_log(self, message):
@@ -414,6 +459,9 @@ class App:
             self.root.destroy()
 
     def _open(self, url):
+        if self.demo:
+            self._append_log(f"Demo link: {url}")
+            return
         try:
             if not webbrowser.open_new_tab(url):
                 raise RuntimeError(f"Open this address in your web browser: {url}")
@@ -444,16 +492,23 @@ class App:
         self._forget_device()
         self._sync_controls()
 
+    def _configured_tools(self, title):
+        config = self.ToolConfig(*(value.get().strip() for value in self.paths))
+        if config.adb_path:
+            return config
+        self._show_error(title, ValueError(
+            "Choose adb from Google Platform-Tools in the ADB field on the Connection tab.",
+        ))
+        return None
+
     def _scan(self):
         if self.worker.busy:
             return
         toolkit = self.toolkit
+        config = None
         if toolkit is None:
-            config = self.ToolConfig(*(value.get().strip() for value in self.paths))
-            if not config.adb_path:
-                self._show_error("Scan devices", ValueError(
-                    "Choose adb from Google Platform-Tools in the ADB field, then scan again.",
-                ))
+            config = self._configured_tools("Scan devices")
+            if config is None:
                 return
 
         self.devices = []
@@ -496,7 +551,7 @@ class App:
             self.device = device
             abis = ", ".join(device.abis) or "not reported"
             self.firmware.set(
-                f"{device.manufacturer} {device.model} · Fire OS {device.fire_os or 'unknown'}\n"
+                f"{device.manufacturer} {device.model} · Fire OS {device.fire_os or 'unknown'} · "
                 f"Android {device.android_release or 'unknown'} · SDK {device.sdk} · User {device.user_id}\n"
                 f"ABIs: {abis}"
             )
@@ -533,6 +588,67 @@ class App:
         toolkit, serial = self.toolkit, self.device.serial
         self._start(title, lambda log: make_plan(toolkit, serial),
                     lambda plan: self._review_plan(toolkit, plan))
+
+    def _run_tool(self, feature, collect_values):
+        """Snapshot Tk field values and the selected tablet before dispatching."""
+        from .feature_catalog import run_feature
+
+        if feature.requires_device and self.device is None:
+            self._show_error(feature.label, ValueError("Select a tablet on the Connection tab first."))
+            return
+        if self.worker.busy or self.review is not None:
+            self.root.bell()
+            return
+
+        values = dict(collect_values())
+        toolkit = self.toolkit
+        serial = self.device.serial if feature.requires_device else ""
+        if feature.read_only:
+            self._start(
+                feature.label, lambda _log: run_feature(toolkit, serial, feature, values),
+                lambda result: self._show_tool_output(feature.label, serial, result),
+            )
+            return
+
+        config = None
+        if toolkit is None:
+            config = self._configured_tools(feature.label)
+            if config is None:
+                return
+
+        def plan(_log):
+            active = toolkit if toolkit is not None else self.Toolkit(config)
+            return active, run_feature(active, serial, feature, values)
+
+        self._start(feature.label, plan, lambda result: self._review_plan(*result))
+
+    def _tool_window(self, title, serial):
+        window = self.tk.Toplevel(self.root)
+        window.title(title)
+        window.geometry("655x425")
+        window.minsize(455, 285)
+        window.transient(self.root)
+        window.bind("<Escape>", lambda _event: window.destroy())
+        panel = self.ttk.Frame(window, padding=16, style="Panel.TFrame")
+        panel.pack(fill="both", expand=True)
+        self.ttk.Label(panel, text=title, style="Heading.TLabel").pack(anchor="w")
+        if serial:
+            self._description(panel, f"Target tablet · {serial}").pack(fill="x", pady=(3, 9))
+        return window, panel
+
+    def _show_tool_output(self, title, serial, result):
+        window, panel = self._tool_window(title, serial)
+        box = self._text_box(panel, height=12)
+        if isinstance(result, list):
+            result = "\n".join(
+                f"{row['package']}  ·  {row['state']}  ·  {row['label']}" for row in result
+            )
+        self._write_text(box, result or "No results.")
+        close = self.ttk.Button(panel, text="Close", command=window.destroy)
+        close.pack(anchor="e", pady=(10, 0))
+        close.focus_set()
+        target = f" for {serial}" if serial else ""
+        self._append_log(f"{title} read completed{target}.")
 
     def _plan_play(self):
         paths = tuple(self.apk_paths)
@@ -583,7 +699,7 @@ class App:
             self._plan("Check optional app",
                        lambda toolkit, serial: toolkit.plan_package(serial, package, enable=enable))
 
-    def _review_plan(self, toolkit, plan: Plan):
+    def _review_plan(self, toolkit, plan: Plan | WorkflowPlan | TransportPlan):
         window = self.tk.Toplevel(self.root)
         self.review = window
         self._sync_controls()
@@ -595,7 +711,8 @@ class App:
         panel.pack(fill="both", expand=True)
         self.ttk.Label(panel, text=plan.title, style="Heading.TLabel").pack(anchor="w")
         mode = "Demo tablet" if self.demo else "Target tablet"
-        self._description(panel, f"{mode} · {plan.device.model} · {plan.serial}").pack(fill="x", pady=(3, 9))
+        target = f"{mode} · {plan.device.model} · {plan.serial}" if plan.serial else plan.device.model
+        self._description(panel, target).pack(fill="x", pady=(3, 9))
         box = self._text_box(panel, height=12)
         self._write_text(box, self._plan_text(plan))
         actions = self.ttk.Frame(panel, style="Panel.TFrame")
@@ -627,9 +744,10 @@ class App:
         sections = ["\n".join(plan.details)]
         if plan.warnings:
             sections.append("Before you run this plan\n" + "\n".join(plan.warnings))
-        if plan.apks:
+        apk_metadata = getattr(plan, "apks", ())
+        if apk_metadata:
             apks = []
-            for apk in plan.apks:
+            for apk in apk_metadata:
                 abis = ", ".join(apk.abis) or "no native ABI requirement"
                 signers = "\n".join(apk.signer_sha256)
                 apks.append(
@@ -641,11 +759,16 @@ class App:
         return "\n\n".join(sections)
 
     def _execute(self, toolkit, plan):
-        self._forget_apps()
-        if plan.action == "reboot":
+        if (
+            plan.action in ("reboot", "transport")
+            or (plan.action == "device_workflow" and plan.operation in ("reboot", "shutdown", "user-switch"))
+            or (plan.action == "extra_workflow" and plan.operation in ("wireless-enable", "wireless-usb"))
+        ):
             self._forget_device()
             self.devices = []
             self._clear_table(self.device_table)
+        else:
+            self._forget_apps()
 
         def execute(log):
             emitted = []

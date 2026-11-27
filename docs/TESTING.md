@@ -23,13 +23,23 @@ Run `python3 -m open_fire_toolkit gui --demo` in a desktop session with Tk. On L
 
 ## Release archive
 
-Compare the source ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c open-fire-toolkit-0.1.0.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\archive.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `open-fire-toolkit-0.1.0.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
+Compare the source ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c fire-tools-0.2.0.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\fire-tools-0.2.0.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `fire-tools-0.2.0.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
 
 The checksum verifies that the ZIP matches the checksum you obtained. Obtain both files from a source you trust.
 
-## Recorded validation (2026-11-27)
+## Expanded release validation (0.2, 2026-11-27)
 
-- All 76 automated tests passed in the final source tree. Python compilation and whitespace checks passed. Independent reviews closed all reported findings; these are code-review results, not malware certification.
+- The integrated Linux suite passed 202 tests with a JDK available, with no skips. Python compilation and whitespace checks passed. These tests include simulated device responses and do not establish physical-tablet compatibility.
+- Both rendered Tk smoke scripts passed under Xvfb: `tests/gui_smoke.py` and `tests/gui_expanded_smoke.py`. The expanded script visits all 85 catalog forms, tests parameter capture, selection, package picking, previews, cancellation, read-only output, source links without a tablet, and connection-only plans. Simulation does not access hardware or save screenshots to the selected user path.
+- The controller independently verified the final API-24 helper with real Google `aapt` and `apksigner` through the product's verifier. The signed test artifact SHA-256 was `748557ca7c4120d83c100dc1543ae791d7d387a7b2c4418fefabdab127b9a563`; its test-key signer was `c1d6a57d46c25e365898e368fcd482587b56a08fdfb30f3ff098fea7351e2d2d`. This is test evidence, not a fingerprint users should trust for their own separately signed builds.
+- Helper tests exercise its Java state logic on the host; SDK build/signature checks do not exercise Android lifecycle, notifications, boot behavior, permission grant or actual ad visibility.
+- Source checks are configured in GitHub Actions for Linux and Windows with Python 3.11 and 3.13. The remote results are separate from the local Linux results; configuring a workflow alone does not establish that it passed.
+- Reviews and fix evidence are retained in `docs/reviews/parity-*.txt`. They include tests for partial mutations, stale previews, journal preservation, endpoint validation, output-directory replacement and helper permission provenance.
+- No physical Fire tablet, Google account login, live Wi-Fi ADB endpoint or Android helper runtime was tested. Full feature-and-option equivalence with the original is not established; see [coverage and limits](FEATURES.md).
+
+## Earlier release validation (0.1, 2026-11-27)
+
+- All 76 automated tests passed in the 0.1 source tree. Python compilation and whitespace checks passed. Independent reviews closed all reported findings for that version; these are code-review results, not malware certification.
 - The Tk UI was exercised in an isolated Xvfb display, including error recovery, cancelled and confirmed previews, ad restore, app enable/disable and reboot in clearly labeled demo mode. Repeat with `python3 tests/gui_smoke.py` in a display, or `xvfb-run -a python3 tests/gui_smoke.py`.
 - Google's Build Tools 36.0.0 and OpenJDK 21 verified and parsed a real signed Automate 1.51.1 APK as a test specimen. A modified copy was rejected by apksigner. Neither the APK nor its bundled executables were executed or included in this release. This validates the tool integration, not Google Play compatibility.
 - Build Tools archive SHA-1 matched the value in Google's HTTPS SDK repository manifest: `b0b6376977657e8ad9b969bacf4093601da2c6fb` for `build-tools_r36_linux.zip`.

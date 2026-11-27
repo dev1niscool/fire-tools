@@ -17,7 +17,10 @@ def source_files(root: Path):
         allowed = (len(parts) == 1 and parts[0] in ROOT_FILES) or (
             parts[0] in {'open_fire_toolkit', 'tests', 'scripts'}
             and path.suffix == '.py' and '__pycache__' not in parts
-        ) or (parts[0] == 'docs' and path.suffix in {'.md', '.txt', '.png'})
+        ) or (parts[0] == 'docs' and path.suffix in {'.md', '.txt', '.png'}) or (
+            parts[0] == 'companion' and path.suffix in {'.java', '.xml', '.md'}
+            and not any(part in {'build', 'out', 'dist', '.gradle'} for part in parts)
+        )
         if allowed:
             if path.is_symlink() or any(parent.is_symlink() for parent in path.parents if parent != root):
                 raise ValueError(f'Refusing symlinked release input: {relative}')
@@ -51,7 +54,7 @@ def main():
     parser.add_argument('--output', type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
-    path = build_release(root, args.output or root / 'dist' / 'open-fire-toolkit-0.1.0.zip')
+    path = build_release(root, args.output or root / 'dist' / 'fire-tools-0.2.0.zip')
     print(path)
     print(path.with_suffix(path.suffix + '.sha256').read_text(), end='')
 

@@ -1,0 +1,102 @@
+Independent package workflow review, 2026-11-27
+
+Verdict — changes required before release. Five Important findings.
+
+Critical
+
+None identified.
+
+Important
+
+1. A rejected first change erases the preceding batch's usable undo.
+   package_workflows.py lines 494–499 replace the device's journal with the
+   new package before the command. In the stateful Tablet fixture, disabling
+   Kindle succeeded, then Android denied disabling Photos. Kindle remained
+   disabled. The next undo preview contained only Photos, which was already
+   enabled. Retain the preceding journal alongside the pending first change
+   until the new batch has a confirmed effect. Preserve enough information
+   to recover when a command's result is uncertain.
+
+2. A failed two-step undo hides a confirmed change.
+   package_workflows.py lines 461–474 restore an uninstalled package, check
+   that it is installed, then apply its saved enabled/disabled state. Line
+   499 records completion only after both operations finish. In the fixture,
+   undoing removal of a previously disabled Kindle reinstalled it, then a
+   denial of disable-user left it enabled. The error reported only the denial.
+   Record the confirmed reinstall before the next command and retain the
+   remaining disabled-state target for retry.
+
+3. Stock launcher recovery requires a working current HOME.
+   package_workflows.py lines 196–205 and 342–347 parse the current HOME as a
+   component before looking up the stock HOME, even for launcher-restore.
+   With stock disabled and global resolution returning "No activity found",
+   the fixture rejected the preview with "Expected an Android component in
+   package/.Class format." The stock-specific HOME still resolved. Represent
+   a recognized no-current-HOME result in the restore preview, verify the
+   stock-specific component, and permit its enable-and-select sequence.
+
+4. Replacement installs can report success for the old installed version.
+   package_workflows.py lines 450–456 check only that the package ID exists
+   after adb install accepts the APK. In a focused system-update probe,
+   the reviewed APK had version code 42 and install returned Success, while
+   pm path still pointed to /system/app/com.amazon.kindle/base.apk. The
+   workflow returned "Installed com.amazon.kindle for owner user 0." Verify
+   the installed package's version and the installed APK's digest when
+   readable, including replacements with the same version code. Report an
+   accepted but unverified installation when readback is insufficient.
+
+5. Empty OTA selections authorize every installed known updater.
+   package_workflows.py lines 265–269 default an empty selection to UPDATERS.
+   Calling plan_package_action(serial, 'ota-disable') in the fixture produced
+   a plan selecting com.amazon.device.software.ota. feature_catalog.py lines
+   70–71 expose neither OTA operation's package selector. The brief requires
+   explicit package selection. Require a nonempty known selection, expose
+   it through the UI, and retain the existing preview and undo.
+
+Minor
+
+None additional.
+
+Evidence and scope
+
+Inspected parity-packages.diff (SHA-256
+2bdda3d51ff469c277a8f56278fd697dff3272b341e2ffb10ac9beaa4d6c3c23), the
+integrated service/ADB dispatch, ApkVerifier and the package tests. Five
+focused Python probes exercised Toolkit.plan_package_action and confirmed
+Toolkit.execute with isolated state directories and the existing synthetic
+Tablet. The APK probe supplied synthetic signed metadata through the verifier
+test double. Existing staged-batch code verifies every staged APK before the
+first install, rehashes each before use, and invokes the owner-scoped ADB
+install command. HOME selection checks the replacement before stock disable.
+Keyboard selection validates the requested service and reads the secure
+default back. Hardware and firmware behavior remain unverified. The original
+Toolbox implementation was never executed.
+
+Round 1 verification, 2026-11-27
+
+Verdict — approved for the reviewed package changes. All five Important
+findings are resolved. No new Critical, Important or Minor finding arose in
+the fix diff.
+
+1. The journal retains the prior batch alongside the pending first write.
+   Tests cover a denied first command and interruption on either side of the
+   mutation, then exercise the resulting undo through the public API.
+2. A successful install-existing step now appears in the partial completion
+   report when restoring disablement fails. Retrying undo restores the saved
+   disabled state.
+3. Stock restore accepts Android's no-current-HOME response, resolves the
+   stock component, enables it and verifies the selected HOME. A permission
+   denial still prevents the operation.
+4. Android's acceptance is recorded before checking owner registration and
+   comparing the installed standalone APK's SHA-256 with the reviewed bytes.
+   A different APK with the same version or missing owner registration
+   produces a partial outcome and stops the batch.
+5. Both OTA operations reject empty and unknown selections. Both entries
+   in feature_catalog.py now expose the package ID field.
+
+The added journal tests also cover a symlinked state directory, a symlinked
+journal file and renaming the directory during publication. I independently
+ran python -m unittest discover -s tests -p test_package_workflows.py.
+All 30 tests passed on Linux with a simulated Android command boundary.
+Fix diff SHA-256
+17d7884c4d31f0e0a44ceb79f8fe2192985099bec07e47762e5bd21c48f60a3e.

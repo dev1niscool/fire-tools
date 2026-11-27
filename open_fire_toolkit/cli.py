@@ -7,6 +7,7 @@ from . import __version__
 from .adb import AdbError
 from .apk import ApkError
 from .service import ToolConfig, Toolkit, ToolkitError
+from .feature_catalog import BY_KEY, FEATURES, feature_values, run_feature
 
 
 def parser() -> argparse.ArgumentParser:
@@ -21,6 +22,13 @@ def parser() -> argparse.ArgumentParser:
     gui = subs.add_parser('gui', help='Open the desktop interface (default)')
     gui.add_argument('--demo', dest='gui_demo', action='store_true', help='Offline simulation')
     subs.add_parser('devices', help='List ADB devices without selecting one')
+    catalog = subs.add_parser('tools', help='List all tools and their parameters; no device required')
+    catalog.add_argument('--feature', choices=sorted(BY_KEY), help='Show parameters for one tool')
+    tool = subs.add_parser('tool', help='Preview or run a tool from the catalog')
+    tool.add_argument('feature', choices=sorted(BY_KEY))
+    tool.add_argument('--serial', default='', help='Required for tablet operations; not for source links or endpoint connection')
+    tool.add_argument('--param', action='append', default=[], metavar='KEY=VALUE')
+    tool.add_argument('--yes', action='store_true', help='Confirm the displayed action')
     for name, text in (('info', 'Show device identity'), ('play', 'Verify/install local Google Play APKs'),
                        ('ads', 'Preview temporary ad-setting suppression or restore'),
                        ('apps', 'List or enable/disable optional apps'), ('reboot', 'Preview a normal restart')):
@@ -52,6 +60,17 @@ def _show_plan(plan):
 def main(argv=None) -> int:
     args = parser().parse_args(argv)
     demo = args.demo or getattr(args, 'gui_demo', False)
+    if args.command == 'tools':
+        selected = [BY_KEY[args.feature]] if args.feature else FEATURES
+        for feature in selected:
+            print(f'{feature.key}: {feature.label} [{feature.category}]')
+            if args.feature:
+                print(feature.description)
+                print('Read only' if feature.read_only else 'Preview first; --yes confirms the action.')
+                for field in feature.fields:
+                    choices = ' Choices: ' + ', '.join(field.choices) if field.choices else ''
+                    print(f'  --param {field.key}=VALUE: {field.label}. Default: {field.default!r}.{choices}')
+        return 0
     if args.command in (None, 'gui'):
         try:
             from .gui import main as gui_main
@@ -67,12 +86,34 @@ def main(argv=None) -> int:
             print(f'Cannot open a graphical display: {exc}. Use a desktop session or CLI commands.', file=sys.stderr)
             return 1
     try:
+        feature = BY_KEY[args.feature] if args.command == 'tool' else None
+        values = feature_values(feature, args.param) if feature is not None else None
+        if feature is not None and feature.requires_device and not args.serial:
+            raise ValueError('Specify --serial for this tablet operation.')
+        if feature is not None and feature.key == 'source-catalog':
+            print(run_feature(None, '', feature, values))
+            return 0
         if demo:
             from .demo import DemoToolkit
             toolkit = DemoToolkit()
             print('SIMULATED DEMO — no hardware commands or APK verification.')
         else:
             toolkit = Toolkit(ToolConfig(args.adb, args.aapt, args.apksigner_jar, args.java))
+        if feature is not None:
+            result = run_feature(toolkit, args.serial, feature, values)
+            if feature.read_only:
+                if isinstance(result, list):
+                    for row in result:
+                        print('\t'.join(f'{key}={value}' for key, value in row.items()))
+                else:
+                    print(result)
+                return 0
+            _show_plan(result)
+            if not args.yes:
+                print('Preview only — no changes made. Run again with --yes to apply this action.')
+                return 0
+            toolkit.execute(result, confirmed=True)
+            return 0
         if args.command == 'devices':
             devices = toolkit.devices()
             if not devices:

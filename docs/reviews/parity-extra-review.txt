@@ -1,0 +1,118 @@
+Additional utility workflow review
+==================================
+
+Spec verdict: changes required. The requested actions are present in the
+catalog and service. The normal execute path requires confirmation. Tablet
+mutations use an explicit serial and Amazon owner checks. The host-only
+plan dispatches only connect and disconnect. The endpoint interpretation,
+desktop reselection, progress reporting and Private DNS recovery cases below
+remain open.
+
+Quality verdict: changes required. The 22 focused tests passed in a fresh
+run. The implementation uses standard-library code, bounded ADB capture
+and remote argument quoting. The extra checks below exercised failures
+after command acceptance and after the workflow revalidated its preview.
+
+High — Accepted changes disappear from the failure report
+---------------------------------------------------------
+extra_workflows.py lines 470–487, 497–514, 538–560 and 587–592. A successful
+command is followed by another device guard and readback before anything
+is added to completed. For example, disconnecting the simulated tablet
+after its file deletion left the file absent and Toolkit.execute reported
+only "No attached tablets." Battery exemption, widget binding, network
+settings, folder creation, rename and the current Private DNS write have
+the same gap. Record accepted commands with the reviewed target as soon
+as acceptance is known, then upgrade the entry once verified. Preserve
+the special metering status as an uncertain attempt until readback.
+
+High — A new journal can be overwritten or an unrelated journal removed
+----------------------------------------------------------------------
+extra_workflows.py lines 377–385 and 572–598. Directory pinning protects
+the parent. The journal entry itself is checked at the start, published
+with unconditional replacement and later removed by name. In temporary
+host state, a file arriving at the journal name before first publication
+was overwritten. During undo, replacing the journal after the setting
+write caused the replacement to be deleted. The toolkit operation lock
+serializes cooperating toolkit processes but does not pin this entry for
+other writers. Publish first state with no-clobber semantics. Check the
+saved journal's identity and contents before subsequent settings writes
+and preserve changed or unrecognized entries during consumption. This
+finding is independent of the shared staging-directory cleanup issue.
+
+Medium — Undo can report success and discard its only copy after drift
+--------------------------------------------------------------------
+extra_workflows.py lines 565–572 and 596–599. A restore whose current
+values already match its baseline skips the readback loop. The final
+device guard verifies tablet identity only. In a simulated no-write
+restore, changing the tablet mode after the execution preview left it
+different from the target while the action returned "Saved Private DNS
+configuration restored." The journal had been removed. Read back both
+current keys against the full restoration target immediately before
+consuming the journal. Keep the journal and report drift on mismatch.
+
+Medium — Some accepted DNS names select a different ADB transport
+----------------------------------------------------------------
+extra_workflows.py lines 86–98 and 518–526. The endpoint parser accepts
+single-label names, including names ADB reserves as transport prefixes.
+The AOSP host service dispatches the emulator prefix separately, and
+connect_device treats vsock and localfilesystem as socket specifications.
+Validating the reply after dispatch cannot guarantee the reviewed DNS/TCP
+operation was the one requested. Reject those reserved names when
+validating the endpoint and cover them in the pure planner tests.
+Upstream source:
+https://android.googlesource.com/platform/packages/modules/adb/+/refs/heads/main/services.cpp
+https://android.googlesource.com/platform/packages/modules/adb/+/refs/heads/main/client/transport_emulator.cpp
+
+Medium — Desktop transport changes can retain a stale selected endpoint
+---------------------------------------------------------------------
+gui.py lines 585–605 and 761–768. A user can select a network tablet,
+disconnect its endpoint, reconnect it, then use the prior selection for
+another tablet action. The transport operations leave self.device and the
+scan rows populated, and the next feature obtains its serial from that
+cached selection. An address can have been reassigned in the interim.
+Clear affected selection and stale scan rows when a reviewed transport
+change can invalidate them, including uncertain results. Exercise the
+disconnect/reconnect path with the same endpoint and require explicit
+selection again before enabling tablet actions.
+
+Verification and dependencies
+-----------------------------
+Ran python -m unittest discover -s tests -p test_extra_workflows.py -q.
+All 22 tests passed. Separate checks used Toolkit.execute, the existing
+simulated tablet and temporary host state for the deletion, intervening
+journal writes and no-write undo cases. The desktop finding follows the
+normal GUI control flow. The transport finding follows upstream source
+inspection. No real endpoint or Fire tablet was used. The supplied
+integrated result was 189 passing tests. This review did not rerun it.
+The shared _private_stage cleanup issue is tracked in the device review.
+
+Round-one re-review
+-------------------
+
+Spec and quality verdict. Approved for the five reported findings.
+
+Accepted writes now enter the progress record before the next owner check or
+readback. Matching readback upgrades that entry. The special metering return
+status records an unverified request. The disconnect regression follows eight
+mutation paths through Toolkit.execute.
+
+First journal publication preserves an intervening entry. The preview binds
+the saved journal's identity and digest, and each settings write checks it.
+Undo moves the journal aside in the pinned state directory, then revalidates
+the moved entry before removing it. Changes arriving at the canonical path
+during consumption are preserved. Both DNS values are read back against the
+restoration target even when undo issued no setting command.
+
+The planner rejects reserved ADB transport labels for both host operations.
+The GUI clears the selected tablet and scan rows before dispatching any of
+the four transport changes. Cancellation retains the existing selection.
+A successful reconnect and an uncertain execution both require reselection.
+
+Fresh Linux verification passed all 29 extra-workflow tests, all 8 advanced
+GUI tests, and the rendered gui_expanded_smoke.py test on an isolated Xvfb
+display. The rendered regression connected a simulated second tablet at the
+same address and verified the explicit scan and selection sequence. The
+integration owner reports 202 passing tests with the workspace JDK. This
+scoped pass used simulated tablet and transport responses and temporary
+Linux state. It did not exercise physical firmware or native Windows and
+macOS filesystems.

@@ -101,6 +101,15 @@ class AdbBoundaryTests(unittest.TestCase):
         self.assertEqual(shlex.split(self.run.call_args_list[1].args[0][-1]), ["getprop"])
         self.assertEqual(shlex.split(self.run.call_args.args[0][-1]), ["am", "get-current-user"])
 
+    def test_info_reads_amazon_marketing_fire_os_property(self):
+        self.run.side_effect = [self.connected, self.result(
+            "[ro.product.model]: [KFTUWI]\n"
+            "[ro.product.manufacturer]: [Amazon]\n"
+            "[ro.build.mktg.fireos]: [8.3.3.8]\n"
+            "[ro.build.version.sdk]: [30]\n"
+        ), self.connected, self.result("0\n")]
+        self.assertEqual(self.client.info("FIRE123").fire_os, "8.3.3.8")
+
     def test_info_rejects_unknown_sdk(self):
         for sdk in ("", "unknown", "0", "-1"):
             with self.subTest(sdk=sdk):

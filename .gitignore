@@ -4,3 +4,11 @@ __pycache__/
 .superpowers/
 dist/
 *.egg-info/
+*.apk
+*.apkm
+*.xapk
+*.p12
+*.jks
+*.keystore
+.env
+.env.*

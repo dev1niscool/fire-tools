@@ -221,7 +221,7 @@ class AdbClient:
             serial=serial,
             model=properties.get("ro.product.model", ""),
             manufacturer=properties.get("ro.product.manufacturer", ""),
-            fire_os=properties.get("ro.build.version.fireos") or properties.get("ro.build.version.name", ""),
+            fire_os=properties.get("ro.build.mktg.fireos") or properties.get("ro.build.version.fireos") or properties.get("ro.build.version.name", ""),
             android_release=properties.get("ro.build.version.release", ""),
             sdk=int(sdk),
             abis=tuple(abi.strip() for abi in abis.split(",") if abi.strip()),

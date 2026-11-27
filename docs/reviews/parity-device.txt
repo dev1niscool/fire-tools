@@ -1,0 +1,155 @@
+Device workflows implementation and verification
+===============================================
+
+Scope: open_fire_toolkit/device_workflows.py and tests/test_device_workflows.py.
+The test harness uses a simulated ADB tablet and real temporary host files.
+
+RED / GREEN
+-----------
+python -m unittest discover -s tests -p test_device_workflows.py
+
+Initial RED: 8 tests failed because the device workflow mixin was absent.
+Initial GREEN: all 8 passed. Additional RED cases caught unbounded imported
+screen timeouts, restore restricted to the six legacy optional apps, missing
+assistant undo, exports containing values that could not be imported, and
+export permissions affected by host umask. Each was fixed and rerun.
+
+Current focused result: 24 tests passed. Coverage includes literal null versus
+missing settings, stale settings/imports, per-step profile checks, surviving a
+partial privacy change, denial text with a zero shell status, command token
+boundaries, key/namespace/path validation, source-build helper signer checks,
+tablet accessibility consent, transfer truncation/failure, captures and cleanup,
+safe host targets, current optional-package restore and split APK extraction.
+
+Full suite command: python -m unittest discover -v -s tests
+Initial integrated run: 113 tests, all passed except the JDK-dependent helper
+test skipped in this environment. Later integrated runs overlapped a sibling's
+RED cycle. At 154 tests, 16 ExtraWorkflowTests failed with the shared assertion
+"extra workflows missing" and the same JDK test skipped. The failures were
+battery_exemption_defaults_to_play_services_and_reads_back,
+file_delete_refuses_directories_and_changed_source,
+file_tools_keep_storage_arguments_literal,
+invalid_paths_ports_settings_and_endpoints_do_not_write,
+network_commands_read_back_expected_values,
+private_dns_saves_and_restores_both_original_settings,
+private_dns_stops_if_profile_changes_between_writes,
+rename_refuses_destination_created_after_preview,
+settings_open_reports_unresolved_activity,
+settings_open_requests_google_accounts_without_host_credentials,
+source_catalog_has_first_party_links_and_needs_no_device,
+usb_and_tcp_mode_are_scoped_to_reviewed_serial,
+widget_readback_only_claimed_if_available,
+wifi_metered_exit_code_alone_is_not_success,
+wireless_connect_requires_recognized_connection_response, and
+wireless_disconnect_requires_matching_endpoint_response.
+
+After sibling integration and selecting the local test JDK:
+JAVA_HOME=/workspace/android-test-tools/jdk/usr/lib/jvm/java-21-openjdk-amd64 python -m unittest discover -s tests -v
+Result: 154 tests passed, no failures or skips.
+
+Coverage and boundaries
+-----------------------
+* Device readouts include scoped settings, processes, up to 500 log records,
+  installed IMEs, users, home, package details and storage/battery statistics.
+* Setting changes capture the original value locally and verify listed state.
+  Imports bind to serial hash, model, SDK and the digest of the reviewed file.
+  Exports cover allowlisted display/UI, sound and privacy values. Unsupported
+  firmware values appear as omissions in the preview. An exact value readback
+  establishes neither visible UI changes nor reduced telemetry.
+* Optional package restoration handles differing enabled/disabled states for
+  currently installed, non-protected catalog packages. The preview lists skipped
+  unavailable or unrecognized packages. It cannot reinstall missing APKs or
+  recover private app data. Combined backups contain configuration metadata.
+* File transfers target canonical paths in owner shared storage. New local
+  outputs publish from temporary staging. Files are limited to 512 MiB. A
+  shared folder is limited to 4,096 entries, 4 GiB and a ten-minute enumeration
+  or transfer window. Shared storage can change independently while copying.
+  APK extraction uses each owner package-manager path. No OS image or private
+  app-data backup is produced.
+* ADB and the tablet must implement each command. File workflows require
+  ordinary Android utilities including realpath/stat, and push requires
+  no-clobber mv -nT. A refusal stops the operation. A device disconnect can
+  leave a unique temporary capture or upload file on the tablet. Local atomic
+  no-replacement directory publication requires Windows, Linux renameat2, or
+  macOS renamex_np. No hardware or Windows/macOS validation was performed.
+* Helpers are checked against the supplied source-build signer using local
+  verification tools before WRITE_SECURE_SETTINGS is requested. The user
+  then chooses the actual helper action on the tablet. Accessibility enables,
+  wallpaper selection and lockscreen credentials likewise require tablet UI.
+  Parental controls open tablet Settings; automatic visibility changes are
+  unavailable. A helper launch does not establish ad removal.
+* Remote input, display overrides, rotation, app-ops, permissions, user
+  changes and power requests use ordinary, owner-scoped ADB. Reboot requests
+  report acceptance, without claiming a completed boot. An expert shell
+  accepts one reviewed token list. There is no credential bypass, automatic
+  factory reset, firmware flashing or elevated execution.
+
+Round-one review fixes
+----------------------
+All five findings from parity-device-review.txt were addressed.
+
+1. Generic grants reject WRITE_SECURE_SETTINGS for org.firetools.adshelper.
+   The shared permission executor independently requires the signer-verified
+   helper-start or helper-restore plan and checks the installed APK again.
+2. First-time and existing undo files, reviewed local input files and output
+   staging/publication now use pinned directories. POSIX traverses with
+   O_NOFOLLOW and openat-style dir_fd operations. Windows holds non-reparse
+   directory handles throughout traversal and publication, denying write/delete
+   sharing on each component. Linux uses parent-process descriptor paths for
+   ADB output. macOS stages child-process transfers privately before copying
+   into the held destination. A host without a usable directory descriptor
+   path or handle refuses the affected operation.
+3. Package, display, permission, app-op and profile writes record acceptance
+   before another tablet request can fail. Remote upload publication and local
+   file publication are recorded before cleanup. Readback upgrades the entry.
+4. Advanced device reads check the selected Amazon owner tablet before
+   collecting diagnostics or configuration.
+5. Owner permission/app-op previews capture the exposed previous state, show
+   it to the user and recheck before mutation. A preview explicitly identifies
+   unexposed values. The helper grant also binds its prior permission state.
+
+Review RED: 31 device tests ran; 4 failed and 3 errored on the prior
+implementation. They exposed unverified helper permission grants, secondary
+profile diagnostic reads, symlinked first-time undo, redirected staging during
+ancestor rename, unbound previous permission state and missing partial progress
+on grant readback or upload cleanup failure.
+
+Review GREEN: python -m unittest discover -s tests -p test_device_workflows.py
+ran 35 tests, all passed. Additional coverage exercises the shared grant
+boundary, app-op/display readback failures, missing prior grant-state warnings
+and a real child process writing to a pinned Linux output directory.
+
+The first integrated rerun saw one sibling GUI test error at 180 tests:
+test_transport_review_loads_configured_adb_without_selecting_tablet could
+not render a TransportPlan lacking the apks attribute. After sibling updates:
+JAVA_HOME=/workspace/android-test-tools/jdk/usr/lib/jvm/java-21-openjdk-amd64 python -m unittest discover -s tests
+ran 184 tests, all passed with no skips. Windows/macOS handle behavior and
+physical device behavior still require native-environment validation.
+
+Round-two re-review fixes
+-------------------------
+The previous module and tests are preserved under /workspace/device-round2-base.
+The isolated change set is /workspace/parity-device-round2-fix.diff.
+
+Private staging no longer registers a pathname for recursive cleanup by
+TemporaryDirectory. The original staging directory stays pinned while cleanup
+handles its output/snapshot entries. Cleanup checks the staging entry identity
+and leaves both directories untouched if a replacement is present. The last
+pathname operation is a non-recursive rmdir. The regression replaces the
+staging entry itself with a different populated ordinary directory, including
+a nested file, and checks that both replacement files survive.
+
+App-op snapshots retain UID and package modes separately, show the exposed
+scopes in the preview, and bind both before requesting the change. An explicit
+UID mode that disagrees with the requested mode now reports its observed
+value on readback, including when the package line agrees. The accepted
+command remains visible in partial progress.
+
+RED: 38 tests run, 3 failing assertions/subtests plus 1 error. The previous
+implementation failed to detect UID-only and mixed-scope changes, confirmed
+conflicting readback, and removed the replacement staging directory.
+GREEN: python -m unittest discover -s tests -p test_device_workflows.py -q
+ran 38 tests, all passed.
+Integrated: JAVA_HOME=/workspace/android-test-tools/jdk/usr/lib/jvm/java-21-openjdk-amd64 python -m unittest discover -s tests
+ran 193 tests, all passed, no skips. Physical and Windows/macOS verification
+remain outstanding.

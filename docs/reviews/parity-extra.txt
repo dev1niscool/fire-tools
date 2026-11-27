@@ -1,0 +1,104 @@
+Additional utility workflows
+============================
+
+Scope
+-----
+ExtraWorkflows reuses the existing selected-device checks, serial-scoped ADB
+shell token handling, and canonical shared-storage validation. Review is
+read-only. Execution rebuilds the preview, compares the snapshot, and
+rechecks owner identity before a command. The private DNS workflow repeats
+the check for each setting write. The normal Toolkit confirmation and
+operation lock cover all these workflows.
+
+Coverage and limits
+-------------------
+* Settings requests use an allowlist of Android activity actions. The result
+  records the activity request. Account credentials and Settings controls
+  are handled on the tablet.
+* Battery exemption updates the device-idle user whitelist for an installed
+  owner package and checks the list again. Built-in system exemptions retain
+  their own state. Widget bind grants target an installed owner package.
+  When the tablet exposes the grant dump, the workflow verifies that list.
+  Otherwise the completion message reports only command acceptance.
+* Legacy TCP and USB requests use the selected serial. Independent host-only
+  previews allow connect and disconnect without an attached tablet. They
+  target one validated IPv4 or DNS endpoint on the local ADB server and
+  require a matching confirmation in the response. Endpoint connections
+  require explicit selection before tablet tools can use them. Encrypted
+  pairing and pairing-code handling are outside this workflow.
+* Shared folder creation, rename and deletion use literal paths under
+  /sdcard. Rename checks the source, new destination, and identifying
+  metadata. The tablet must support no-clobber mv -nT. Android versions
+  without that option can reject the command. Concurrent tablet filesystem
+  writes can race individual shell utilities. Deletion covers one regular
+  file and verifies its absence.
+* Network information reads Wi-Fi metering identifiers, Data Saver, and
+  Private DNS where the tablet exposes those commands. Data Saver and
+  metering changes require matching readback. Some AOSP netpolicy versions
+  return an unsuccessful status after setting metering, so the exact generic
+  ADB status 255 proceeds to readback. Private DNS uses Android 9 or newer
+  settings, saves the first pre-change mode and hostname in bounded private
+  atomic local state, and restores missing keys as missing. Journal reads,
+  publication, and removal use a pinned local directory. A change to its
+  path stops subsequent settings writes. Readback checks stored settings.
+  Resolver availability and network behavior depend on the tablet and
+  network. No CA certificates are imported.
+* The source directory lists project and official store URLs with package IDs.
+  The toolkit performs no download on catalog reads. Streaming availability,
+  playback and device certification depend on providers and firmware.
+
+Verification
+------------
+python -m unittest discover -s tests -p test_extra_workflows.py -v
+The initial 16 tests failed with the absent-mixin assertion, then passed
+after implementation. A file regression reproduced a same-size edit within
+one timestamp second. A catalog integration regression reproduced accidental
+rejection of blank unused options. Transport tests reproduced failure to
+connect or disconnect without a detected tablet, and exercised the difference
+between a local ADB daemon startup notice and an actual transport error.
+Three journal regressions exercise a symlinked state directory before the
+first save and path redirection during publication or deletion. The resulting
+focused suite has 22 tests. The harness models ADB replies and settings with
+real temporary host state. No live Fire tablet or firmware-specific validation
+was performed.
+
+Upstream command references
+---------------------------
+Android ADB manual
+https://developer.android.com/tools/adb
+
+Android Settings activity actions and extras
+https://developer.android.com/reference/android/provider/Settings
+
+Android 11 network policy shell formatting and Wi-Fi metering exit behavior
+https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-11.0.0_r1/services/core/java/com/android/server/net/NetworkPolicyManagerShellCommand.java
+
+Android 11 widget grant and dump format
+https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-11.0.0_r1/services/appwidget/java/com/android/server/appwidget/AppWidgetServiceImpl.java
+
+Review round 1 corrections
+--------------------------
+Seven regression test methods initially reproduced the four utility review
+findings. The disconnect fixture exercises eight write paths through
+Toolkit.execute. Each path now records the accepted target before the
+identity check or verification. The special Wi-Fi metering status records
+an unverified attempt until matching readback.
+
+Private DNS publishes its first journal with an atomic no-overwrite
+operation. Preview captures the saved journal's file identity and SHA-256.
+Execution checks them before each tablet write and before retiring the
+journal. Undo reads both tablet values again even when the plan needs no
+write. Consumption moves the entry within the pinned directory and checks
+it again before removal. If the moved entry changed and another journal
+occupies its original name, the moved entry remains under its recovery
+name. Tests cover first-publication collisions, changes between writes,
+same-content entry replacement, a change during consumption, and tablet
+drift before a no-write undo consumes the journal.
+
+The endpoint planner rejects ADB's reserved single-label transport names.
+Dotted DNS names that start with the same text remain valid.
+https://android.googlesource.com/platform/packages/modules/adb/+/refs/heads/main/services.cpp
+https://android.googlesource.com/platform/packages/modules/adb/+/refs/heads/main/socket_spec.cpp
+
+The focused suite now has 29 tests. These changes were exercised with a
+simulated tablet and real temporary undo state.

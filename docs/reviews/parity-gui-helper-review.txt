@@ -1,0 +1,81 @@
+Fire Tools desktop and Android helper review
+
+Verdict: changes requested. Two medium-severity findings.
+
+1. Medium — Changing tools during package discovery breaks the package picker.
+   advanced_gui.py:230–234 sets the disabled state on the tool Treeview. Tk
+   8.6 still processes pointer selection. Lines 124–132 then destroy the
+   original form while lines 258–265 retain its Text widget for the worker's
+   completion callback. At lines 290–295 Add selected packages reads the
+   destroyed widget. Reproduced under Xvfb with the actual GUI and a delayed
+   DemoToolkit inventory response. While Choose packages was loading on
+   packages-disable, a click selected packages-enable. Selecting a package
+   in the resulting picker and pressing Add produced “TclError: invalid command
+   name” and left the modal picker open. Guard navigation while the request
+   is pending or discard obsolete picker results, and cover this interaction
+   with a rendered regression test.
+
+2. Medium — API 23 can continue enforcement with notifications blocked.
+   AndroidManifest.xml:7 advertises API 23. In AdsService.java:60–69,
+   canShowNotification returns true unconditionally on that API. The same
+   check gates start and each write cycle at lines 42 and 111. Android 6 lets
+   users block an app's notifications. Its foreground-service implementation
+   posts under the app UID, and the notification service suppresses that
+   app's blocked notifications. The helper can therefore start or resume
+   without the promised visible notification and Stop action. Verify
+   notification availability on API 23 and fail closed when visibility cannot
+   be established. This finding follows from the Android platform source and
+   the helper code. Android runtime behavior was not exercised in this review.
+   Platform references:
+   https://android.googlesource.com/platform/frameworks/base/+/android-6.0.1_r1/services/core/java/com/android/server/am/ServiceRecord.java#509
+   https://android.googlesource.com/platform/frameworks/base/+/android-6.0.1_r1/services/core/java/com/android/server/notification/NotificationManagerService.java#2156
+
+Other checks
+
+The desktop dispatch captures form strings, toolkit and tablet serial on the
+Tk thread. Device mutations go through a review window which initially focuses
+Cancel. Confirm passes the reviewed plan to execute. A missing tablet blocks
+submission. Demo file paths remain inputs to an in-memory simulation.
+
+The helper requires the user to press Enable, its exported activity ignores
+external action data, and the private service checks the settings grant.
+The boot receiver checks saved opt-in and permission before requesting a
+restart. Restore verifies presence and value before discarding the backup.
+Stop preserves the backup. The manifest declares no Internet permission.
+Firmware-dependent limitations are visible in the app and its documentation.
+
+The offline builder stages the APK in the output directory, verifies signature
+and alignment, and publishes it with a no-replace hard link. Locally generated
+development keys are installed with the same no-replace primitive after their
+permissions are set to 0600 on POSIX. A supplied keystore goes only to the
+signer. The companion ignore rules cover generated keys and APKs.
+
+Existing evidence reviewed: eight desktop controller tests, two rendered Tk
+smokes, six helper host tests, and an official SDK build with signature and
+alignment checks. The Android lifecycle, Fire OS lock-screen behavior and
+platform-native chooser behavior still lack on-device or per-platform evidence.
+
+Round 1 follow-up review
+
+Verdict: approved for the GUI and companion changes in this fix. Both medium
+findings are resolved.
+
+The rendered Tk regression passed on a fresh Xvfb display. A pointer click
+during the delayed inventory request kept the original form active. Adding
+the selected packages succeeded and their IDs appeared in the reviewed plan.
+The picker also checks the field and serial before showing or applying it.
+The expanded smoke opened the local source directory without ADB or a tablet.
+It exercised host endpoint review with an injected transport client, including
+cancellation and one confirmed execution. All ten GUI unit tests passed.
+
+The companion now requires API 24. Android's public app notification switch
+is checked at startup and on each enforcement pass across the supported range.
+On API 26 and newer the additional channel check still applies. The manifest,
+D8 minimum, and companion documentation agree on the new floor. All seven
+companion host tests passed with JDK 21. Independent aapt2 inspection of the
+rebuilt APK confirmed minimum API 24 and target API 28. Its SHA-256 matched the
+recorded rebuild. The desktop toolkit retains API 23 support.
+
+Scope covered the supplied round 1 GUI and helper fix. The transport smoke
+used a fake endpoint. Android lifecycle and Fire OS behavior still need
+runtime verification on a tablet or emulator.
