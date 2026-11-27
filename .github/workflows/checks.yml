@@ -21,6 +21,11 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Run unit and subprocess tests
         run: python -m unittest discover -s tests -v
+      - name: Exercise the desktop on a virtual display
+        if: runner.os == 'Linux'
+        run: |
+          xvfb-run -a python tests/gui_smoke.py
+          xvfb-run -a python tests/gui_expanded_smoke.py
       - name: Compile Python sources
         run: python -m compileall -q open_fire_toolkit tests scripts
       - name: Exercise offline command-line demo
