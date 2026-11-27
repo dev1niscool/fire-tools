@@ -1,9 +1,12 @@
 """Owner package workflow tests at the Android command boundary."""
+import contextlib
 from dataclasses import replace
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -131,18 +134,14 @@ class PackageWorkflowTests(unittest.TestCase):
     def execute(self, plan):
         return self.tool.execute(plan, confirmed=True, log=lambda message: None)
 
-    def test_cli_confirms_the_reviewed_files_signers_and_selection(self):
-        import contextlib
-        import io
-        import re
+    def run_cli(self, args):
         from open_fire_toolkit.cli import main
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+            result = main(args)
+        return result, output.getvalue()
 
-        def run(args):
-            output = io.StringIO()
-            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
-                result = main(args)
-            return result, output.getvalue()
-
+    def test_cli_confirms_the_reviewed_files_signers_and_selection(self):
         paths = [self.root / 'a.apk', self.root / 'b.apk']
         packages = ['org.example.first', 'org.example.second']
         certificates = dict(zip(packages, ('a' * 64, 'b' * 64)))
@@ -158,27 +157,27 @@ class PackageWorkflowTests(unittest.TestCase):
         with patch('open_fire_toolkit.cli.Toolkit', return_value=self.tool), patch.object(self.tool, '_verifier') as verifier:
             verifier.return_value.inspect.side_effect = inspect
             args = ['tool', 'sideload', '--serial', SERIAL, '--param', 'paths=' + json.dumps(list(map(str, paths)))]
-            result, preview = run(args)
+            result, preview = self.run_cli(args)
             self.assertEqual(result, 0, preview)
             match = re.search(r'--confirm-token ([0-9a-f]{64})', preview)
             self.assertIsNotNone(match, preview)
             confirm = ['--yes', '--confirm-token', match[1]]
-            self.assertEqual(run(args + ['--yes'])[0], 1)
+            self.assertEqual(self.run_cli(args + ['--yes'])[0], 1)
             certificates[packages[1]] = 'c' * 64
-            self.assertEqual(run(args + confirm)[0], 1)
+            self.assertEqual(self.run_cli(args + confirm)[0], 1)
             self.assertEqual(self.adb.installs, [])
             certificates[packages[1]] = 'b' * 64
-            self.assertEqual(run(args + confirm)[0], 0)
+            self.assertEqual(self.run_cli(args + confirm)[0], 0)
             self.assertEqual(self.adb.installs, packages)
 
             custom = self.root / 'apps.txt'
             custom.write_text(A)
             args = ['tool', 'debloat', '--serial', SERIAL, '--param', 'profile=custom', '--param', 'list_file=' + str(custom)]
-            result, preview = run(args)
+            result, preview = self.run_cli(args)
             self.assertEqual(result, 0, preview)
             token = re.search(r'--confirm-token ([0-9a-f]{64})', preview)[1]
             custom.write_text(B)
-            self.assertEqual(run(args + ['--yes', '--confirm-token', token])[0], 1)
+            self.assertEqual(self.run_cli(args + ['--yes', '--confirm-token', token])[0], 1)
             self.assertEqual(self.adb.disabled, set())
 
     def test_accepted_last_package_write_survives_disconnect_or_identity_change(self):
@@ -356,7 +355,95 @@ class PackageWorkflowTests(unittest.TestCase):
         self.assertEqual(self.plan('debloat', profile='standard', mode='enable').packages, (A,))
         complete = self.plan('debloat', profile='complete')
         self.assertNotIn(setup, complete.packages)
-        self.assertIn('Skipped ' + setup + ': protected', ' '.join(complete.details))
+        self.assertIn('Device Setup (' + setup + '): protected', ' '.join(complete.details))
+
+    def test_current_presets_keep_v46_order_through_preview_and_comparison(self):
+        from open_fire_toolkit import package_catalog
+        # The ordinary v46 Complete preset, with + marking its additions to Standard.
+        entries = """
+            +com.amazon.dee.app +com.amazon.venezia com.amazon.ags.app com.amazon.geo.client.maps
+            com.amazon.mp3 com.amazon.kindle com.amazon.avod com.amazon.alexa.youtube.app
+            com.audible.application.kindle +com.android.calculator2 +com.android.calendar
+            +com.android.camera2 +com.android.deskclock +com.android.contacts +com.amazon.zico
+            com.amazon.smartgenie +com.amazon.kindle.otter.oobe +com.android.email +com.amazon.tahoe
+            com.goodreads.kindle com.amazon.csapp +com.amazon.imdb.tv.mobile.app com.amazon.webapp
+            com.amazon.ods.kindleconnect org.mopria.printplugin com.android.music
+            com.amazon.kindle.personal_video com.amazon.iris com.amazon.photos.importer com.amazon.photos
+            com.amazon.windowshop +com.amazon.cloud9 com.kingsoft.office.amz com.washingtonpost.rainbow
+            com.amazon.weather
+        """.split()
+        complete = tuple(p.lstrip('+') for p in entries)
+        standard = tuple(p for p in entries if not p.startswith('+'))
+        extras = tuple(p[1:] for p in entries if p.startswith('+'))
+        self.adb.present.update(complete)
+        self.adb.known.update(complete)
+        self.assertEqual(self.plan('debloat').packages, standard)
+        self.assertEqual(self.plan('debloat', profile='recommended'), self.plan('debloat', profile='standard'))
+        plan = self.plan('debloat', profile='complete')
+        self.assertEqual(plan.packages, tuple(p for p in complete if p != 'com.amazon.kindle.otter.oobe'))
+        comparison = package_catalog.debloat_preset_comparison()
+        self.assertEqual(tuple(re.findall(r'\(([\w]+(?:\.[\w]+)+)\)', comparison)), standard + extras)
+        for name in ('Standard Debloat (Recommended)', 'Complete Debloat', '22', '35', '13', 'up to 34 eligible',
+                     'Mayday Sharing', 'Device Setup', 'protected', 'Restore Everything', 'Undo'):
+            self.assertIn(name, comparison)
+
+    def test_complete_preview_explains_app_names_skips_counts_and_restore(self):
+        self.adb.disabled.add(A)
+        plan = self.plan('debloat', profile='complete')
+        self.assertEqual(plan.title, 'Complete Debloat')
+        self.assertEqual(plan.packages, (B,))
+        details = '\n'.join(plan.details)
+        for text in ('35 listed', '1 to disable', '34 skipped', 'owner user 0',
+                     'Prime Photos', 'enabled → disabled', 'Amazon Newsstand',
+                     'already disabled', 'Mayday Sharing', 'absent', 'Device Setup', 'protected'):
+            self.assertIn(text, details)
+        self.assertIn('Amazon Appstore', ' '.join(plan.warnings))
+        self.assertFalse(self.adb.writes)
+
+        restore = self.plan('debloat', profile='complete', mode='enable')
+        self.assertEqual(restore.title, 'Restore Everything')
+        self.assertEqual(restore.packages, (A,))
+        self.assertIn('Undo', ' '.join(restore.details))
+
+    def test_cli_restore_everything_enables_reviewed_disabled_apps_and_supports_undo(self):
+        appstore, setup = 'com.amazon.venezia', 'com.amazon.kindle.otter.oobe'
+        self.adb.known.update((appstore, setup))
+        self.adb.present.update((appstore, setup))
+        self.adb.disabled.update((appstore, setup, A, HOME))
+        with patch('open_fire_toolkit.cli.Toolkit', return_value=self.tool):
+            args = ['tool', 'debloat-restore', '--serial', SERIAL]
+            code, preview = self.run_cli(args)
+            self.assertEqual(code, 0, preview)
+            self.assertIn('Restore Everything', preview)
+            self.assertIn('Device Setup', preview)
+            token = re.search(r'--confirm-token ([0-9a-f]{64})', preview)[1]
+            self.assertEqual(self.run_cli(args + ['--yes'])[0], 1)
+            self.assertFalse(self.adb.writes)
+            code, applied = self.run_cli(args + ['--yes', '--confirm-token', token])
+            self.assertEqual(code, 0, applied)
+        self.assertEqual(self.adb.writes, [('pm', 'enable', '--user', '0', p) for p in (appstore, A)])
+        self.assertEqual(self.adb.disabled, {setup, HOME})
+        self.execute(self.plan('undo'))
+        self.assertEqual(self.adb.disabled, {appstore, setup, A, HOME})
+
+    def test_upgraded_preset_retry_preserves_undo_from_sorted_order(self):
+        # Saved list-source values from the alphabetical v0.3.1 presets.
+        for profile, source, pending in (
+            ('recommended', '7bed63d1d483b752f73e9dfcdfc02fbec08466d3f25249a882dcfa0447bf2dee', True),
+            ('complete', 'cb46bf84bf43b459e31f881c542137dc99a09af579375ea5d944a597be463dea', False),
+        ):
+            with self.subTest(profile=profile):
+                self.adb.disabled.add(A)
+                record = {'model': 'Fire', 'states': {A: 'enabled'}, 'restore_source': source}
+                if pending:
+                    record = {'model': 'Fire', 'states': {}, 'pending': {A: 'enabled'}, 'pending_source': source}
+                data = {'schema': 1, 'devices': {self.tool._state_key(SERIAL): record}}
+                (self.root / 'packages-state.json').write_text(json.dumps(data))
+                retry = self.plan('debloat', profile=profile)
+                self.assertEqual(retry.packages, (B,))
+                self.execute(retry)
+                self.execute(self.plan('undo'))
+                self.assertEqual(self.adb.disabled, set())
 
     def test_presets_exclude_updater_and_specialized_targets(self):
         for profile in ('standard', 'complete'):

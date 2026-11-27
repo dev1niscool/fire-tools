@@ -1,4 +1,4 @@
-# Feature coverage for Fire Tools 0.3
+# Feature coverage for Fire Tools 0.3.2
 
 This release implements the workflows below in original source. Automated tests exercise their commands, validation and failure handling through simulated tablets; desktop smoke tests exercise their forms and confirmation. No physical Fire tablet has been attached, so **implemented does not mean verified on your firmware**.
 
@@ -9,7 +9,7 @@ The original v46 inventory is in [PARITY-RESEARCH.md](PARITY-RESEARCH.md). That 
 | Area | Implemented | Limits |
 | --- | --- | --- |
 | Google Play | Verified local installer for the three core Google components, Account Manager and optional Calendar/Contacts sync; generic account/settings and app-management tools; battery exemption | User obtains APKs. No automatic firmware-specific version selection or account credentials handled on the computer. |
-| Amazon debloat | 22-entry v46 Standard and 35-entry Complete lists, Toolbox debloat and restore files, legacy v0.2 lists, selected app disable/enable/remove-for-owner/restore, saved undo | The v46 identifiers match the Windows presets. Preview skips protected packages, including Device Setup. Protected packages may refuse changes. System images remain on the tablet. |
+| Amazon debloat | Offline comparison of v46 Standard (Recommended) and Complete, owner ADB preview and apply, Restore Everything, saved batch undo, custom Toolbox lists and legacy v0.2 lists | Complete adds 13 apps to Standard’s 22. Fire Tools protects Device Setup, leaving at most 34 eligible targets. Fire OS can refuse changes. [Package comparison](REA-NOTES.md#debloating-amazon-apps) |
 | Ads | Setting and Special Offers together with exact undo, setting-only and package-only controls; independent source-built foreground helper | All experimental. Helper requires API 24+, a verified local signing identity, secure-settings grant and visible notification. No ad-visibility or update-persistence guarantee. |
 | Apps | Inventory filters, batch operations, clear data, force stop, launch, permission/app-op controls, standalone APK sideload/update, system update rollback | No split APKM/XAPK installation. Guided package management protects infrastructure; expert shell remains powerful. |
 | Launcher and keyboard | Select installed HOME/IME, verify replacement before stock launcher disable, restore Fire launcher, widget binding, keys/taps | No original launcher downgrade, Launcher Hijack or exploit-specific workaround reproduction. Firmware can reject defaults. |
@@ -32,7 +32,9 @@ The original Google Play, temporary-ad-setting and quick-app tabs remain availab
 | CLI key | Tool | Group | Parameters |
 | --- | --- | --- | --- |
 | `packages-inventory` | Browse installed and system apps (read) | Applications | `mode` |
+| `debloat-presets` | Compare debloat presets (offline) | Amazon apps | None |
 | `debloat` | Debloat Amazon apps | Amazon apps | `profile`, `list_file`, `mode` |
+| `debloat-restore` | Restore Everything (enable disabled, installed Complete members after preview) | Amazon apps | None |
 | `packages-disable` | Disable selected apps | Applications | `packages` |
 | `packages-enable` | Enable selected apps | Applications | `packages` |
 | `packages-uninstall` | Remove selected apps for owner | Applications | `packages` |

@@ -1,21 +1,52 @@
 """Offline demonstration: no subprocesses, hardware, file writes or network."""
-from pathlib import Path
+from dataclasses import replace
 
 from .adb import Device, DeviceInfo
+from .package_catalog import APP_LABELS, STOCK_HOME
+from .package_workflows import PackageWorkflows, _guard_selection, _state_after
 from .service import OPTIONAL_APPS, Plan, ToolkitError
 from .workflows import TransportPlan, WorkflowPlan
+
+
+_EXPLICIT_PACKAGE_CHANGES = {'disable', 'enable', 'uninstall', 'restore'}
+
+
+class _DemoPackagePreview(PackageWorkflows):
+    """Use the real preset and undo planner with only the simulated tablet's data."""
+
+    def __init__(self, demo):
+        self.demo = demo
+
+    def _writable_device(self, serial):
+        return self.demo.device_info(serial)
+
+    def _pkg_states(self, serial):
+        return {package: self.demo._package_state(package) for package in self.demo.demo_packages}
+
+    def _pkg_undo_record(self, device):
+        return {}, {'states': self.demo.package_undo}
+
+    def _pkg_keyboard(self, serial):
+        return 'com.amazon.inputmethod/.ImeService'
+
+    def _pkg_activity(self, serial, category):
+        return STOCK_HOME + '/.Launcher'
 
 
 class DemoToolkit:
     def __init__(self):
         self.identity = DeviceInfo('DEMO_FIRE_HD10', 'Fire HD 10 (simulated)', 'Amazon',
                                    '8.3.3.8', '11', 30, ('arm64-v8a', 'armeabi-v7a'), 0)
-        self.disabled: set[str] = set()
+        self.disabled: set[str] = {'com.android.calendar'}
         self.value = '1'
         self.paired_original: tuple[str, bool] | None = None
         self.original: str | None = None
-        self.demo_packages = set(OPTIONAL_APPS) | {'com.amazon.kindle.kso', 'com.amazon.firelauncher', 'com.android.vending', 'com.google.android.gms', 'org.firetools.adshelper'}
+        self.demo_packages = set(OPTIONAL_APPS) | {
+            'com.amazon.kindle.kso', STOCK_HOME, 'com.android.vending', 'com.google.android.gms',
+            'org.firetools.adshelper', 'com.amazon.cloud9', 'com.android.calendar', 'com.amazon.kindle.otter.oobe',
+        }
         self.removed: set[str] = set()
+        self.package_undo: dict[str, str] = {}
 
     def _check(self, serial):
         if serial != self.identity.serial:
@@ -30,7 +61,8 @@ class DemoToolkit:
 
     def packages(self, serial, disabled_only=False):
         self._check(serial)
-        return sorted(self.disabled if disabled_only else OPTIONAL_APPS)
+        installed = self.demo_packages - self.removed
+        return sorted(installed & self.disabled if disabled_only else installed)
 
     def _plan(self, title, serial, action, details, package=''):
         self._check(serial)
@@ -75,7 +107,13 @@ class DemoToolkit:
         if mode not in {'all', 'system', 'third-party', 'disabled', 'uninstalled'}:
             raise ToolkitError('Unknown inventory mode.')
         items = self.disabled if mode == 'disabled' else self.removed if mode == 'uninstalled' else self.demo_packages - self.removed
-        return [{'package': package, 'state': 'removed' if package in self.removed else 'disabled' if package in self.disabled else 'enabled', 'label': OPTIONAL_APPS.get(package, package)} for package in sorted(items)]
+        return [{'package': package, 'state': 'removed' if package in self.removed else self._package_state(package),
+                 'label': APP_LABELS.get(package, package)} for package in sorted(items)]
+
+    def _package_state(self, package):
+        if package in self.removed:
+            return 'uninstalled'
+        return 'disabled' if package in self.disabled else 'enabled'
 
     def _workflow(self, serial, backend, operation, packages=(), **parameters):
         from .feature_catalog import FEATURES
@@ -90,7 +128,48 @@ class DemoToolkit:
                             tuple(parameters.items()), tuple(packages))
 
     def plan_package_action(self, serial, operation, packages=(), **parameters):
+        if operation in _EXPLICIT_PACKAGE_CHANGES or operation == 'undo':
+            selected = self.package_undo if operation == 'undo' else packages
+            for package in selected:
+                _guard_selection(package, operation)
+        if operation in {'debloat', 'undo'}:
+            self._check(serial)
+            if parameters.get('profile') == 'custom' or parameters.get('list_file'):
+                raise ToolkitError('Demo mode only simulates built-in presets. Custom lists require reading a local file.')
+            plan = _DemoPackagePreview(self).plan_package_action(serial, operation, packages, **parameters)
+            return replace(plan, title='SIMULATED — ' + plan.title,
+                           warnings=('Demo only. All package states and undo data stay in memory.', *plan.warnings))
         return self._workflow(serial, 'package', operation, packages, **parameters)
+
+    def _apply_package_plan(self, plan):
+        explicit = plan.packages if plan.operation in _EXPLICIT_PACKAGE_CHANGES else ()
+        if self.plan_package_action(plan.serial, plan.operation, explicit, **plan.params) != plan:
+            raise ToolkitError('Simulated package state changed since preview. Review again.')
+        undo = plan.operation == 'undo'
+        mode = dict(plan.snapshot).get('list-mode', plan.operation)
+        previous = {}
+        result = []
+        for package in plan.packages:
+            before = self._package_state(package)
+            if before == 'uninstalled' and not undo and mode != 'restore':
+                continue
+            target = self.package_undo[package] if undo else _state_after(mode, before)
+            if target == before:
+                continue
+            if package in self.demo_packages:
+                previous[package] = before
+            self.disabled.discard(package)
+            self.removed.discard(package)
+            if target == 'disabled':
+                self.disabled.add(package)
+            elif target == 'uninstalled':
+                self.removed.add(package)
+            result.append(f'SIMULATED: {package} is {self._package_state(package)} for owner user 0.')
+        if undo:
+            self.package_undo.clear()
+        elif previous:
+            self.package_undo = previous
+        return result
 
     def plan_device_action(self, serial, operation, **parameters):
         return self._workflow(serial, 'device', operation, **parameters)
@@ -140,17 +219,9 @@ class DemoToolkit:
         if isinstance(plan, WorkflowPlan):
             if plan.action not in {'package_workflow', 'device_workflow', 'extra_workflow'}:
                 raise ToolkitError('Unknown simulated action.')
-            if plan.action == 'package_workflow':
-                selected = set(plan.packages)
-                if plan.operation == 'disable':
-                    self.disabled.update(selected)
-                elif plan.operation == 'enable':
-                    self.disabled.difference_update(selected)
-                elif plan.operation == 'uninstall':
-                    self.removed.update(selected)
-                elif plan.operation == 'restore':
-                    self.removed.difference_update(selected)
             result = ['SIMULATED: action completed in memory. No hardware or host files were accessed.']
+            if plan.action == 'package_workflow' and plan.operation in _EXPLICIT_PACKAGE_CHANGES | {'debloat', 'undo'}:
+                result.extend(self._apply_package_plan(plan))
             for message in result:
                 log(message)
             return result

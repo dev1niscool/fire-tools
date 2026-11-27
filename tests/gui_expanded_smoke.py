@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from open_fire_toolkit.adb import Device, DeviceInfo
 from open_fire_toolkit.feature_catalog import FEATURES
 from open_fire_toolkit.gui import App
+from open_fire_toolkit.package_catalog import DEBLOAT_TITLES
 from open_fire_toolkit.workflows import TransportPlan
 
 
@@ -102,6 +103,7 @@ def smoke(root):
     assert app.advanced.feature.key == "debloat"
     assert serial in app.status.get()
     assert app.advanced.form_canvas.winfo_height() > 100
+    initially_disabled = app.toolkit.disabled.copy()
 
     def review():
         click(root, "Review...")
@@ -114,10 +116,11 @@ def smoke(root):
         return window, preview.get("1.0", "end")
 
     window, preview = review()
-    assert "SIMULATED" in preview
-    assert "standard" in preview.casefold()
+    review_labels = [str(widget.cget("text")) for widget in descendants(window) if isinstance(widget, ttk.Label)]
+    assert any("SIMULATED" in label and "Standard Debloat (Recommended)" in label for label in review_labels)
+    assert "com.amazon.kindle" in preview and "com.amazon.cloud9" not in preview
     click(window, "Cancel")
-    assert app.review is None and not app.toolkit.disabled
+    assert app.review is None and app.toolkit.disabled == initially_disabled
     assert "Simulation finished" not in app.log_box.get("1.0", "end")
 
     app.advanced.show_feature("packages-disable")
@@ -159,7 +162,7 @@ def smoke(root):
     window, preview = review()
     assert all(package in preview for package in package_ids)
     click(window, "Cancel")
-    assert not app.toolkit.disabled
+    assert app.toolkit.disabled == initially_disabled
 
     app.advanced.show_feature("settings-set")
     root.update()
@@ -223,6 +226,7 @@ def smoke(root):
         assert "Simulation finished" in app.log_box.get("1.0", "end")
         assert not destination.exists()
 
+    check_debloat_presets(app, review)
     app.tabs.select(2)
     root.update()
     click(root, "Disable Special Offers package...")
@@ -233,6 +237,82 @@ def smoke(root):
     assert app.advanced.feature.key == "helper-start"
     assert serial in app.status.get()
     assert not callback_errors, callback_errors
+
+
+def check_debloat_presets(app, review):
+    root = app.root
+    initially_disabled = app.toolkit.disabled.copy()
+    app.tabs.select(3)
+    root.update()
+    click(root, "Debloat Amazon apps...")
+    form = app.advanced.form
+    preset, mode = [item for item in descendants(form) if isinstance(item, ttk.Combobox)]
+    custom_file = next(item for item in descendants(form) if type(item) is ttk.Entry)
+
+    def choose(combo, title):
+        combo.current(combo.cget("values").index(title))
+        combo.event_generate("<<ComboboxSelected>>")
+        root.update()
+
+    def form_labels():
+        return " ".join(str(w.cget("text")) for w in descendants(form)
+                        if isinstance(w, ttk.Label) and w.winfo_ismapped())
+
+    assert preset.get() == "Standard Debloat (Recommended)"
+    assert not custom_file.winfo_ismapped()
+    standard_help = form_labels()
+    assert all(name in standard_help for name in ("Appstore", "Silk", "Camera"))
+    assert app.advanced._values()["profile"] == "standard"
+    assert len(preset.cget("values")) == 5
+    for legacy in ("standard-v0.2", "complete-v0.2"):
+        choose(preset, DEBLOAT_TITLES[legacy])
+        assert app.advanced._values()["profile"] == legacy
+    choose(preset, DEBLOAT_TITLES["custom"])
+    assert custom_file.winfo_ismapped()
+    custom_file.insert(0, "custom fixture.debloat")
+    assert app.advanced._values()["list_file"] == "custom fixture.debloat"
+    choose(preset, "Complete Debloat")
+    assert not custom_file.winfo_ismapped()
+    assert app.advanced._values() == {"profile": "complete", "list_file": "", "mode": "auto"}
+    complete_help = form_labels()
+    assert complete_help != standard_help
+    assert all(name in complete_help for name in ("Appstore", "Silk", "Camera", "Device Setup"))
+    for title, action in zip(mode.cget("values"), ("auto", "disable", "enable", "uninstall"), strict=True):
+        choose(mode, title)
+        assert app.advanced._values()["mode"] == action
+    choose(mode, mode.cget("values")[0])
+
+    window, preview = review()
+    assert "com.amazon.cloud9" in preview
+    assert preset.instate(["disabled"]) and mode.instate(["disabled"])
+    assert app.toolkit.disabled == initially_disabled
+    click(window, "Confirm simulation")
+    wait(root, lambda: not app.worker.busy, "Complete Debloat simulation")
+    assert "com.amazon.cloud9" in app.toolkit.disabled
+    assert "com.amazon.kindle.otter.oobe" not in app.toolkit.disabled
+    after_complete = app.toolkit.disabled.copy()
+    app.tabs.select(3)
+    root.update()
+    click(root, "Restore Everything...")
+    window, preview = review()
+    assert "com.amazon.cloud9" in preview and "com.android.calendar" in preview
+    assert app.advanced.action.instate(["disabled"])
+    app.advanced.show_feature("packages-undo")
+    assert app.advanced.feature.key == "debloat-restore"
+    click(window, "Cancel")
+    assert app.toolkit.disabled == after_complete
+    window, _ = review()
+    click(window, "Confirm simulation")
+    wait(root, lambda: not app.worker.busy, "Restore Everything simulation")
+    assert "com.amazon.cloud9" not in app.toolkit.disabled
+    assert "com.android.calendar" in initially_disabled - app.toolkit.disabled
+    app.tabs.select(3)
+    root.update()
+    click(root, "Undo saved package changes...")
+    window, _ = review()
+    click(window, "Confirm simulation")
+    wait(root, lambda: not app.worker.busy, "Undo of Restore Everything")
+    assert app.toolkit.disabled == after_complete
 
 
 def connection_layout(root):
@@ -247,6 +327,22 @@ def connection_layout(root):
 def tools_without_tablet(root):
     app = App(root)
     root.update()
+    app.tabs.select(3)
+    root.update()
+    click(root, "Compare debloat presets...")
+    output = wait(root, lambda: displayed_window(root, "Compare debloat presets"), "offline preset list")
+    comparison = text_box(output).get("1.0", "end")
+    assert all(term in comparison for term in ("Standard", "Complete", "com.amazon.cloud9"))
+    click(output, "Close")
+    assert app.tabs.tab(app.tabs.select(), "text") == "Apps"
+    assert app.toolkit is None and app.device is None
+    for label, key in (("Restore Everything...", "debloat-restore"),
+                       ("Undo saved package changes...", "packages-undo")):
+        app.tabs.select(3)
+        root.update()
+        click(root, label)
+        assert app.advanced.feature.key == key
+        assert app.advanced.action.instate(["disabled"])
     app.advanced.show_feature("source-catalog")
     root.update()
     assert app.device is None and app.toolkit is None
@@ -363,4 +459,5 @@ if __name__ == "__main__":
         tools_without_tablet(tk.Toplevel(desktop))
     finally:
         desktop.destroy()
-    print("PASS: rendered Tools navigation, package picker, previews, read results, and ADB transport reselection")
+    print("PASS: rendered preset comparison, Complete Debloat, Restore Everything, saved undo, package picker, "
+          "tool navigation and ADB transport reselection")

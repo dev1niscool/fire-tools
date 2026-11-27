@@ -5,6 +5,28 @@ from __future__ import annotations
 import json
 
 from .feature_catalog import package_values
+from .package_catalog import DEBLOAT_TITLES
+
+
+DEBLOAT_HELP = {
+    "standard": (
+        "Includes Kindle, Prime Video and Amazon Music. Appstore, Silk and Camera are outside this preset."
+    ),
+    "complete": (
+        "Adds Appstore, Silk, Camera and other everyday apps to Standard. Fire Tools skips protected Device Setup."
+    ),
+    "custom": (
+        "Choose a Toolbox .debloat file or a plain package list. Automatic follows the file’s list type. "
+        "Fire Tools skips protected packages, including Device Setup."
+    ),
+    "standard-v0.2": (
+        "The Fire Tools v0.2 Standard list includes Email, Calendar and Contacts. It excludes Appstore, Silk and Camera."
+    ),
+    "complete-v0.2": (
+        "The Fire Tools v0.2 Complete list adds Appstore, messaging and metrics services to the older Standard list. "
+        "It excludes Silk and Camera."
+    ),
+}
 
 
 class AdvancedTools:
@@ -156,11 +178,41 @@ class AdvancedTools:
                 description = self.app._description(self.form, feature.description)
                 description.pack(fill="x", pady=(0, 8))
                 self._bind_wheel(description)
-            for field in feature.fields:
-                self._add_field(field)
+            if feature.key == "debloat":
+                self._add_debloat_fields(feature.fields)
+            else:
+                for field in feature.fields:
+                    self._add_field(field)
         self.sync_controls()
 
-    def _add_field(self, field):
+    def _add_debloat_fields(self, fields):
+        fields = {field.key: field for field in fields}
+        profile_row, profile_box = self._add_field(fields["profile"], DEBLOAT_TITLES)
+        summary = self.app._description(profile_row)
+        summary.pack(fill="x", pady=(4, 0))
+        self._bind_wheel(summary)
+        file_row, _ = self._add_field(fields["list_file"])
+        mode_row, _ = self._add_field(fields["mode"], {
+            "auto": "Automatic (follow list type)", "disable": "Disable apps",
+            "enable": "Enable apps", "uninstall": "Remove for owner (keep data)",
+        })
+
+        read_profile = self.field_sources["profile"]
+        read_file = self.field_sources["list_file"]
+        self.field_sources["list_file"] = lambda: read_file() if read_profile() == "custom" else ""
+
+        def select_profile(_event=None):
+            profile = read_profile()
+            summary.configure(text=DEBLOAT_HELP[profile])
+            if profile == "custom":
+                file_row.pack(fill="x", pady=(0, 8), before=mode_row)
+            else:
+                file_row.pack_forget()
+
+        profile_box.bind("<<ComboboxSelected>>", select_profile)
+        select_profile()
+
+    def _add_field(self, field, choice_labels=None):
         tk, ttk = self.app.tk, self.app.ttk
         row = ttk.Frame(self.form, style="Panel.TFrame")
         row.pack(fill="x", pady=(0, 8))
@@ -192,19 +244,28 @@ class AdvancedTools:
                 )
                 self.package_button.pack(anchor="w", pady=(4, 0))
                 self._field_control(self.package_button, row)
+            return row, box
         else:
             value = tk.StringVar(value=field.default)
-            if field.choices:
-                entry = ttk.Combobox(inputs, textvariable=value, values=field.choices, state="readonly")
+            choices = field.choices
+            if choice_labels:
+                keys_by_title = {title: key for key, title in choice_labels.items()}
+                choices = tuple(keys_by_title)
+                value.set(choice_labels[field.default])
+                self.field_sources[field.key] = lambda: keys_by_title[value.get()]
+            else:
+                self.field_sources[field.key] = value.get
+            if choices:
+                entry = ttk.Combobox(inputs, textvariable=value, values=choices, state="readonly")
             else:
                 entry = ttk.Entry(inputs, textvariable=value)
             entry.pack(side="left", fill="x", expand=True)
-            self.field_sources[field.key] = value.get
             self._field_control(entry, row)
             if field.kind in self.FILE_FIELDS:
                 browse = ttk.Button(inputs, text="Browse...", command=lambda: self._browse(field, value))
                 browse.pack(side="right", padx=(6, 0))
                 self._field_control(browse, row)
+            return row, entry
 
     def _field_control(self, widget, row):
         self.form_controls.append(widget)

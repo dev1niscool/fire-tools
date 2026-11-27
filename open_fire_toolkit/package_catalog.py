@@ -36,47 +36,69 @@ _PREVIOUS_EXTRA = {
 STOCK_HOME = 'com.amazon.firelauncher'
 OFFERS = 'com.amazon.kindle.kso'
 UPDATERS = ('com.amazon.device.software.ota', 'com.amazon.device.software.ota.override')
-_LABELS = {
-    **_PREVIOUS_STANDARD, **_PREVIOUS_EXTRA,
-    'com.amazon.geo.client.maps': 'Maps',
-    'com.amazon.iris': 'Amazon news',
-    'com.amazon.smartgenie': 'Device Dashboard',
-    'com.amazon.webapp': 'Kindle Store',
-    'com.washingtonpost.rainbow': 'Washington Post',
-    'org.mopria.printplugin': 'Mopria Print Service',
-    'com.amazon.cloud9': 'Silk Browser',
-    'com.amazon.imdb.tv.mobile.app': 'Amazon streaming TV',
-    'com.amazon.kindle.otter.oobe': 'Device setup',
-    'com.amazon.tahoe': 'Amazon Kids',
-    'com.amazon.zico': 'Documents',
-    'com.android.calculator2': 'Calculator',
-    'com.android.camera2': 'Camera',
-    'com.android.deskclock': 'Clock',
-}
 
-# Package identifiers observed in the ordinary Windows v46 preset branches.
-# The preview separately identifies protected infrastructure such as device setup.
-_STANDARD = tuple(sorted((
-    'com.amazon.ags.app', 'com.amazon.alexa.youtube.app', 'com.amazon.avod',
-    'com.amazon.csapp', 'com.amazon.geo.client.maps', 'com.amazon.iris', 'com.amazon.kindle',
-    'com.amazon.kindle.personal_video', 'com.amazon.mp3', 'com.amazon.ods.kindleconnect',
-    'com.amazon.photos', 'com.amazon.photos.importer', 'com.amazon.smartgenie',
-    'com.amazon.weather', 'com.amazon.webapp', 'com.amazon.windowshop', 'com.android.music',
-    'com.audible.application.kindle', 'com.goodreads.kindle', 'com.kingsoft.office.amz',
-    'com.washingtonpost.rainbow', 'org.mopria.printplugin',
-)))
-_COMPLETE = tuple(sorted((*_STANDARD,
-    'com.amazon.cloud9', 'com.amazon.dee.app', 'com.amazon.imdb.tv.mobile.app',
-    'com.amazon.kindle.otter.oobe', 'com.amazon.tahoe', 'com.amazon.venezia', 'com.amazon.zico',
-    'com.android.calculator2', 'com.android.calendar', 'com.android.camera2',
-    'com.android.contacts', 'com.android.deskclock', 'com.android.email',
-)))
+# Windows v46 Complete order. Each row names the first preset that includes the app.
+_V46_APPS = (
+    ('com.amazon.dee.app', 'Amazon Alexa', 'complete'),
+    ('com.amazon.venezia', 'Amazon Appstore', 'complete'),
+    ('com.amazon.ags.app', 'Amazon Games', 'standard'),
+    ('com.amazon.geo.client.maps', 'Amazon Maps', 'standard'),
+    ('com.amazon.mp3', 'Amazon Music', 'standard'),
+    ('com.amazon.kindle', 'Amazon Newsstand (Kindle)', 'standard'),
+    ('com.amazon.avod', 'Amazon Prime Video', 'standard'),
+    ('com.amazon.alexa.youtube.app', 'Amazon YouTube', 'standard'),
+    ('com.audible.application.kindle', 'Audible', 'standard'),
+    ('com.android.calculator2', 'Calculator', 'complete'),
+    ('com.android.calendar', 'Calendar', 'complete'),
+    ('com.android.camera2', 'Camera', 'complete'),
+    ('com.android.deskclock', 'Clock', 'complete'),
+    ('com.android.contacts', 'Contacts', 'complete'),
+    ('com.amazon.zico', 'Docs', 'complete'),
+    ('com.amazon.smartgenie', 'Device Dashboard', 'standard'),
+    ('com.amazon.kindle.otter.oobe', 'Device Setup', 'complete'),
+    ('com.android.email', 'Email', 'complete'),
+    ('com.amazon.tahoe', 'FreeTime (Amazon Kids)', 'complete'),
+    ('com.goodreads.kindle', 'Goodreads', 'standard'),
+    ('com.amazon.csapp', 'Help', 'standard'),
+    ('com.amazon.imdb.tv.mobile.app', 'IMDb TV', 'complete'),
+    ('com.amazon.webapp', 'Kindle Store', 'standard'),
+    ('com.amazon.ods.kindleconnect', 'Mayday Sharing', 'standard'),
+    ('org.mopria.printplugin', 'Mopria Print Service', 'standard'),
+    ('com.android.music', 'Music', 'standard'),
+    ('com.amazon.kindle.personal_video', 'My Videos', 'standard'),
+    ('com.amazon.iris', 'News', 'standard'),
+    ('com.amazon.photos.importer', 'Photo Importer', 'standard'),
+    ('com.amazon.photos', 'Prime Photos (Amazon Photos)', 'standard'),
+    ('com.amazon.windowshop', 'Shop Amazon', 'standard'),
+    ('com.amazon.cloud9', 'Silk Browser', 'complete'),
+    ('com.kingsoft.office.amz', 'WPS Office', 'standard'),
+    ('com.washingtonpost.rainbow', 'Washington Post', 'standard'),
+    ('com.amazon.weather', 'Weather', 'standard'),
+)
+_STANDARD = tuple(p for p, _, first_profile in _V46_APPS if first_profile == 'standard')
+_COMPLETE = tuple(row[0] for row in _V46_APPS)
 DEBLOAT_PROFILES = {
     'standard': _STANDARD, 'complete': _COMPLETE,
     'standard-v0.2': tuple(_PREVIOUS_STANDARD), 'complete-v0.2': (*_PREVIOUS_STANDARD, *_PREVIOUS_EXTRA),
 }
-APP_LABELS = {**_LABELS, STOCK_HOME: 'Fire Launcher', OFFERS: 'Special Offers',
-              UPDATERS[0]: 'Fire OS updater', UPDATERS[1]: 'Fire OS updater override'}
+DEBLOAT_TITLES = {
+    'standard': 'Standard Debloat (Recommended)', 'complete': 'Complete Debloat',
+    'custom': 'Load From File...',
+    'standard-v0.2': 'Standard Debloat (v0.2)', 'complete-v0.2': 'Complete Debloat (v0.2)',
+}
+DEBLOAT_RESTORE_DESCRIPTION = (
+    'Restore Everything enables eligible disabled apps from Complete Debloat for owner user 0, '
+    'including apps disabled before debloating. Undo restores the owner states saved for the last package change.'
+)
+DEBLOAT_COMPLETE_WARNING = (
+    'Complete Debloat includes the Amazon Appstore, Alexa, Silk Browser, Camera and Email. '
+    'Changing their availability can interrupt app downloads, browsing and other tablet features.'
+)
+APP_LABELS = {
+    **_PREVIOUS_STANDARD, **_PREVIOUS_EXTRA, **{p: label for p, label, _ in _V46_APPS},
+    STOCK_HOME: 'Fire Launcher', OFFERS: 'Special Offers',
+    UPDATERS[0]: 'Fire OS updater', UPDATERS[1]: 'Fire OS updater override',
+}
 
 _CORE = {
     'android', 'com.android.phone', 'com.android.bluetooth', 'com.android.shell',
@@ -103,3 +125,36 @@ _CORE_TREES = (
 
 def is_protected(package: str) -> bool:
     return package in _CORE or any(package == root or package.startswith(root + '.') for root in _CORE_TREES)
+
+
+def canonical_debloat_profile(profile: str) -> str:
+    return 'standard' if profile == 'recommended' else profile
+
+
+def debloat_plan_title(profile: str, mode: str) -> str:
+    profile = canonical_debloat_profile(profile)
+    title = 'Custom package list' if profile == 'custom' else DEBLOAT_TITLES[profile]
+    if mode == 'enable':
+        return 'Restore Everything' if profile == 'complete' else f'Enable apps — {title}'
+    if mode == 'uninstall':
+        return f'Remove apps for owner — {title}'
+    return title
+
+
+def package_display_name(package: str) -> str:
+    if package in APP_LABELS:
+        return f'{APP_LABELS[package]} ({package})'
+    return package
+
+
+def debloat_preset_comparison() -> str:
+    extras = tuple(p for p in _COMPLETE if p not in _STANDARD)
+    eligible = sum(not is_protected(p) for p in _COMPLETE)
+    lines = [f'{DEBLOAT_TITLES["standard"]} — {len(_STANDARD)} packages shared with Complete']
+    lines.extend(package_display_name(p) for p in _STANDARD)
+    lines.extend(('', f'{DEBLOAT_TITLES["complete"]} — {len(_COMPLETE)} packages, up to {eligible} eligible',
+                  f'{len(extras)} additions to Standard'))
+    for p in extras:
+        detail = ' — kept (protected)' if is_protected(p) else ''
+        lines.append(package_display_name(p) + detail)
+    return '\n'.join((*lines, '', DEBLOAT_RESTORE_DESCRIPTION))

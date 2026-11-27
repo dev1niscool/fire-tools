@@ -75,6 +75,7 @@ tests/test_apk.py
 tests/test_apk_checks.py
 tests/test_cli.py
 tests/test_companion.py
+tests/test_debloat_demo.py
 tests/test_device_workflows.py
 tests/test_extra_workflows.py
 tests/test_feature_cli.py

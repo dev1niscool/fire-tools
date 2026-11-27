@@ -36,7 +36,7 @@ def parser() -> argparse.ArgumentParser:
     catalog.add_argument('--feature', choices=sorted(BY_KEY), help='Show parameters for one tool')
     tool = subs.add_parser('tool', help='Preview or run a tool from the catalog')
     tool.add_argument('feature', choices=sorted(BY_KEY))
-    tool.add_argument('--serial', default='', help='Required for tablet operations; not for source links or endpoint connection')
+    tool.add_argument('--serial', default='', help='Select a tablet for device operations. Offline references and endpoint connections need no serial.')
     tool.add_argument('--param', action='append', default=[], metavar='KEY=VALUE')
     _confirmation_options(tool)
     for name, text in (('info', 'Show device identity'), ('play', 'Verify/install local Google Play APKs'),
@@ -127,7 +127,7 @@ def main(argv=None) -> int:
         values = feature_values(feature, args.param) if feature is not None else None
         if feature is not None and feature.requires_device and not args.serial:
             raise ValueError('Specify --serial for this tablet operation.')
-        if feature is not None and feature.key == 'source-catalog':
+        if feature is not None and feature.backend == 'local':
             print(run_feature(None, '', feature, values))
             return 0
         if demo:

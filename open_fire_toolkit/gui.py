@@ -364,10 +364,12 @@ class App:
         ).pack(side="left")
 
     def _apps_tab(self):
+        from .feature_catalog import BY_KEY
+
         tab = self._panel(
             "Apps", "Optional Amazon apps",
-            "Read the tablet's current app states, then select one optional app to review a "
-            "disable or enable action. Changes can affect the features that use the app.",
+            "Compare debloat presets before connecting. Select a tablet to review a preset "
+            "or read app states and choose an individual app.",
         )
         self.app_table = self._table(
             tab, (("label", "Application", 155), ("package", "Package", 310), ("state", "State", 95)),
@@ -392,8 +394,20 @@ class App:
             packages, "Debloat Amazon apps...", lambda: self.advanced.show_feature("debloat"),
         ).pack(side="left")
         self._button(
+            packages, "Compare debloat presets...",
+            lambda: self._run_tool(BY_KEY["debloat-presets"], dict),
+        ).pack(side="left", padx=6)
+        self._button(
             packages, "Package inventory...",
             lambda: self.advanced.show_feature("packages-inventory"),
+        ).pack(side="left")
+        recovery = self.ttk.Frame(tab, style="Panel.TFrame")
+        recovery.pack(fill="x", pady=(6, 0))
+        self._button(
+            recovery, "Restore Everything...", lambda: self.advanced.show_feature("debloat-restore"),
+        ).pack(side="left")
+        self._button(
+            recovery, "Undo saved package changes...", lambda: self.advanced.show_feature("packages-undo"),
         ).pack(side="left", padx=6)
 
     def _table(self, parent, columns, height, on_selection, *, selectmode="browse"):

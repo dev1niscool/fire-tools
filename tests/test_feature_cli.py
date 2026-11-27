@@ -33,6 +33,29 @@ class FeatureCliTests(unittest.TestCase):
         self.assertEqual(result, 1)
         self.assertIn('Unknown parameter', output)
 
+    def test_preset_comparison_needs_no_android_tools(self):
+        with patch('open_fire_toolkit.cli.Toolkit', side_effect=AssertionError('ADB setup')):
+            result, output = self.run_cli(['tool', 'debloat-presets'])
+        self.assertEqual(result, 0)
+        self.assertIn('Standard Debloat (Recommended)', output)
+        self.assertIn('Complete Debloat', output)
+        self.assertIn('com.amazon.kindle.otter.oobe', output)
+
+    def test_restore_everything_requires_a_selected_tablet(self):
+        with patch('open_fire_toolkit.cli.Toolkit', side_effect=AssertionError('unselected tablet')):
+            result, output = self.run_cli(['tool', 'debloat-restore'])
+        self.assertEqual(result, 1)
+        self.assertIn('--serial', output)
+
+    def test_recommended_profile_is_discoverable_and_accepted(self):
+        _, help_output = self.run_cli(['tools', '--feature', 'debloat'])
+        self.assertIn('recommended', help_output)
+        result, output = self.run_cli([
+            '--demo', 'tool', 'debloat', '--serial', 'DEMO_FIRE_HD10', '--param', 'profile=recommended',
+        ])
+        self.assertEqual(result, 0, output)
+        self.assertIn('Preview only', output)
+
     def test_demo_file_operation_does_not_write_host_file(self):
         with patch('pathlib.Path.open', side_effect=AssertionError('file access')), patch('subprocess.Popen', side_effect=AssertionError('hardware')):
             result, output = self.run_cli(['--demo', 'tool', 'screenshot', '--serial', 'DEMO_FIRE_HD10', '--param', 'local=/tmp/never-made-by-demo.png', '--yes'])

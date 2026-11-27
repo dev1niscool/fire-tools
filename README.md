@@ -1,6 +1,6 @@
 # Fire Tools
 
-An independent, MIT-licensed desktop and command-line toolkit for Amazon Fire tablets. Version 0.3 adds the Google sync adapters, Fire Toolbox v46 debloat lists and combined lock-screen ad controls. It also includes launcher and keyboard controls, backups, file transfers, screen capture and wireless ADB.
+An independent, MIT-licensed desktop and command-line toolkit for Amazon Fire tablets. Version 0.3.2 lets you compare Fire Toolbox v46’s Recommended and Complete debloat presets before connecting a tablet. It also provides Google Play installation, lock-screen ad controls, backups, file transfers, screen capture and wireless ADB.
 
 [Read the Fire tablet field guide](https://dev1niscool.github.io/fire-tools/) for setup, model compatibility and step-by-step tool guides.
 
@@ -8,7 +8,7 @@ This release is designed for Fire tablets running Android API 23 or later. Devic
 
 ## Checking your download
 
-Fire Tools runs from Python source on your computer. Use the launcher included in this repository with an installed copy of Python. The source distribution includes the optional Android helper as Java code. Google apps are separate downloads.
+Fire Tools runs from Python source on your computer. Download the current source and extract the folder containing the launchers. The ClamAV results in the desktop audit cover the earlier 0.3.1 snapshot. The optional Android helper ships as Java source. Google apps are separate downloads. [Current source ZIP](https://github.com/dev1niscool/fire-tools/archive/refs/heads/main.zip) · [Audited 0.3.1 source](https://github.com/dev1niscool/fire-tools/archive/312709c2bc93df00500232a5c8aa02e43cd46b4e.zip)
 
 **Before connecting the tablet**, open **Google Play → Choose APKs → Check scan records**. This reads the files locally and shows whether their SHA-256 hashes match files examined in the project audit. The command-line equivalent is `./launch-linux.sh check-apks file.apk` or `.\launch-windows.cmd check-apks "C:\Downloads\file.apk"` in PowerShell. For Google components, use the **Google Play** tab. It checks Google’s signing identity and verifies the installed bytes. The general **sideload** tool also accepts apps from other publishers. [Links to the six scanned builds](docs/GOOGLE-APKS.md#files-with-a-local-scan-record) · [Audit and scan results](docs/TESTING.md)
 
@@ -17,7 +17,7 @@ Fire Tools runs from Python source on your computer. Use the launcher included i
 | Goal | Where to find it | What it does |
 | --- | --- | --- |
 | Install Google Play | **Google Play** | Verifies locally selected Google components against the pinned Google signing certificate, checks compatibility and installs them in dependency order. |
-| Debloat Amazon apps | **Apps → Debloat presets** or **Tools → Amazon apps** | Standard, complete or custom package lists; disable or remove for the owner; preview the exact installed targets; save prior states for undo. Core infrastructure is protected. |
+| Debloat Amazon apps | **Apps → Debloat Amazon apps** | Choose Standard (Recommended), Complete or a custom list. Review the installed targets and skipped packages before disabling or removing apps for the owner. |
 | Disable lock-screen ads | **Lock-screen ads** | Temporary setting, Special Offers package disable/restore, or optional [source-built helper](companion/README.md). All depend on firmware; no mode guarantees that ads disappear. |
 
 Removing a system package for the owner does not erase its read-only system image. Restoring it uses the existing package image; a removed third-party app may need its original APK. Debloat previews disclose skipped packages and potential dependencies. Do not select an app you still need.
@@ -31,7 +31,8 @@ The command line uses the same catalog:
 ```sh
 python -m open_fire_toolkit tools
 python -m open_fire_toolkit tools --feature debloat
-python -m open_fire_toolkit --demo tool debloat --serial DEMO_FIRE_HD10 --param profile=standard
+python -m open_fire_toolkit tool debloat-presets
+python -m open_fire_toolkit --demo tool debloat --serial DEMO_FIRE_HD10 --param profile=recommended
 python -m open_fire_toolkit tool source-catalog
 ```
 
@@ -93,9 +94,14 @@ To try the v46 package method, open **Lock-screen ads → Suppress with setting 
 
 For the **Fire HD 10 (13th generation)**, Amazon’s downloadable update page listed **Fire OS 8.3.3.8** on November 27, 2026. Fire Toolbox v46 treats Fire OS 8 builds above 8.3.3.7 as restricted and uses a fallback. On that firmware the package method may be refused and the setting may reset. The official Special Offers removal option is the reliable choice where available. Installing Google APKs is a separate operation. Store sign-in and ad visibility on this firmware still need a physical tablet test. [Amazon software updates](https://digprjsurvey.amazon.com/csad/help/node/G2JXLC4L34GX73TE) · [v46 behavior and XDA sources](docs/PARITY-RESEARCH.md#xda-setup-and-download-provenance) · [REA findings](docs/REA-NOTES.md#suppressing-and-restoring-lock-screen-offers)
 
-**Apps → Debloat presets** offers v46’s **Standard** (22 package IDs) and **Complete** (35). Review which packages are installed and which are protected. Complete skips Amazon Device Setup. Choose **custom** to import a Toolbox `.debloat` file. The default **auto** action follows `ListType=debloat` (disable) or `ListType=restore` (enable). **Tools → Undo saved package changes** restores the states recorded before your batch. The older Fire Tools selections remain available as `standard-v0.2` and `complete-v0.2`.
+## Debloat Amazon apps
 
-The **Apps** tab retains quick controls for common Amazon apps and links to the full inventory and debloat tools. The full package picker supports multiple targets. Disabling leaves the package and its data on the tablet. Package undo retains the recorded target states even when a batch stops partway through; read its preview before restoring.
+Open **Apps → Compare debloat presets** to see every app name and package ID offline. **Standard Debloat (Recommended)** lists 22 packages, including Kindle books, Prime Video, Amazon Music, Amazon Photos and the Mopria Print Service. **Complete Debloat** adds 13, including Silk, Amazon Appstore, Camera, Email and Device Setup. Fire Tools protects Device Setup, so Complete can change at most 34 packages. [All 13 additions and the original v46 evidence](docs/REA-NOTES.md#debloating-amazon-apps)
+
+In **Apps → Debloat Amazon apps**, choose a preset and select **Review**. Fire Tools uses ordinary ADB on the primary adult profile. Check the installed targets, skipped packages and proposed action before confirming. The default action disables built-in preset apps and keeps their data. To keep an app on the list, use **Tools → Disable selected apps** to pick individual packages. For a custom Toolbox `.debloat` file, **auto** follows `ListType=debloat` (disable) or `ListType=restore` (enable). The CLI accepts `profile=recommended` and `profile=standard` for the same preset. Legacy lists remain available as `standard-v0.2` and `complete-v0.2`.
+
+* **Undo saved package changes** under **Apps** returns each changed package to its saved state from the last batch on that tablet, including an interrupted batch. Use this to keep an app you had already disabled.
+* **Restore Everything** under **Apps** previews the installed, disabled members of the Complete preset that Fire Tools can enable. It works without a saved batch and can enable apps you disabled separately. Its CLI preview is `python -m open_fire_toolkit --adb /path/to/adb tool debloat-restore --serial TABLET_SERIAL`.
 
 ## CLI examples
 

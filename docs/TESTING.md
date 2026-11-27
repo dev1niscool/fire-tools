@@ -23,9 +23,15 @@ Run `python3 -m open_fire_toolkit gui --demo` in a desktop session with Tk. On L
 
 ## Release archive
 
-Compare the source ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c fire-tools-0.3.1.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\fire-tools-0.3.1.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `fire-tools-0.3.1.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
+Compare the source ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c fire-tools-0.3.2.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\fire-tools-0.3.2.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `fire-tools-0.3.2.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
 
 The checksum verifies that the ZIP matches the checksum you obtained. Obtain both files from a source you trust.
+
+## Fire Toolbox debloat preset checks (0.3.2, 2026-11-27)
+
+We compared the ordered package IDs in both copies of the v46 worker's Standard and Complete arrays with the published Fire Tools catalog. All 22 Standard and 35 Complete entries matched in order. With every listed app installed and enabled on a simulated tablet, Standard requested 22 owner disables and Complete requested 34, skipping protected Device Setup. [Preset comparison and source methods](REA-NOTES.md#debloating-amazon-apps)
+
+The CLI and rendered desktop checks exercised offline comparison, preview, cancel, apply, Restore Everything and saved undo. In a mixed inventory, Restore Everything re-enabled a previously disabled Calendar and left owner-removed, protected and unrelated packages alone. Undo returned Calendar to its saved disabled state. Interrupted batches created by the older 0.3.1 planner resumed under 0.3.2 and retained their original undo targets. These checks used simulated ADB responses. Package protection and results on a physical Fire tablet depend on firmware.
 
 ## Desktop and tablet safety audit (0.3.1, 2026-11-27)
 

@@ -2,6 +2,8 @@
 from dataclasses import dataclass
 import re
 
+from .package_catalog import DEBLOAT_RESTORE_DESCRIPTION, debloat_preset_comparison
+
 
 @dataclass(frozen=True)
 class Field:
@@ -51,7 +53,20 @@ def _extra(key, label, operation, fields=(), description='', category='Additiona
 
 FEATURES = (
     _package('packages-inventory', 'Browse installed and system apps', 'inventory', (Field('mode', 'Filter', 'all', ('all', 'system', 'third-party', 'disabled', 'uninstalled')),), read_only=True),
-    _package('debloat', 'Debloat Amazon apps', 'debloat', (Field('profile', 'Debloat list', 'standard', ('standard', 'complete', 'custom', 'standard-v0.2', 'complete-v0.2')), Field('list_file', 'Custom .debloat or plain package list', kind='file'), Field('mode', 'Action (auto follows list type)', 'auto', ('auto', 'disable', 'enable', 'uninstall'))), 'Review the exact installed apps first. Removing for the owner keeps data and leaves system images intact.', 'Amazon apps'),
+    Feature('debloat-presets', 'Compare debloat presets', 'Amazon apps', 'local', 'debloat-presets',
+            description='See all 22 Standard packages and the 13 additions in Complete. Works offline.',
+            read_only=True, requires_device=False),
+    _package(
+        'debloat', 'Debloat Amazon apps', 'debloat',
+        (Field('profile', 'Debloat list', 'standard',
+               ('standard', 'recommended', 'complete', 'custom', 'standard-v0.2', 'complete-v0.2')),
+         Field('list_file', 'Custom .debloat or plain package list', kind='file'),
+         Field('mode', 'Action', 'auto', ('auto', 'disable', 'enable', 'uninstall'))),
+        'Review which installed apps will change on this tablet. The default action disables apps for the owner.', 'Amazon apps',
+    ),
+    _package('debloat-restore', 'Restore Everything', 'debloat',
+             description=DEBLOAT_RESTORE_DESCRIPTION,
+             category='Amazon apps'),
     _package('packages-disable', 'Disable selected apps', 'disable', (PACKAGES,), 'Keeps installed app data.'),
     _package('packages-enable', 'Enable selected apps', 'enable', (PACKAGES,)),
     _package('packages-uninstall', 'Remove selected apps for owner', 'uninstall', (PACKAGES,), 'Uses owner-only removal with kept data. Restoring third-party apps may require the original APK.'),
@@ -122,7 +137,9 @@ FEATURES = (
     _extra('settings-open', 'Open a tablet settings page', 'settings-open', (Field('target', 'Settings page', 'accounts', ('accounts', 'google-account-add', 'security', 'applications', 'accessibility', 'wifi', 'vpn', 'location', 'unknown-sources', 'app-details')), Field('package', 'Package (app-details only)')), 'Complete account sign-in and permission choices on the tablet.', 'Google and assistants'),
     _extra('battery-exemption', 'Change background battery exemption', 'battery-exemption', (Field('package', 'Package ID', 'com.google.android.gms'), Field('enabled', 'Exempt from battery optimizations', 'true', ('true', 'false'))), 'May improve notifications at the cost of battery life.', 'Google and assistants'),
     _extra('widget-bind', 'Allow a launcher to host widgets', 'widget-bind', (PACKAGE, Field('enabled', 'Allow widget binding', 'true', ('true', 'false'))), 'Widget hosts can display data from other apps. Trust the chosen launcher.', 'Launcher and input'),
-    _extra('source-catalog', 'FOSS and app source directory', 'source-catalog', description='Google APKMirror listings for the Fire HD 10 (2023), plus project and store links for optional apps. Verify Google APKs on the Google Play tab.', category='App sources', read_only=True, requires_device=False),
+    Feature('source-catalog', 'FOSS and app source directory', 'App sources', 'local', 'source-catalog',
+            description='Google APKMirror listings for the Fire HD 10 (2023), plus project and store links for '
+                        'optional apps. Verify Google APKs on the Google Play tab.', read_only=True, requires_device=False),
     _extra('wireless-enable', 'Enable legacy Wi-Fi ADB from USB', 'wireless-enable', (Field('port', 'TCP port', '5555'),), 'Use only a trusted private network. This is legacy TCP debugging, not encrypted Android pairing. Re-enable USB when finished.', 'Connection tools'),
     _extra('wireless-usb', 'Return ADB to USB transport', 'wireless-usb', category='Connection tools'),
     _extra('wireless-connect', 'Connect to an ADB endpoint', 'wireless-connect', (Field('endpoint', 'Tablet hostname or IP and port'),), 'Requests a connection only. Scan and explicitly select the connected device afterward.', 'Connection tools', requires_device=False),
@@ -167,12 +184,16 @@ def package_values(value: str) -> tuple[str, ...]:
 def run_feature(toolkit, serial: str, feature: Feature, values: dict[str, str]):
     """Return a read result or immutable plan. Never confirms a mutation."""
     params = dict(values)
+    if feature.key == 'debloat-presets':
+        return debloat_preset_comparison()
     if feature.key == 'source-catalog':
         from .extra_workflows import source_catalog_text
         return source_catalog_text()
     if feature.backend == 'package':
         if feature.read_only:
             return toolkit.package_inventory(serial, **params)
+        if feature.key == 'debloat-restore':
+            params = {'profile': 'complete', 'mode': 'enable'}
         packages = package_values(params.pop('packages', ''))
         return toolkit.plan_package_action(serial, feature.operation, packages, **params)
     if feature.backend == 'extra':

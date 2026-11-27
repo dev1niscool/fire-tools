@@ -11,7 +11,11 @@ import tempfile
 
 from .adb import AdbError
 from .apk import ApkError, MAX_APK_BYTES, PLAY_PACKAGES, _open_regular_file, file_sha256, google_signer_is_trusted
-from .package_catalog import APP_LABELS, DEBLOAT_PROFILES, OFFERS, STOCK_HOME, UPDATERS, is_protected
+from .package_catalog import (
+    APP_LABELS, DEBLOAT_COMPLETE_WARNING, DEBLOAT_PROFILES, DEBLOAT_RESTORE_DESCRIPTION,
+    OFFERS, STOCK_HOME, UPDATERS, canonical_debloat_profile, debloat_plan_title, is_protected,
+    package_display_name,
+)
 from .workflows import WorkflowPlan
 
 _PACKAGE = re.compile(r'[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*')
@@ -293,6 +297,8 @@ class PackageWorkflows:
             raise _error('Unexpected package operation parameter.')
         if any(not isinstance(value, str) or len(value) > 131072 for value in parameters.values()):
             raise _error('Package options must be bounded text.')
+        if operation == 'debloat':
+            parameters['profile'] = canonical_debloat_profile(parameters.get('profile', 'standard'))
         requested = _selection(packages)
         if operation in _SIMPLE and not requested:
             raise _error('Select one or more packages.')
@@ -322,14 +328,20 @@ class PackageWorkflows:
             saved = record.get('states', {})
             snapshot['undo-digest'] = self._pkg_undo_digest(record)
         if op == 'debloat':
-            requested, mode = _optional_packages(params.get('profile', 'standard'), params.get('list_file', ''),
-                                                 params.get('mode', 'auto'))
+            profile = params['profile']
+            requested, mode = _optional_packages(profile, params.get('list_file', ''), params.get('mode', 'auto'))
+            plan = replace(plan, title=debloat_plan_title(profile, mode))
             snapshot['list-mode'] = mode
-            # The reviewed input list stays stable on retry even when some apps
-            # already reached the target and drop out of the remaining writes.
-            identity = ('debloat', params.get('profile', 'standard'), mode, requested)
+            # v0.3.1 journaled these two presets in package-ID order. Preserve that
+            # identity for interrupted batches while executing in the reviewed v46 order.
+            source_packages = sorted(requested) if profile in {'standard', 'complete'} else requested
+            identity = ('debloat', profile, mode, source_packages)
             snapshot['list-source'] = hashlib.sha256(json.dumps(identity).encode()).hexdigest()
-            details.append(f'List action: {mode} for owner user 0.')
+            if profile == 'complete':
+                if mode == 'enable':
+                    details.append(DEBLOAT_RESTORE_DESCRIPTION)
+                else:
+                    warnings.append(DEBLOAT_COMPLETE_WARNING)
         elif op == 'undo':
             if not saved:
                 raise _error('No package undo state is available for this tablet.')
@@ -355,8 +367,9 @@ class PackageWorkflows:
                 raise _error('This firmware does not advertise a package-specific rollback command.')
             system = self._pkg_list(plan.serial, '-s')
         for p in requested:
+            display_name = package_display_name(p) if op == 'debloat' else p
             if op == 'debloat' and is_protected(p):
-                details.append(f'Skipped {p}: protected infrastructure or dedicated workflow required.')
+                details.append(f'Skipped {display_name}: protected infrastructure or dedicated workflow required.')
                 continue
             guard_op = op
             if op == 'undo' and p in (*UPDATERS, OFFERS):
@@ -368,15 +381,16 @@ class PackageWorkflows:
                     details.append(f'Skipped {p}: original signed APK required. Its undo record will be kept.')
                     continue
                 if op == 'debloat' or op.startswith('ota-'):
-                    details.append(f'Skipped {p}: absent for owner user 0.')
+                    status = 'uninstalled' if op == 'debloat' and before == 'uninstalled' else 'absent'
+                    details.append(f'Skipped {display_name}: {status} for owner user 0.')
                     continue
                 raise _error(f'{p} is unavailable for this operation. Restoring a missing app requires its original signed APK.')
             if op in _STATE_OPS:
                 target = saved[p] if op == 'undo' else _state_after(mode, before)
                 if target == before and op != 'undo':
-                    details.append(f'Skipped {p}: already {target}.')
+                    details.append(f'Skipped {display_name}: already {target}.')
                     continue
-                details.append(f'{p}: {before} → {target} for owner user 0.')
+                details.append(f'{display_name}: {before} → {target} for owner user 0.')
             elif op == 'launch':
                 if before != 'enabled':
                     raise _error(f'Enable {p} before launching it.')
@@ -392,6 +406,9 @@ class PackageWorkflows:
                 details.append(f'{op} {p} for owner user 0.')
             selected.append(p)
             snapshot[p] = before
+        if op == 'debloat':
+            details.insert(0, f'{len(requested)} listed · {len(selected)} to {mode} · '
+                              f'{len(requested) - len(selected)} skipped for owner user 0.')
         if not selected:
             raise _error('No matching packages require this change. ' + ' '.join(details))
         if mode in {'disable', 'uninstall', 'clear-data', 'force-stop', 'rollback-system'}:

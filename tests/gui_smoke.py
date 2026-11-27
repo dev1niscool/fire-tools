@@ -128,14 +128,15 @@ assert app.loaded_apps
 app.app_table.selection_set("0")
 root.update()
 package, _ = app.loaded_apps[0]
+initially_disabled = app.toolkit.disabled.copy()
 confirm(review("Review disable..."))
-assert app.toolkit.disabled == {package}
+assert app.toolkit.disabled == initially_disabled | {package}
 click("Read app states")
 wait_until(lambda: not app.worker.busy)
 app.app_table.selection_set("0")
 root.update()
 confirm(review("Review enable..."))
-assert app.toolkit.disabled == set()
+assert app.toolkit.disabled == initially_disabled
 
 tab(0)
 confirm(review("Review reboot..."))

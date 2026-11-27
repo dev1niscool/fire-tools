@@ -4,7 +4,7 @@ The analysis used [REA by morluto](https://github.com/morluto/rea), as requested
 
 The reference was Fire Toolbox 46.0, a managed Windows assembly targeting .NET Framework 4.8. The inspected file's SHA-256 is `34be37dff0c3bf40cb34155896e92b70d9dfdff5cb969c780cade88f13f74079`. The static inspection used `rea-agents@6.10.1` with provider `rea-dotnet-static` version 1. The original executable remained unexecuted.
 
-The targeted review found no clear signs of password theft or hidden Windows startup behavior. The original updater obtains its download address and expected checksum from the same remotely maintained manifest. Later downloads fall outside the review of these bytes. ClamAV's inspection of the original Windows executable reached its nested-file limit, and a legacy Android check timed out while scanning embedded content. The scan of the independent Fire Tools source archive completed with zero detections or warnings. [Original mirror hashes](PARITY-RESEARCH.md#xda-setup-and-download-provenance) · [Fire Tools safety audit](TESTING.md#desktop-and-tablet-safety-audit-031-2026-11-27)
+The targeted review found no clear signs of password theft or hidden Windows startup behavior. The original updater obtains its download address and expected checksum from the same remotely maintained manifest. Later downloads fall outside the review of these bytes. ClamAV's inspection of the original Windows executable reached its nested-file limit, and a legacy Android check timed out while scanning embedded content. The scan of the independent Fire Tools **0.3.1** source archive completed with zero detections or warnings. [Original mirror hashes](PARITY-RESEARCH.md#xda-setup-and-download-provenance) · [Fire Tools safety audit](TESTING.md#desktop-and-tablet-safety-audit-031-2026-11-27)
 
 | Static inspection | Evidence ID |
 | --- | --- |
@@ -69,6 +69,30 @@ Fire Tools provides the ordinary setting and package controls and an independent
 
 ### Debloating Amazon apps
 
-`ManageAmazon.AutoDisHide_DoWork` (`0x060007f6`) builds package arrays containing 22 entries for Standard and 35 for Complete. Both include `org.mopria.printplugin`. Complete also includes Amazon Device Setup (`com.amazon.kindle.otter.oobe`). The method iterates each entry up to the selected count and applies the tablet’s package disable/hide or enable/unhide operation. This changes availability to the Android user. The preset list and saved pre-change package state serve different purposes when restoring apps.
+The XDA opening post identifies the Windows v46 archive, and its FAQ documents firmware protections. REA 6.10.1 inspected the `FireToolbox.ManageAmazon` type in that executable (static evidence `ev_c6af80f50b6194fe50b620e4d489ac5b0f32c391ff68233d3f990579ed16964c`). The preset names and package membership below come from the selector and worker in that build. [Archived XDA thread](https://web.archive.org/web/20261108011721/https://xdaforums.com/t/windows-linux-tool-fire-toolbox-v46-0.3889604/)
+
+The Windows v46 selector calls the options **Standard Debloat (Recommended)** and **Complete Debloat**. The text shown by `ManageAmazon.ComboBox1_SelectedIndexChanged` (`0x06000808`) mentions IMDb TV under Standard, and Fire Keyboard and Fire Launcher under Complete. The worker that actually chooses package IDs, `ManageAmazon.AutoDisHide_DoWork` (`0x060007f6`), puts IMDb TV in Complete only and omits both the keyboard and launcher from both presets. Fire Tools follows the worker’s package IDs. [Fire Tools package catalog](../open_fire_toolkit/package_catalog.py)
+
+**Standard** has 22 entries. It covers Kindle books and the Kindle Store, Prime Video and Personal Videos, Amazon Music and Music, Photos and its importer, Amazon Shopping, Maps, News, Weather, Device Dashboard, Help, Mayday Sharing (Kindle Connect), the Alexa YouTube app, Amazon Games (GameCircle), Audible, Goodreads, WPS Office, Washington Post and Mopria Print Service. For a labeled package-by-package list, run `python -m open_fire_toolkit tool debloat-presets` without a tablet.
+
+**Complete** contains those same 22 plus the 13 below. The default action disables the eligible installed packages for the owner. Keeping Device Setup protected limits Fire Tools to 34 possible changes. The preview identifies which apps your tablet actually has.
+
+| App added by Complete | Android package ID |
+| --- | --- |
+| Alexa app | `com.amazon.dee.app` |
+| Amazon Appstore | `com.amazon.venezia` |
+| Amazon Kids (FreeTime) | `com.amazon.tahoe` |
+| Calculator | `com.android.calculator2` |
+| Calendar | `com.android.calendar` |
+| Camera | `com.android.camera2` |
+| Clock | `com.android.deskclock` |
+| Contacts | `com.android.contacts` |
+| Device Setup (protected in Fire Tools) | `com.amazon.kindle.otter.oobe` |
+| Documents | `com.amazon.zico` |
+| Email | `com.android.email` |
+| IMDb TV | `com.amazon.imdb.tv.mobile.app` |
+| Silk Browser | `com.amazon.cloud9` |
+
+In v46, **Restore Everything** selects Complete and sets the worker to enable or unhide packages (`ManageAmazon.ComboBox2_TextChanged`, `0x06000807`). This reaches apps disabled before the last debloat. Fire Tools’ **Restore Everything** previews the installed, disabled and unprotected members of Complete for owner user 0. **Undo saved package changes** instead reads the states Fire Tools saved for the last batch on that tablet. It can restore an interrupted batch while preserving apps that were already disabled. [How to use the debloater](../README.md#debloat-amazon-apps)
 
 `ReadDebloatFile_DoWork` (`0x06000801`) reads the custom list, previews the described packages and chooses disable or enable from its declared list type. `LineContainsSpecial` (`0x06000803`) separates metadata and notes from package entries, and `CustomDebloat_DoWork` (`0x06000804`) applies the selected operation. The three distributed example lists use one package ID per line and a `ListType=debloat` directive. In two examples the directive is the **last** line. Caret-prefixed descriptions, hash comments, plus-prefixed display text, empty lines, trailing spaces and Windows or Unix newlines are relevant when importing an existing list. A restore list requests re-enabling the named packages. Fire Tools also records prior package states for undo. [Feature coverage](FEATURES.md)
