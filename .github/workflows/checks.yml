@@ -29,6 +29,7 @@ jobs:
         if: runner.os != 'macOS'
         run: python -m unittest discover -s tests -v
       - name: Exercise supported macOS offline workflows
+        timeout-minutes: 3
         if: runner.os == 'macOS'
         run: |
           python -m unittest discover -s tests -p test_cli.py -v
@@ -36,6 +37,7 @@ jobs:
           sh launch.sh --demo info --serial DEMO_FIRE_HD10
           sh launch.sh tool debloat-presets
           python tests/gui_smoke.py
+          python -m unittest discover -s tests -p test_device_workflows.py -k directory_descriptor_requires_working_child_lookup
       - name: Exercise the desktop on a virtual display
         if: runner.os == 'Linux'
         run: |

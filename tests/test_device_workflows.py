@@ -679,6 +679,31 @@ class DeviceWorkflowTests(unittest.TestCase):
                             str(stage)], check=True, close_fds=True)
         self.assertEqual(b'content', target.read_bytes())
 
+    def test_directory_descriptor_requires_working_child_lookup(self):
+        import errno
+        import os
+        from unittest.mock import patch
+        from open_fire_toolkit.device_workflows import _fd_directory
+
+        if os.name != 'posix':
+            self.skipTest('POSIX descriptor directory')
+        fd = os.open(self.host, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, fd)
+        descriptor = f'/dev/fd/{fd}'
+
+        def descriptor_stat(path, *args, **kwargs):
+            # This descriptor entry identifies the held directory, but its
+            # filesystem does not implement looking up names below the entry.
+            if os.fspath(path) == descriptor:
+                return os.fstat(fd)
+            if os.fspath(path).startswith(descriptor + '/'):
+                raise NotADirectoryError(errno.ENOTDIR, 'Not a directory', path)
+            raise FileNotFoundError(errno.ENOENT, 'No such file', path)
+
+        with patch('os.stat', side_effect=descriptor_stat):
+            with self.assertRaisesRegex(ToolkitError, 'Windows or Linux'):
+                _fd_directory(fd)
+
     def test_staging_name_replacement_preserves_the_replacement_directory(self):
         import os
         from open_fire_toolkit.device_workflows import _pinned_directory, _private_stage

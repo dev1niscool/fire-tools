@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import time
+from unittest.mock import patch
 import tkinter as tk
 from tkinter import ttk
 
@@ -113,9 +114,15 @@ def dismiss_error():
     root.tk.call(expected + ".ok", "invoke")
 
 
-root.after(20, dismiss_error)
-click("Review restore...")
-wait_until(lambda: not app.worker.busy)
+if root.tk.call("tk", "windowingsystem") == "aqua":
+    # macOS uses a native sheet with no Tk child widgets to dismiss.
+    with patch.object(app.dialog, "showerror", side_effect=lambda title, text, **kw: errors.append(text)):
+        click("Review restore...")
+        wait_until(lambda: not app.worker.busy)
+else:
+    root.after(20, dismiss_error)
+    click("Review restore...")
+    wait_until(lambda: not app.worker.busy)
 assert len(errors) == 1 and "suppression first" in errors[0], errors
 assert app.review is None
 assert button("Review setting change...").instate(["!disabled"])

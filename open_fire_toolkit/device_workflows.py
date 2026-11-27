@@ -208,10 +208,18 @@ def _windows_hold(path, *, directory):
 def _fd_directory(fd):
     # Linux ADB runs in a child with closed fds; use our PID, not /proc/self.
     candidates = [Path('/proc') / str(os.getpid()) / 'fd' / str(fd), Path('/dev/fd') / str(fd)]
+    held = os.fstat(fd)
     for candidate in candidates:
-        if candidate.is_dir() and os.path.samestat(os.fstat(fd), candidate.stat()):
+        # A descriptor entry can report the right inode yet reject child
+        # lookups. Keep the literal '/.' here since pathlib normalizes it.
+        try:
+            child = os.stat(f'{candidate}/.')
+        except OSError:
+            continue
+        if os.path.samestat(held, child):
             return candidate
-    _fail('This host cannot provide a pinned directory path for safe file staging.')
+    _fail('This host cannot safely access files through an opened directory. '
+          'Use Windows or Linux for operations that save state or files.')
 
 
 @contextmanager
