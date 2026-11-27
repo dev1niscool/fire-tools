@@ -41,6 +41,17 @@ class FeatureCliTests(unittest.TestCase):
         self.assertIn('Complete Debloat', output)
         self.assertIn('com.amazon.kindle.otter.oobe', output)
 
+    def test_redirected_windows_preview_prints_state_changes_and_confirmation(self):
+        buffer = io.BytesIO()
+        output = io.TextIOWrapper(buffer, encoding='cp1252')
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+            result = cli.main(['--demo', 'tool', 'debloat', '--serial', 'DEMO_FIRE_HD10'])
+            output.flush()
+        transcript = buffer.getvalue().decode('cp1252')
+        self.assertEqual(result, 0, transcript)
+        self.assertIn('enabled -> disabled', transcript)
+        self.assertIn('Preview only', transcript)
+
     def test_restore_everything_requires_a_selected_tablet(self):
         with patch('open_fire_toolkit.cli.Toolkit', side_effect=AssertionError('unselected tablet')):
             result, output = self.run_cli(['tool', 'debloat-restore'])

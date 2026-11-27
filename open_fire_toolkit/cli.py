@@ -61,12 +61,16 @@ def parser() -> argparse.ArgumentParser:
 
 
 def _show_plan(plan):
-    print(plan.title)
-    print(f'Device: {plan.device.model} ({plan.serial})')
-    for item in plan.details:
-        print('  ' + item)
-    for warning in plan.warnings:
-        print('Note: ' + warning)
+    lines = [plan.title, f'Device: {plan.device.model} ({plan.serial})']
+    lines.extend('  ' + item for item in plan.details)
+    lines.extend('Note: ' + warning for warning in plan.warnings)
+    preview = '\n'.join(lines)
+    try:
+        print(preview)
+    except UnicodeEncodeError as error:
+        # Windows pipes can use a legacy code page even with a Unicode-capable console.
+        readable = preview.replace('→', '->')
+        print(readable.encode(error.encoding, 'backslashreplace').decode(error.encoding))
 
 
 def _confirm_plan(toolkit, plan, args, demo):
