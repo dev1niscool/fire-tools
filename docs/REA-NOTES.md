@@ -4,6 +4,8 @@ The analysis used [REA by morluto](https://github.com/morluto/rea), as requested
 
 The reference was Fire Toolbox 46.0, a managed Windows assembly targeting .NET Framework 4.8. The inspected file's SHA-256 is `34be37dff0c3bf40cb34155896e92b70d9dfdff5cb969c780cade88f13f74079`. The static inspection used `rea-agents@6.10.1` with provider `rea-dotnet-static` version 1. The original executable remained unexecuted.
 
+The targeted review found no clear signs of password theft or hidden Windows startup behavior. The original updater obtains its download address and expected checksum from the same remotely maintained manifest. Later downloads fall outside the review of these bytes. ClamAV's inspection of the original Windows executable reached its nested-file limit, and a legacy Android check timed out while scanning embedded content. The scan of the independent Fire Tools source archive completed with zero detections or warnings. [Original mirror hashes](PARITY-RESEARCH.md#xda-setup-and-download-provenance) · [Fire Tools safety audit](TESTING.md#desktop-and-tablet-safety-audit-031-2026-11-27)
+
 | Static inspection | Evidence ID |
 | --- | --- |
 | Managed artifact metadata | `ev_aa0087f806608fa4e2f437017103b75307ae62a3d1dd7e8e813166424a1ccb2e` |

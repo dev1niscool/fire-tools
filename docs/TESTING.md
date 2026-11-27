@@ -29,6 +29,10 @@ The checksum verifies that the ZIP matches the checksum you obtained. Obtain bot
 
 ## Desktop and tablet safety audit (0.3.1, 2026-11-27)
 
+ClamAV 1.5.5 scanned two copies of Fire Tools 0.3.1 with 3,628,228 official signatures and reported zero detections or warnings. The ZIP downloaded back from GitHub matched all 86 tracked files at commit `312709c` byte for byte. The source ZIP from the project's release builder had SHA-256 `3255c56f94c5fcdcbb62ca2a42248f53c0c16b4011f14b88e7dfad34d35177fe`. [Audited source](https://github.com/dev1niscool/fire-tools/tree/312709c2bc93df00500232a5c8aa02e43cd46b4e)
+
+The Linux suite passed all 245 tests and both rendered GUI checks. Hosted checks passed on Windows and Ubuntu with Python 3.11 and 3.13. Each Windows job skipped 16 POSIX-specific tests. [GitHub Actions results](https://github.com/dev1niscool/fire-tools/actions/runs/46057334928)
+
 | What was checked | Result |
 | --- | --- |
 | Desktop startup, application imports, and child processes | Review found no hidden downloads, telemetry, credential collection or PC startup service. The runtime uses Python’s standard library. Source launchers start an already installed Python in isolated mode. ADB, the SDK tools and the Java installation are separate executables selected by the user. |
@@ -39,6 +43,8 @@ The checksum verifies that the ZIP matches the checksum you obtained. Obtain bot
 | Packaging | The source distribution includes the reviewed source paths, documentation, tests and demo image. The helper APK, private signing key, SDK tools and external Google APKs are excluded. GitHub Actions uses read-only repository permissions and pins its actions to specific commits. |
 
 The [Google APK guide](GOOGLE-APKS.md#files-with-a-local-scan-record) links the exact files used in testing. Of the six APKMirror listings in its alternate table, Account Manager and Framework match locally scanned files. The other four listings were checked for package, signer and published file hashes. We could not retrieve those exact four APKs from the download pages for a local malware scan. An external tool or an APK update obtained later needs its own checks. Physical-tablet execution and Google account sign-in remain untested.
+
+We repeated the Play services and Play Store scans with archive-limit alerts enabled. Play services exceeded the default file-count limit. Raising the limit to 200,000 let ClamAV examine 755.98 MiB of expanded content with no archive-limit alert. Both APKs returned zero malware detections. One legacy Android check timed out on both files even with four minutes allowed for that check. Fire Tools shows this limitation when a selected file matches either hash.
 
 ## Fire Toolbox v46 workflow checks (0.3, 2026-11-27)
 
