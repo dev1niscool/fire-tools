@@ -10,11 +10,15 @@ import re
 import stat
 import tempfile
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable, Sequence
 
 from .adb import AdbClient, AdbError, DeviceInfo
-from .apk import ApkInfo, ApkVerifier, ApkError, MAX_APK_BYTES, file_sha256, google_play_order
+from .apk import (
+    ApkInfo, ApkVerifier, ApkError, MAX_APK_BYTES, PLAY_CORE, PLAY_PACKAGES, SYNC_PROVIDERS,
+    file_sha256, google_play_order,
+)
+from .package_catalog import OFFERS
 from .package_workflows import PackageWorkflows
 from .device_workflows import DeviceWorkflows, _read_file
 from .extra_workflows import ExtraWorkflows
@@ -29,6 +33,9 @@ OPTIONAL_APPS = {
     'com.amazon.windowshop': 'Amazon Shopping',
 }
 ADS_KEY = 'LOCKSCREEN_AD_ENABLED'
+# Android's PackageManager.COMPONENT_ENABLED_STATE_* values and matching pm verbs.
+_OFFERS_MODES = {'0': 'default-state', '1': 'enable', '2': 'disable',
+                 '3': 'disable-user', '4': 'disable-until-used'}
 AMAZON_DEVICES_URL = 'https://www.amazon.com/hz/mycd/digital-console/alldevices'
 PLATFORM_TOOLS_URL = 'https://developer.android.com/tools/releases/platform-tools'
 BUILD_TOOLS_URL = 'https://developer.android.com/tools/releases/build-tools'
@@ -58,6 +65,15 @@ class Plan:
     package: str = ''
     old_value: str | None = None
     restore_value: str | None = None
+    providers_to_enable: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class PairedAdsPlan(Plan):
+    package_mode: str = ''
+    saved_package_mode: str = ''
+    saved_pair_exists: bool = False
+    target_package_mode: str = ''
 
 
 def _default_state_dir() -> Path:
@@ -111,26 +127,60 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
         self._require_execution_directory()
         return device
 
-    def _verifier(self) -> ApkVerifier:
+    def _verifier(self, device_sdk: int | None = None) -> ApkVerifier:
         if not all((self.config.aapt_path, self.config.apksigner_jar, self.config.java_path)):
             raise ToolkitError('Select official aapt, apksigner.jar and Java paths before verifying APKs.')
-        return ApkVerifier(self.config.aapt_path, self.config.apksigner_jar, self.config.java_path)
+        return ApkVerifier(self.config.aapt_path, self.config.apksigner_jar, self.config.java_path, device_sdk=device_sdk)
 
     def plan_google_play(self, serial: str, paths: Sequence[str | Path]) -> Plan:
         device = self._writable_device(serial)
-        if not paths or len(paths) > 4:
-            raise ToolkitError('Select Framework, Play services and Play Store APKs; Account Manager is optional.')
+        if not paths or len(paths) > len(PLAY_PACKAGES):
+            raise ToolkitError('Choose up to six standalone Google APKs. To add sync to an existing Play installation, select only the sync adapters.')
         try:
-            verifier = self._verifier()
+            verifier = self._verifier(device.sdk)
             apks = google_play_order([verifier.inspect(Path(p)) for p in paths], device.sdk, device.abis)
         except (ApkError, OSError, ValueError) as exc:
             raise ToolkitError(str(exc)) from exc
-        details = tuple(f'Install {a.package} {a.version_name} (SDK {a.min_sdk}+), SHA-256 {a.sha256}' for a in apks)
-        return Plan('Install Google Play components', serial, details, (
+        providers = self._play_providers_to_enable(serial, apks)
+        details = []
+        for apk in apks:
+            details.append(f'Install {apk.package} {apk.version_name} (SDK {apk.min_sdk}+). '
+                           f'File SHA-256 {apk.sha256}. Signer SHA-256 {apk.signer_sha256[0]}.')
+            if apk.signer_lineage:
+                details.append(f'Verified Google signer rotation from {apk.signer_lineage[0]}.')
+            provider = SYNC_PROVIDERS.get(apk.package)
+            if provider in providers:
+                details.append(f'Enable {provider} for the owner profile after installing the adapter.')
+        warnings = [
             'Google Play is not officially supported by Amazon. Some apps and push notifications may not work.',
-            'All APKs will be staged and verified again before installation. Installation is not atomic; a failed later step does not undo earlier installs.',
-            'No downgrade or blanket permission grants are used. Restart the tablet after successful installation.',
-        ), 'play', device, tuple(apks))
+            'Each APK is staged and verified again before installation. A failure leaves earlier installations in place.',
+            'Restart the tablet after successful installation.',
+        ]
+        names = {apk.package for apk in apks}
+        if (device.sdk == 30 and 'arm64-v8a' in device.abis and 'com.android.vending' in names
+                and 'com.google.android.gsf.login' not in names):
+            warnings.append('For a fresh install on this Android 11 ARM64 tablet, the Toolbox v46 set '
+                            'includes Google Account Manager. Select its APK as well if it is missing.')
+        return Plan('Install Google Play components', serial, tuple(details), tuple(warnings),
+                    'play', device, tuple(apks), providers_to_enable=providers)
+
+    def _play_providers_to_enable(self, serial, apks):
+        packages = {apk.package for apk in apks}
+        providers = {provider for adapter, provider in SYNC_PROVIDERS.items() if adapter in packages}
+        if not providers:
+            return ()
+        installed = set(self.adb.packages(serial))
+        disabled = set(self.adb.packages(serial, disabled_only=True))
+        missing = providers - installed
+        if missing:
+            raise ToolkitError('The selected sync adapter needs an installed owner-profile provider: '
+                               + ', '.join(sorted(missing)))
+        if packages <= SYNC_PROVIDERS.keys():
+            unavailable = set(PLAY_CORE) - (installed - disabled)
+            if unavailable:
+                raise ToolkitError('Install or enable these core packages before adding sync adapters: '
+                                   + ', '.join(sorted(unavailable)))
+        return tuple(sorted(providers & disabled))
 
     def _state_key(self, serial: str) -> str:
         return hashlib.sha256(serial.encode('utf-8')).hexdigest()
@@ -143,14 +193,20 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
             data = json.loads(content)
             if not isinstance(data, dict) or data.get('schema') != 1 or not isinstance(data.get('ads'), dict):
                 raise ValueError('unknown schema')
-            for key, record in data['ads'].items():
-                if not re.fullmatch(r'[0-9a-f]{64}', key) or not isinstance(record, dict):
-                    raise ValueError('invalid record')
-                value = record['value']
-                if value is not None and (not isinstance(value, str) or not re.fullmatch(r'-?\d{1,9}', value, re.ASCII)):
-                    raise ValueError('invalid previous setting')
-                if not isinstance(record.get('model'), str):
-                    raise ValueError('missing device identity')
+            for group in ('ads', 'paired_ads'):
+                records = data.get(group, {})
+                if not isinstance(records, dict):
+                    raise ValueError('invalid ad undo records')
+                for key, record in records.items():
+                    if not re.fullmatch(r'[0-9a-f]{64}', key) or not isinstance(record, dict):
+                        raise ValueError('invalid record')
+                    value = record['value']
+                    if value is not None and (not isinstance(value, str) or not re.fullmatch(r'-?\d{1,9}', value, re.ASCII)):
+                        raise ValueError('invalid previous setting')
+                    if not isinstance(record.get('model'), str):
+                        raise ValueError('missing device identity')
+                    if group == 'paired_ads' and record.get('mode') not in _OFFERS_MODES:
+                        raise ValueError('invalid Special Offers package state')
             return data
         except FileNotFoundError:
             return {'schema': 1, 'ads': {}}
@@ -174,10 +230,14 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
     def _read_ads(self, serial: str) -> str | None:
         return _setting_value(self.adb.shell(serial, ('settings', '--user', '0', 'get', 'global', ADS_KEY)))
 
-    def plan_ads(self, serial: str, restore: bool = False) -> Plan:
+    def plan_ads(self, serial: str, restore: bool = False, *, paired: bool = False) -> Plan:
         device = self._writable_device(serial)
         state = self._load_state()
         current = self._read_ads(serial)
+        if paired:
+            return self._plan_paired_ads(device, state, current, restore)
+        if self._state_key(serial) in state.get('paired_ads', {}):
+            raise ToolkitError('Restore the paired ad controls first so the two undo operations apply in order.')
         record = state['ads'].get(self._state_key(serial))
         if record and record['model'] != device.model:
             raise ToolkitError('Saved undo state belongs to a different device model. No changes made.')
@@ -193,6 +253,49 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
             'Modern firmware may ignore or reset it. This release does not install Automate or run privilege exploits.',
             'For reliable removal, use Amazon’s official paid Special Offers removal.',
         ), 'ads_restore' if restore else 'ads', device, old_value=current, restore_value=target if restore else None)
+
+    def _offers_mode(self, serial):
+        # pm list -d collapses default, explicit, and until-used states. Read the
+        # owner override so restore can issue the exact corresponding command.
+        dump = self._pkg_shell(serial, 'dumpsys', 'package', OFFERS)
+        owner = re.findall(r'^\s*User 0:[^\r\n]*', dump, re.M)
+        if len(owner) != 1 or not re.search(r'\binstalled=true\b', owner[0]):
+            raise ToolkitError('Cannot confirm Special Offers is installed for the owner. Use the setting-only option if available.')
+        modes = re.findall(r'\benabled=(\d+)\b', owner[0])
+        if len(modes) != 1 or modes[0] not in _OFFERS_MODES:
+            raise ToolkitError('Cannot read the owner’s Special Offers package state reliably.')
+        return modes[0]
+
+    def _plan_paired_ads(self, device, state, current, restore):
+        key = self._state_key(device.serial)
+        record = state.get('paired_ads', {}).get(key)
+        if record and record['model'] != device.model:
+            raise ToolkitError('Saved paired ad undo belongs to a different tablet model.')
+        if restore and record is None:
+            raise ToolkitError('No saved paired ad controls exist for this tablet.')
+        mode = self._offers_mode(device.serial)
+        if self._writable_device(device.serial) != device:
+            raise ToolkitError('The tablet changed during inspection.')
+        original = record['value'] if record else current
+        original_mode = record['mode'] if record else mode
+        target = original if restore else '0'
+        target_mode = original_mode if restore else ('3' if mode in ('0', '1') else mode)
+        warnings = ['Fire OS can reject or reset either control. Only the setting and package state can be verified.',
+                    'Use the paired restore for this operation. A partial change retains its saved undo.']
+        version = re.fullmatch(r'(?:Fire OS\s+)?(8(?:\.[0-9]{1,4}){1,5})', device.fire_os.strip(), re.I)
+        if version and tuple(map(int, version[1].split('.'))) > (8, 3, 3, 7):
+            warnings.append('Fire Toolbox v46 treats Fire OS 8 above 8.3.3.7 as restricted. '
+                            'If Fire OS protects Special Offers, alternatives include the setting-only control, '
+                            'the source-built ad helper, and Amazon’s official Special Offers removal.')
+        return PairedAdsPlan(
+            'Restore ad setting and Special Offers' if restore else 'Suppress ad setting and Special Offers',
+            device.serial,
+            (f'{ADS_KEY}: {current if current is not None else "absent"} → {target if target is not None else "absent"}.',
+             f'{OFFERS} (owner user 0): {_OFFERS_MODES[mode]} → {_OFFERS_MODES[target_mode]}.',
+             f'Saved for undo: setting {original if original is not None else "absent"}, package {_OFFERS_MODES[original_mode]}.'),
+            tuple(warnings), 'ads_paired_restore' if restore else 'ads_paired', device, old_value=current,
+            restore_value=original, package_mode=mode, saved_package_mode=original_mode, saved_pair_exists=record is not None,
+            target_package_mode=target_mode)
 
     def plan_package(self, serial: str, package: str, enable: bool = False) -> Plan:
         device = self._writable_device(serial)
@@ -248,6 +351,8 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
                 self._execute_device_workflow(plan, completed, log)
             elif plan.action == 'extra_workflow':
                 self._execute_extra_workflow(plan, completed, log)
+            elif plan.action in ('ads_paired', 'ads_paired_restore'):
+                self._apply_paired_ads(plan, completed)
             elif plan.action in ('ads', 'ads_restore'):
                 self._apply_ads(plan)
                 completed.append('Ad setting restored and read back.' if plan.action == 'ads_restore' else 'Ad setting set to 0 and read back. Actual ad visibility is not verified.')
@@ -291,12 +396,13 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
                 self._operation_lock.release()
 
     def _install_play(self, plan: Plan, completed: list[str], log: Callable[[str], None]) -> None:
-        verifier = self._verifier()
+        verifier = self._verifier(plan.device.sdk)
         ordered = google_play_order(plan.apks, plan.device.sdk, plan.device.abis)
         with tempfile.TemporaryDirectory(prefix='open-fire-apks-') as temp:
+            staging = Path(temp).resolve(strict=True)
             staged: list[ApkInfo] = []
             for index, apk in enumerate(ordered):
-                target = Path(temp) / f'{index:02d}.apk'
+                target = staging / f'{index:02d}.apk'
                 # O_NONBLOCK prevents a replaced FIFO from hanging the worker on POSIX.
                 fd = os.open(apk.path, os.O_RDONLY | getattr(os, 'O_NONBLOCK', 0) | getattr(os, 'O_BINARY', 0))
                 with os.fdopen(fd, 'rb') as source:
@@ -313,10 +419,12 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
                 if file_sha256(target) != apk.sha256:
                     raise ToolkitError('An APK changed since preview; no APKs were installed. Review the files again.')
                 checked = verifier.inspect(target)
-                if (checked.package, checked.sha256, checked.signer_sha256) != (apk.package, apk.sha256, apk.signer_sha256):
+                if checked != replace(apk, path=target):
                     raise ToolkitError('Staged APK verification changed; no APKs were installed.')
                 staged.append(checked)
             staged_order = google_play_order(staged, plan.device.sdk, plan.device.abis)
+            if self._play_providers_to_enable(plan.serial, staged_order) != plan.providers_to_enable:
+                raise ToolkitError('Sync provider state changed since preview. Review again.')
             for apk in staged_order:
                 if file_sha256(apk.path) != apk.sha256:
                     raise ToolkitError('Staged APK changed during installation; stopped.')
@@ -325,12 +433,69 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
                 message = f'Installed {apk.package}'
                 completed.append(message)
                 log(message)
+                provider = SYNC_PROVIDERS.get(apk.package)
+                if provider:
+                    self._finish_sync_provider(plan, provider, completed, log)
+
+    def _finish_sync_provider(self, plan, provider, completed, log):
+        self._device_guard(plan)
+        if provider in plan.providers_to_enable:
+            self._pkg_write(plan, completed, 'pm', 'enable', '--user', '0', provider)
+        if (provider not in self.adb.packages(plan.serial)
+                or provider in self.adb.packages(plan.serial, disabled_only=True)):
+            raise ToolkitError(f'Could not confirm {provider} is enabled for the owner profile.')
+        self._device_guard(plan)
+        if provider in plan.providers_to_enable:
+            message = f'Enabled {provider} for the owner profile.'
+            completed[-1] = message
+            log(message)
+
+    def _apply_paired_ads(self, plan, completed):
+        restore = plan.action == 'ads_paired_restore'
+        state = self._load_state()
+        fresh = self._plan_paired_ads(plan.device, state, self._read_ads(plan.serial), restore)
+        if fresh != plan or self._read_ads(plan.serial) != plan.old_value:
+            raise ToolkitError('The paired ad setting, package or undo state changed since preview. Review again.')
+
+        self._device_guard(plan)
+        key = self._state_key(plan.serial)
+        saved = {'model': plan.device.model, 'value': plan.restore_value, 'mode': plan.saved_package_mode}
+        if not plan.saved_pair_exists:
+            state.setdefault('paired_ads', {})[key] = saved
+            self._save_state(state)
+        target = plan.restore_value if restore else '0'
+        mode = plan.package_mode
+        target_mode = plan.target_package_mode
+        if target != plan.old_value:
+            args = ('put', 'global', ADS_KEY, target) if target is not None else ('delete', 'global', ADS_KEY)
+            self._pkg_write(plan, completed, 'settings', '--user', '0', *args)
+            if self._read_ads(plan.serial) != target:
+                raise ToolkitError('Ad setting change could not be confirmed. Paired undo retained.')
+            self._pkg_confirm(plan, completed, 'Ad setting change confirmed.')
+
+        if self._offers_mode(plan.serial) != mode:
+            raise ToolkitError('Special Offers changed during the operation. Paired undo retained.')
+        if mode != target_mode:
+            self._pkg_write(plan, completed, 'pm', _OFFERS_MODES[target_mode], '--user', '0', OFFERS)
+        self._device_guard(plan)
+        if self._offers_mode(plan.serial) != target_mode or self._read_ads(plan.serial) != target:
+            raise ToolkitError('Could not confirm both ad controls. Paired undo retained.')
+        self._device_guard(plan)
+        completed.append('Confirmed the ad setting and Special Offers package state for user 0.')
+        if restore:
+            state = self._load_state()
+            if state.get('paired_ads', {}).get(key) != saved:
+                raise ToolkitError('The paired undo record changed during restore and was retained.')
+            del state['paired_ads'][key]
+            self._save_state(state)
 
     def _apply_ads(self, plan: Plan) -> None:
         if self._read_ads(plan.serial) != plan.old_value:
             raise ToolkitError('The ad setting changed since preview. Review a fresh plan.')
         state = self._load_state()
         key = self._state_key(plan.serial)
+        if key in state.get('paired_ads', {}):
+            raise ToolkitError('Paired ad undo was saved since preview. Restore the paired ad controls first.')
         record = state['ads'].get(key)
         if record and record['model'] != plan.device.model:
             raise ToolkitError('Undo state device model mismatch.')

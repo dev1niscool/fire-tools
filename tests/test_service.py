@@ -153,6 +153,133 @@ class ServiceTests(unittest.TestCase):
         self.app.execute(self.app.plan_ads('SERIAL123'),True,log=lambda x:None)
         self.app.execute(self.app.plan_ads('SERIAL123',True),True,log=lambda x:None)
         self.assertEqual(self.adb.value,'null')
+    def paired_fixture(self, mode='0', value='null'):
+        self.adb.kso_mode = mode
+        self.adb.value = value
+        self.adb.kso_denied = False
+        adb_shell = self.adb.shell
+        pkg = 'com.amazon.kindle.kso'
+        modes = ('default-state', 'enable', 'disable', 'disable-user', 'disable-until-used')
+        def shell(serial, args, timeout=30):
+            if tuple(args) == ('dumpsys', 'package', pkg):
+                return f'  User 0: installed=true stopped=false enabled={self.adb.kso_mode}\n  User 10: installed=true enabled=1'
+            if args[0] == 'pm' and args[-1] == pkg:
+                self.assertEqual(tuple(args[2:4]), ('--user', '0'))
+                self.adb.commands.append(tuple(args))
+                if self.adb.kso_denied:
+                    return 'Error: Permission Denial'
+                self.adb.kso_mode = str(modes.index(args[1]))
+                return 'Success'
+            return adb_shell(serial, args, timeout)
+        self.adb.shell = shell
+
+    def paired(self, restore=False):
+        return self.app.plan_ads('SERIAL123', restore=restore, paired=True)
+
+    def apply(self, plan):
+        return self.app.execute(plan, True, log=lambda _: None)
+
+    def test_paired_restore_preserves_absent_key_and_default_package_mode(self):
+        self.paired_fixture()
+        self.apply(self.paired())
+        self.assertEqual((self.adb.value, self.adb.kso_mode), ('0', '3'))
+        self.apply(self.paired())
+        self.apply(self.paired(True))
+        self.assertEqual((self.adb.value, self.adb.kso_mode), ('null', '0'))
+        self.assertFalse(any('clear' in cmd or 'grant' in cmd for cmd in self.adb.commands))
+        with self.assertRaises(ToolkitError):
+            self.paired(True)
+
+    def test_paired_preview_explains_v46_restricted_firmware(self):
+        self.paired_fixture()
+        for version, restricted in (('8.3.3.7', False), ('8.3.3.8', True), ('8.3.12.0', True),
+                                    ('7.3.3.8', False), ('unknown', False)):
+            self.adb.identity = info(fire_os=version)
+            with self.subTest(version=version):
+                self.assertEqual('v46' in ' '.join(self.paired().warnings), restricted)
+
+    def test_paired_restore_keeps_previously_disabled_special_offers_disabled(self):
+        self.paired_fixture('2', '1')
+        self.apply(self.paired())
+        self.apply(self.paired(True))
+        self.assertEqual((self.adb.value, self.adb.kso_mode), ('1', '2'))
+        self.assertFalse(any(cmd[0]=='pm' for cmd in self.adb.commands))
+
+    def test_paired_partial_package_denial_survives_restart_and_allows_undo(self):
+        self.paired_fixture('1', '1')
+        self.adb.kso_denied = True
+        with self.assertRaisesRegex(ToolkitError, 'Completed:'):
+            self.apply(self.paired())
+        self.assertEqual((self.adb.value, self.adb.kso_mode), ('0', '1'))
+        self.app = Toolkit(self.app.config, state_dir=self.app.state_dir)
+        self.apply(self.paired(True))
+        self.assertEqual((self.adb.value, self.adb.kso_mode), ('1', '1'))
+
+    def test_completing_paired_undo_requires_both_confirmed_settings(self):
+        self.paired_fixture('1', '1')
+        self.apply(self.paired())
+        write = self.adb.shell
+        def reset_setting(serial, args, timeout=30):
+            result = write(serial, args, timeout)
+            if args[:2] == ('pm', 'enable'):
+                self.adb.value = '0'
+            return result
+        self.adb.shell = reset_setting
+        with self.assertRaisesRegex(ToolkitError, 'confirm'):
+            self.apply(self.paired(True))
+        self.apply(self.paired(True))
+        self.assertEqual((self.adb.value, self.adb.kso_mode), ('1', '1'))
+
+    def test_paired_undo_with_an_older_setting_only_undo(self):
+        self.paired_fixture('1', '1')
+        self.apply(self.app.plan_ads('SERIAL123'))
+        stale_single = self.app.plan_ads('SERIAL123', restore=True)
+        self.apply(self.paired())
+        with self.assertRaisesRegex(ToolkitError, '[Pp]aired'):
+            self.apply(stale_single)
+        self.apply(self.paired(True))
+        self.assertEqual((self.adb.value, self.adb.kso_mode), ('0', '1'))
+        self.apply(self.app.plan_ads('SERIAL123', restore=True))
+        self.assertEqual(self.adb.value, '1')
+
+    def test_paired_refuses_changed_setting_before_first_command(self):
+        self.paired_fixture('1', '1')
+        plan = self.paired()
+        read = self.app._offers_mode
+        def change_while_reading(serial):
+            self.adb.value = '2'
+            return read(serial)
+        with patch.object(self.app, '_offers_mode', side_effect=change_while_reading):
+            with self.assertRaisesRegex(ToolkitError, '[Cc]hanged'):
+                self.apply(plan)
+        self.assertEqual((self.adb.value, self.adb.kso_mode), ('2', '1'))
+        self.assertFalse(any(cmd[0] == 'pm' or 'put' in cmd for cmd in self.adb.commands))
+        self.assertNotIn(self.app._state_key('SERIAL123'), self.app._load_state().get('paired_ads', {}))
+
+    def test_paired_refuses_uninstalled_and_ambiguous_owner_records(self):
+        for report in ('Unknown package', '  User 0: installed=false enabled=0',
+                       '  User 0: installed=true enabled=0 enabled=1'):
+            with self.subTest(report=report), patch.object(self.app, '_pkg_shell', return_value=report):
+                with self.assertRaises(ToolkitError):
+                    self.paired()
+        self.assertFalse(self.app.state_dir.exists())
+
+    def test_paired_preview_rejects_changed_mode_and_saved_setting(self):
+        self.paired_fixture('0', '1')
+        plan = self.paired()
+        self.adb.kso_mode = '1'
+        with self.assertRaises(ToolkitError):
+            self.apply(plan)
+        self.assertEqual(self.adb.value, '1')
+        self.apply(self.paired())
+        restore = self.paired(True)
+        state = self.app._load_state()
+        state['paired_ads'][self.app._state_key('SERIAL123')]['value'] = '2'
+        self.app._save_state(state)
+        with self.assertRaises(ToolkitError):
+            self.apply(restore)
+        self.assertEqual(self.adb.value, '0')
+
     def test_changed_device_refused_after_preview(self):
         plan=self.app.plan_ads('SERIAL123'); self.adb.identity=info(model='OTHER')
         with self.assertRaises(ToolkitError): self.app.execute(plan,True)
@@ -195,6 +322,43 @@ class ServiceTests(unittest.TestCase):
             self.assertEqual(len(self.adb.installed),0)
             self.app.execute(plan,True,log=lambda x:None)
         self.assertEqual(len(self.adb.installed),3)
+    def test_google_play_sync_validates_dependencies_and_enables_only_selected_provider(self):
+        core = self.make_apks()
+        provider = 'com.android.providers.contacts'
+        calendar = 'com.android.providers.calendar'
+        sync_path = self.root / 'contacts.apk'
+        sync_path.write_bytes(b'contacts')
+        sync = replace(core[0], package='com.google.android.syncadapters.contacts',
+                       path=sync_path, sha256=file_sha256(sync_path))
+        self.adb.present.update((provider, calendar, *(apk.package for apk in core)))
+        self.adb.disabled.update((provider, calendar))
+        with self.verifier([sync]):
+            self.adb.disabled.add(core[0].package)
+            with self.assertRaisesRegex(ToolkitError, 'Framework|com.google.android.gsf'):
+                self.app.plan_google_play('SERIAL123', [sync_path])
+            self.adb.disabled.remove(core[0].package)
+            plan = self.app.plan_google_play('SERIAL123', [sync_path])
+            self.assertTrue(any(provider in line and 'Enable' in line for line in plan.details))
+            self.adb.disabled.discard(provider)
+            with self.assertRaisesRegex(ToolkitError, 'changed'):
+                self.app.execute(plan, True, log=lambda _message: None)
+            self.assertEqual(self.adb.installed, [])
+            self.adb.disabled.add(provider)
+            self.app.execute(plan, True, log=lambda _message: None)
+        self.assertEqual(self.adb.installed, ['00.apk'])
+        self.assertNotIn(provider, self.adb.disabled)
+        self.assertIn(calendar, self.adb.disabled)
+
+    def test_sync_apk_preflight_refuses_missing_provider_even_in_complete_batch(self):
+        core = self.make_apks()
+        sync_path = self.root / 'calendar.apk'
+        sync_path.write_bytes(b'calendar')
+        sync = replace(core[0], package='com.google.android.syncadapters.calendar',
+                       path=sync_path, sha256=file_sha256(sync_path))
+        with self.verifier([*core, sync]), self.assertRaisesRegex(ToolkitError, 'com.android.providers.calendar'):
+            self.app.plan_google_play('SERIAL123', [*(a.path for a in core), sync_path])
+        self.assertEqual(self.adb.installed, [])
+
     def test_apk_change_after_preview_blocks_all_installs(self):
         apks=self.make_apks()
         with self.verifier(apks):

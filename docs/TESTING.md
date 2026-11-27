@@ -23,9 +23,16 @@ Run `python3 -m open_fire_toolkit gui --demo` in a desktop session with Tk. On L
 
 ## Release archive
 
-Compare the source ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c fire-tools-0.2.0.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\fire-tools-0.2.0.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `fire-tools-0.2.0.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
+Compare the source ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c fire-tools-0.3.0.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\fire-tools-0.3.0.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `fire-tools-0.3.0.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
 
 The checksum verifies that the ZIP matches the checksum you obtained. Obtain both files from a source you trust.
+
+## Fire Toolbox v46 workflow checks (0.3, 2026-11-27)
+
+* **Play installation.** Fire Tools inspected six actual standalone APKs with Android Build Tools 36 and JDK 21 for API 30 on ARM64. The four core files matched the v46 catalog selections by SHA-256. The Calendar and Contacts samples were distinct Google-signed Open GApps files. A simulated ADB device received the six staged and reverified inputs in the reviewed order. Both sync providers were enabled and read back in the simulation. The v46 Play services file passed its v3 signing-key rotation check and was rejected for a 32-bit-only target. The [source guide](GOOGLE-APKS.md) identifies the exact files and marks the newer listing examples separately.
+* **Ad controls.** Simulated device tests covered a missing setting, default and explicit Special Offers package modes, firmware refusal after the first write, restart and retry, and undo in the presence of an older saved change. A rendered GUI test performed the paired change and undo. Ad visibility still requires observation on the tablet.
+* **Debloat.** Static comparison matched the 22 Standard and 35 Complete preset identifiers. All three custom lists shipped in v46 could be read as data. Tests exercise package protections, restore-list direction and undo after retrying an interrupted batch.
+* **Firmware.** Tablet operations in these checks used simulated device responses. Installation, account sign-in, actual ad suppression and persistence through a Fire OS update have not been tested on a physical tablet.
 
 ## Expanded release validation (0.2, 2026-11-27)
 

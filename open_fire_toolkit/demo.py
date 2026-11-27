@@ -12,6 +12,7 @@ class DemoToolkit:
                                    '8.3.3.8', '11', 30, ('arm64-v8a', 'armeabi-v7a'), 0)
         self.disabled: set[str] = set()
         self.value = '1'
+        self.paired_original: tuple[str, bool] | None = None
         self.original: str | None = None
         self.demo_packages = set(OPTIONAL_APPS) | {'com.amazon.kindle.kso', 'com.amazon.firelauncher', 'com.android.vending', 'com.google.android.gms', 'org.firetools.adshelper'}
         self.removed: set[str] = set()
@@ -40,11 +41,19 @@ class DemoToolkit:
     def plan_google_play(self, serial, paths):
         return self._plan('Google Play installation preview', serial, 'play', (
             'SIMULATED: verify package identities and Google signing certificates.',
-            'SIMULATED: install Framework → Play services → Play Store.',
+            'SIMULATED: sample core order is Account Manager → Framework → Play services → Play Store.',
+            'Selected Calendar and Contacts sync adapters follow the core packages in a real installation.',
             'The real workflow requires locally selected genuine APKs and Google build-tools.',
         ))
 
-    def plan_ads(self, serial, restore=False):
+    def plan_ads(self, serial, restore=False, *, paired=False):
+        if paired:
+            if restore and self.paired_original is None:
+                raise ToolkitError('Demo: try suppression with setting and package first.')
+            title = 'Undo setting and package' if restore else 'Suppress with setting and package'
+            return self._plan(title, serial, 'ads_paired_restore' if restore else 'ads_paired',
+                              ('Simulate changing LOCKSCREEN_AD_ENABLED and com.amazon.kindle.kso together.',
+                               'Undo restores both original values.'), 'com.amazon.kindle.kso')
         if restore and self.original is None:
             raise ToolkitError('Demo: try temporary suppression first, then restore it.')
         return self._plan('Restore ad setting' if restore else 'Try temporary ad suppression', serial,
@@ -153,6 +162,20 @@ class DemoToolkit:
             if self.original is None:
                 raise ToolkitError('No simulated restore state.')
             self.value, self.original = self.original, None
+        elif plan.action == 'ads_paired':
+            if self.paired_original is None:
+                self.paired_original = (self.value, plan.package in self.disabled)
+            self.value = '0'
+            self.disabled.add(plan.package)
+        elif plan.action == 'ads_paired_restore':
+            if self.paired_original is None:
+                raise ToolkitError('No simulated paired restore state.')
+            self.value, originally_disabled = self.paired_original
+            if not originally_disabled:
+                self.disabled.discard(plan.package)
+            else:
+                self.disabled.add(plan.package)
+            self.paired_original = None
         elif plan.action == 'disable':
             self.disabled.add(plan.package)
         elif plan.action == 'enable':

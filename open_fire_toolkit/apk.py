@@ -16,12 +16,19 @@ from zipfile import BadZipFile, ZipFile
 
 
 GOOGLE_SIGNER_SHA256 = "f0fd6c5b410f25cb25c3b53346c8972fae30f8ee7411df910480ad6b2d60db83"
-_PLAY_PACKAGES = (
-    "com.google.android.gsf.login",
+# This observed Play services rotation also requires a verified v3 signature
+# and its signed, in-APK proof of rotation from GOOGLE_SIGNER_SHA256.
+_GMS_ROTATED_SIGNER = "7ce83c1b71f3d572fed04c8d40c5cb10ff75e6d87d9df6fbd53f0468c2905053"
+PLAY_CORE = (
     "com.google.android.gsf",
     "com.google.android.gms",
     "com.android.vending",
 )
+SYNC_PROVIDERS = {
+    "com.google.android.syncadapters.calendar": "com.android.providers.calendar",
+    "com.google.android.syncadapters.contacts": "com.android.providers.contacts",
+}
+PLAY_PACKAGES = ("com.google.android.gsf.login", *PLAY_CORE, *SYNC_PROVIDERS)
 MAX_APK_BYTES = 512 * 1024 * 1024
 _MAX_EXPANDED_ARCHIVE = 2 * 1024 * 1024 * 1024
 _MAX_CENTRAL_DIRECTORY = 8 * 1024 * 1024
@@ -55,6 +62,7 @@ class ApkInfo:
     sha256: str
     signer_sha256: tuple[str, ...]
     split: bool = False
+    signer_lineage: tuple[str, ...] = ()
 
 
 def _local_file(path: str | Path, label: str) -> Path:
@@ -209,7 +217,7 @@ def _read_windows_pipe(fd: int, count: int, deadline: float) -> bytes:
     raise TimeoutError
 
 
-def _read_tool_output(process: subprocess.Popen, label: str, deadline: float) -> bytes:
+def _read_tool_output(process: subprocess.Popen, label: str, deadline: float, limit: int) -> bytes:
     fd = process.stdout.fileno()
     with DefaultSelector() as selector:
         if os.name != "nt":
@@ -219,7 +227,7 @@ def _read_tool_output(process: subprocess.Popen, label: str, deadline: float) ->
             remaining = deadline - monotonic()
             if remaining <= 0:
                 raise TimeoutError
-            count = min(65_536, _MAX_TOOL_OUTPUT + 1 - len(output))
+            count = min(65_536, limit + 1 - len(output))
             if os.name == "nt":
                 chunk = _read_windows_pipe(fd, count, deadline)
             else:
@@ -229,11 +237,11 @@ def _read_tool_output(process: subprocess.Popen, label: str, deadline: float) ->
             if not chunk:
                 return bytes(output)
             output.extend(chunk)
-            if len(output) > _MAX_TOOL_OUTPUT:
+            if len(output) > limit:
                 raise ApkError(f"{label} output exceeds the inspection limit.")
 
 
-def _run_tool(label: str, args: list[str]) -> str:
+def _run_tool(label: str, args: list[str], *, output_limit: int = _MAX_TOOL_OUTPUT) -> str:
     env = os.environ.copy()
     for name in ("JDK_JAVA_OPTIONS", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS"):
         env.pop(name, None)
@@ -244,7 +252,7 @@ def _run_tool(label: str, args: list[str]) -> str:
             env=env, shell=False,
         ) as process:
             try:
-                output = _read_tool_output(process, label, deadline)
+                output = _read_tool_output(process, label, deadline, output_limit)
                 code = process.wait(timeout=max(0, deadline - monotonic()))
             finally:
                 if process.poll() is None:
@@ -276,11 +284,19 @@ def _parse_badging(output: str, zip_abis: set[str]) -> tuple[str, int, str, int,
     if sdk is None:
         raise ApkError("aapt did not report a known numeric minimum SDK.")
 
-    native = [line for line in lines if line.startswith("native-code:")]
-    if len(native) > 1 or (native and not re.fullmatch(r"native-code:(?: '[a-zA-Z0-9_-]+')+\s*", native[0])):
-        raise ApkError("aapt did not report valid native ABI metadata.")
-    abis = tuple(re.findall(r"'([a-zA-Z0-9_-]+)'", native[0])) if native else ()
-    if set(abis) != zip_abis:
+    def declared_abis(label):
+        rows = [line for line in lines if line.startswith(label + ":")]
+        if not rows:
+            return ()
+        if len(rows) != 1 or not re.fullmatch(label + r":(?: '[a-zA-Z0-9_-]+')+\s*", rows[0]):
+            raise ApkError("aapt did not report valid native ABI metadata.")
+        return tuple(re.findall(r"'([a-zA-Z0-9_-]+)'", rows[0]))
+
+    abis = declared_abis("native-code")
+    alternate = declared_abis("alt-native-code")
+    # Some multi-arch Google APKs include only a subset of libs for the alternate ABI.
+    # Account for all packaged libs but advertise only the primary installable ABIs.
+    if (alternate and not abis) or set(abis).union(alternate) != zip_abis:
         raise ApkError("aapt native ABI metadata does not match the APK archive.")
     return package[1], int(package[2]), package[3], int(sdk[1]), abis
 
@@ -304,10 +320,19 @@ def _parse_signers(output: str) -> tuple[str, ...]:
     return tuple(digests)
 
 
+def google_signer_is_trusted(apk: ApkInfo) -> bool:
+    if apk.signer_sha256 == (GOOGLE_SIGNER_SHA256,):
+        return True
+    return (apk.package == "com.google.android.gms"
+            and apk.signer_sha256 == (_GMS_ROTATED_SIGNER,)
+            and apk.signer_lineage == (GOOGLE_SIGNER_SHA256, _GMS_ROTATED_SIGNER))
+
+
 class ApkVerifier:
     """Verify APK signatures and collect APK metadata using explicit local tools."""
 
-    def __init__(self, aapt_path, apksigner_jar, java_path):
+    def __init__(self, aapt_path, apksigner_jar, java_path, *, device_sdk: int | None = None):
+        self._sdk = device_sdk
         self._aapt = _tool(aapt_path, "aapt")
         self._jar = _tool(apksigner_jar, "apksigner", jar=True)
         self._java = _tool(java_path, "Java")
@@ -318,13 +343,32 @@ class ApkVerifier:
             raise ApkError("Choose a standalone .apk file.")
         zip_abis = _check_archive(apk)
         digest = file_sha256(apk)
-        signers = _parse_signers(_run_tool("apksigner", [
-            str(self._java), "-jar", str(self._jar), "verify", "--verbose", "--print-certs", str(apk),
-        ]))
+        signer_tool = [str(self._java), "-jar", str(self._jar)]
+        platform = [] if self._sdk is None else ["--min-sdk-version", str(self._sdk), "--max-sdk-version", str(self._sdk)]
+        verification = _run_tool("apksigner", [*signer_tool, "verify", *platform, "--verbose", "--print-certs", str(apk)])
+        signers = _parse_signers(verification)
         badging = _run_tool("aapt badging", [str(self._aapt), "dump", "badging", str(apk)])
         package, version_code, version_name, min_sdk, abis = _parse_badging(badging, zip_abis)
+        lineage = ()
+        if package == "com.google.android.gms" and signers == (_GMS_ROTATED_SIGNER,):
+            # apksigner verify validates the v3 signature and proof of rotation.
+            # Its lineage command then identifies the authenticated ancestors.
+            v3_success = {
+                "Verified using v3 scheme (APK Signature Scheme v3): true",
+                "Verified using v3.1 scheme (APK Signature Scheme v3.1): true",
+            }
+            if v3_success.isdisjoint(verification.splitlines()):
+                raise ApkError("The rotated Google Play services signer requires a verified v3 signature.")
+            lineage_output = _run_tool("apksigner lineage", [*signer_tool, "lineage", "--in", str(apk), "--print-certs"])
+            rows = [row.lower() for row in lineage_output.splitlines()
+                    if row.startswith("Signer #") and " in lineage certificate SHA-256 digest:" in row]
+            lineage = (GOOGLE_SIGNER_SHA256, _GMS_ROTATED_SIGNER)
+            if rows != [f"signer #{n} in lineage certificate sha-256 digest: {digest}"
+                        for n, digest in enumerate(lineage, start=1)]:
+                raise ApkError("The Google Play services signing lineage does not match the trusted rotation.")
         manifest = _run_tool(
-            "aapt manifest", [str(self._aapt), "dump", "xmltree", str(apk), "AndroidManifest.xml"]
+            "aapt manifest", [str(self._aapt), "dump", "xmltree", str(apk), "AndroidManifest.xml"],
+            output_limit=4 * 1024 * 1024,
         )
         if not re.search(r"^[ \t]*E: manifest\b", manifest, re.MULTILINE):
             raise ApkError("aapt did not report a readable Android manifest.")
@@ -332,7 +376,7 @@ class ApkVerifier:
             raise ApkError("Split APKs and APKs requiring splits are unsupported.")
         if digest != file_sha256(apk):
             raise ApkError("The APK changed during inspection.")
-        return ApkInfo(apk, package, version_code, version_name, min_sdk, abis, digest, signers)
+        return ApkInfo(apk, package, version_code, version_name, min_sdk, abis, digest, signers, signer_lineage=lineage)
 
 
 def google_play_order(
@@ -342,7 +386,7 @@ def google_play_order(
     entries = {}
     device_abis = set(abis)
     for apk in apks:
-        if apk.package not in _PLAY_PACKAGES:
+        if apk.package not in PLAY_PACKAGES:
             raise ApkError(f"Unexpected Google Play package: {apk.package}")
         if apk.package in entries:
             raise ApkError(f"Duplicate Google Play package: {apk.package}")
@@ -352,12 +396,12 @@ def google_play_order(
             raise ApkError(f"{apk.package} requires Android SDK {apk.min_sdk}, device SDK is {sdk}.")
         if apk.abis and not device_abis.intersection(apk.abis):
             raise ApkError(f"{apk.package} has no native ABI supported by the device.")
-        if not apk.signer_sha256 or any(
-            digest != GOOGLE_SIGNER_SHA256 for digest in apk.signer_sha256
-        ):
+        if not google_signer_is_trusted(apk):
             raise ApkError(f"Google signing certificate mismatch: {apk.package}")
         entries[apk.package] = apk
-    missing = [package for package in _PLAY_PACKAGES[1:] if package not in entries]
-    if missing:
-        raise ApkError(f"Missing required Google Play packages: {', '.join(missing)}")
-    return tuple(entries[package] for package in _PLAY_PACKAGES if package in entries)
+    # The service checks the tablet's enabled core packages for an adapter-only addition.
+    if not entries or not entries.keys() <= SYNC_PROVIDERS.keys():
+        missing = [package for package in PLAY_CORE if package not in entries]
+        if missing:
+            raise ApkError(f"Missing required Google Play packages: {', '.join(missing)}")
+    return tuple(entries[package] for package in PLAY_PACKAGES if package in entries)

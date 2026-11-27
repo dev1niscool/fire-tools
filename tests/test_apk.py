@@ -46,15 +46,18 @@ class ApkInspectionTests(unittest.TestCase):
         self.verify_code = 0
         self.xmltree = "E: manifest (line=1)\n  E: application (line=2)\n"
 
-    def inspect(self):
+    def inspect(self, device_sdk=None, lineage="", lineage_exit=0):
         def run(args, **kwargs):
             self.assertFalse(kwargs.get("shell", False))
+            sdk_flags = ("--min-sdk-version", str(device_sdk), "--max-sdk-version", str(device_sdk)) if device_sdk else ()
             commands = {
+                (str(self.java), "-jar", str(self.jar), "lineage", "--in", str(self.apk),
+                 "--print-certs"): (lineage, lineage_exit),
                 (str(self.aapt), "dump", "badging", str(self.apk)): (self.badging, 0),
                 (str(self.aapt), "dump", "xmltree", str(self.apk), "AndroidManifest.xml"): (
                     self.xmltree, 0
                 ),
-                (str(self.java), "-jar", str(self.jar), "verify", "--verbose", "--print-certs",
+                (str(self.java), "-jar", str(self.jar), "verify", *sdk_flags, "--verbose", "--print-certs",
                  str(self.apk)): (self.verify, self.verify_code),
             }
             output, code = commands[tuple(args)]
@@ -69,7 +72,7 @@ class ApkInspectionTests(unittest.TestCase):
             patch("open_fire_toolkit.apk.subprocess.Popen", side_effect=run),
             patch("open_fire_toolkit.apk._read_tool_output", side_effect=lambda proc, *_: proc.output),
         ):
-            return ApkVerifier(self.aapt, self.jar, self.java).inspect(self.apk)
+            return ApkVerifier(self.aapt, self.jar, self.java, device_sdk=device_sdk).inspect(self.apk)
 
     def test_returns_verified_immutable_metadata(self):
         apk = self.inspect()
@@ -80,6 +83,40 @@ class ApkInspectionTests(unittest.TestCase):
         )
         with self.assertRaises(FrozenInstanceError):
             apk.package = "com.example.other"
+
+    def test_rotated_gms_requires_verified_v3_and_exact_certificate_lineage(self):
+        rotated = "7ce83c1b71f3d572fed04c8d40c5cb10ff75e6d87d9df6fbd53f0468c2905053"
+        self.badging = BADGING.replace("com.android.vending", "com.google.android.gms")
+        self.verify = (VERIFY.replace(PIN, rotated)
+                       + "Verified using v3 scheme (APK Signature Scheme v3): true\n").replace("\n", "\r\n")
+        chain = (f"Signer #1 in lineage certificate SHA-256 digest: {PIN}\n"
+                 f"Signer #2 in lineage certificate SHA-256 digest: {rotated}\n")
+        apk = self.inspect(30, chain)
+        self.assertEqual(apk.signer_sha256, (rotated,))
+        store = replace(apk, package="com.android.vending", signer_sha256=(PIN,), signer_lineage=())
+        framework = replace(store, package="com.google.android.gsf")
+        self.assertEqual(google_play_order((apk, store, framework), 30, ("arm64-v8a",))[1], apk)
+        for bad_chain in ("", chain.replace(PIN, "0" * 64), chain.replace(rotated, PIN),
+                          chain + chain, chain.replace("Signer #2 in lineage", "Source Stamp Signer")):
+            with self.subTest(chain=bad_chain), self.assertRaises(ApkError):
+                self.inspect(30, bad_chain)
+        with self.assertRaises(ApkError):
+            self.inspect(30, chain, lineage_exit=1)
+        self.verify = self.verify.replace("v3): true", "v3): false")
+        with self.assertRaises(ApkError):
+            self.inspect(30, chain)
+        for wrong in (replace(apk, signer_lineage=()), replace(apk, package="com.android.vending"),
+                      replace(apk, signer_sha256=("1" * 64,))):
+            with self.subTest(wrong=wrong), self.assertRaisesRegex(ApkError, "certificate mismatch"):
+                google_play_order([wrong], 30, ("arm64-v8a",))
+
+    def test_alternate_abi_must_match_archive_and_never_grants_primary_support(self):
+        self.badging = BADGING.replace(" 'armeabi-v7a'", "\nalt-native-code: 'armeabi-v7a'")
+        apk = self.inspect()
+        self.assertEqual(apk.abis, ("arm64-v8a",))
+        self.badging = self.badging.replace("alt-native-code: 'armeabi-v7a'", "alt-native-code: 'x86'")
+        with self.assertRaisesRegex(ApkError, "match"):
+            self.inspect()
 
     def test_invalid_signature_even_if_pin_is_printed(self):
         self.verify_code = 1
@@ -303,6 +340,16 @@ class ApkOrderingTests(unittest.TestCase):
         self.assertEqual(self.order(self.apks), (self.gsf, self.gms, self.store))
         self.assertEqual(self.order((*self.apks, self.login)),
                          (self.login, self.gsf, self.gms, self.store))
+
+    def test_sync_adapters_follow_store_or_can_be_added_together(self):
+        calendar = replace(self.gsf, package="com.google.android.syncadapters.calendar")
+        contacts = replace(self.gsf, package="com.google.android.syncadapters.contacts")
+        self.assertEqual(self.order((contacts, self.store, self.gms, calendar, self.login, self.gsf)),
+                         (self.login, self.gsf, self.gms, self.store, calendar, contacts))
+        self.assertEqual(self.order((contacts, calendar)), (calendar, contacts))
+        for invalid in (replace(contacts, signer_sha256=("1" * 64,)), replace(contacts, split=True)):
+            with self.subTest(invalid=invalid), self.assertRaises(ApkError):
+                self.order((invalid,))
 
     def test_rejects_incomplete_duplicate_and_unknown_sets(self):
         for apks in (self.apks[:-1], (*self.apks, self.gms),

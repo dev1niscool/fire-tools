@@ -45,9 +45,11 @@ def parser() -> argparse.ArgumentParser:
         if name != 'info':
             _confirmation_options(sub)
         if name == 'play':
-            sub.add_argument('apks', nargs='+', help='Local APK files (three required components, optional Account Manager)')
+            sub.add_argument('apks', nargs='+', help='Standalone Google APKs: Framework, Play services and Play Store, plus optional Account Manager, Calendar Sync or Contacts Sync. Choose only adapters to add sync to an existing installation.')
         if name == 'ads':
-            sub.add_argument('--restore', action='store_true', help='Restore the saved original setting')
+            sub.add_argument('--restore', action='store_true', help='Restore the original state saved by the selected mode')
+            sub.add_argument('--with-package', action='store_true',
+                             help='Change the ad setting and Special Offers package together')
         if name == 'apps':
             group = sub.add_mutually_exclusive_group()
             group.add_argument('--disable', metavar='PACKAGE')
@@ -152,7 +154,7 @@ def main(argv=None) -> int:
         if args.command == 'play':
             plan = toolkit.plan_google_play(args.serial, args.apks)
         elif args.command == 'ads':
-            plan = toolkit.plan_ads(args.serial, args.restore)
+            plan = toolkit.plan_ads(args.serial, args.restore, paired=args.with_package)
         elif args.command == 'apps':
             plan = toolkit.plan_package(args.serial, args.enable or args.disable, enable=bool(args.enable))
         else:

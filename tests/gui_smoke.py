@@ -80,7 +80,7 @@ assert "SDK 30" in app.firmware.get()
 
 tab(1)
 click("Use demo sample")
-assert len(app.apk_table.get_children()) == 3
+assert len(app.apk_table.get_children()) == 4
 window = review("Verify and review...")
 preview = next(item for item in widgets(window) if isinstance(item, tk.Text))
 assert "SIMULATED" in preview.get("1.0", "end")
@@ -115,6 +115,11 @@ confirm(window)
 assert app.toolkit.value == "0"
 confirm(review("Review restore..."))
 assert app.toolkit.value == "1"
+
+confirm(review("Suppress with setting and package..."))
+assert app.toolkit.value == "0" and "com.amazon.kindle.kso" in app.toolkit.disabled
+confirm(review("Undo setting and package..."))
+assert app.toolkit.value == "1" and "com.amazon.kindle.kso" not in app.toolkit.disabled
 
 tab(3)
 click("Read app states")

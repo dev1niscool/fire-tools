@@ -262,9 +262,9 @@ class App:
     def _play_tab(self):
         tab = self._panel(
             "Google Play", "Install Google Play",
-            "Choose local, standalone APKs for Google Services Framework, Google Play services "
-            "and Google Play Store. Google Account Manager is optional. Review checks the APKs' "
-            "signers and tablet compatibility before preparing an install plan.",
+            "For a fresh Android 11 ARM64 setup, choose standalone APKs for Google Account Manager, "
+            "Google Services Framework, Google Play services and Play Store. Calendar Sync and "
+            "Contacts Sync are optional. To add sync to an existing setup, choose just the adapters.",
         )
         self.apk_table = self._table(
             tab, (("file", "Local APK files", 440),), 7, self._sync_controls,
@@ -281,6 +281,14 @@ class App:
             actions, "Verify and review...", self._plan_play,
             condition=lambda: self._connected() and bool(self.apk_paths), primary=True,
         ).pack(side="right")
+        guides = self.ttk.Frame(tab, style="Panel.TFrame")
+        guides.pack(fill="x", pady=(0, 8))
+        self._button(
+            guides, "Find Google APK sources", lambda: self.advanced.show_feature("source-catalog"),
+        ).pack(side="left")
+        self._button(
+            guides, "Battery exemption...", lambda: self.advanced.show_feature("battery-exemption"),
+        ).pack(side="left", padx=6)
         self._description(
             tab, "Use APKs from a source you trust. If one install fails, earlier packages "
                  "may remain installed. Reboot is a separate action on the Connection tab.",
@@ -318,6 +326,16 @@ class App:
             tab, "Fire OS may block Special Offers package changes. The optional helper "
                  "requires installation, a settings permission, and a visible service on the tablet.",
         ).pack(fill="x", pady=(4, 8))
+        paired = self.ttk.Frame(tab, style="Panel.TFrame")
+        paired.pack(fill="x", pady=(0, 6))
+        self._button(
+            paired, "Suppress with setting and package...",
+            lambda: self._plan_ads(restore=False, paired=True), condition=self._connected,
+        ).pack(side="left")
+        self._button(
+            paired, "Undo setting and package...",
+            lambda: self._plan_ads(restore=True, paired=True), condition=self._connected,
+        ).pack(side="left", padx=6)
         packages = self.ttk.Frame(tab, style="Panel.TFrame")
         packages.pack(fill="x", pady=(0, 6))
         self._button(
@@ -567,7 +585,7 @@ class App:
 
     def _demo_apks(self):
         self._clear_apks()
-        self._add_apks(("demo-framework.apk", "demo-play-services.apk", "demo-play-store.apk"))
+        self._add_apks(("demo-account-manager.apk", "demo-framework.apk", "demo-play-services.apk", "demo-play-store.apk"))
 
     def _add_apks(self, filenames):
         for filename in filenames:
@@ -654,9 +672,9 @@ class App:
         paths = tuple(self.apk_paths)
         self._plan("Verify local APKs", lambda toolkit, serial: toolkit.plan_google_play(serial, paths))
 
-    def _plan_ads(self, restore):
-        self._plan("Read lock-screen setting",
-                   lambda toolkit, serial: toolkit.plan_ads(serial, restore=restore))
+    def _plan_ads(self, restore, paired=False):
+        self._plan("Review lock-screen ad changes",
+                   lambda toolkit, serial: toolkit.plan_ads(serial, restore=restore, paired=paired))
 
     def _plan_reboot(self):
         self._plan("Prepare reboot", lambda toolkit, serial: toolkit.plan_reboot(serial))

@@ -1,6 +1,6 @@
 """Reviewable optional Fire apps. Profiles apply only to packages found on the tablet."""
 
-STANDARD = {
+_PREVIOUS_STANDARD = {
     'com.amazon.kindle': 'Kindle books',
     'com.amazon.avod': 'Prime Video',
     'com.audible.application.kindle': 'Audible',
@@ -22,7 +22,7 @@ STANDARD = {
     'com.android.contacts': 'Contacts',
     'com.android.music': 'Music',
 }
-EXTRA = {
+_PREVIOUS_EXTRA = {
     'com.amazon.client.metrics': 'Amazon client metrics',
     'com.amazon.device.metrics': 'Amazon device metrics',
     'com.amazon.wirelessmetrics.service': 'Wireless metrics',
@@ -36,8 +36,46 @@ EXTRA = {
 STOCK_HOME = 'com.amazon.firelauncher'
 OFFERS = 'com.amazon.kindle.kso'
 UPDATERS = ('com.amazon.device.software.ota', 'com.amazon.device.software.ota.override')
-DEBLOAT_PROFILES = {'standard': tuple(STANDARD), 'complete': (*STANDARD, *EXTRA)}
-APP_LABELS = {**STANDARD, **EXTRA, STOCK_HOME: 'Fire Launcher', OFFERS: 'Special Offers',
+_LABELS = {
+    **_PREVIOUS_STANDARD, **_PREVIOUS_EXTRA,
+    'com.amazon.geo.client.maps': 'Maps',
+    'com.amazon.iris': 'Amazon news',
+    'com.amazon.smartgenie': 'Device Dashboard',
+    'com.amazon.webapp': 'Kindle Store',
+    'com.washingtonpost.rainbow': 'Washington Post',
+    'org.mopria.printplugin': 'Mopria Print Service',
+    'com.amazon.cloud9': 'Silk Browser',
+    'com.amazon.imdb.tv.mobile.app': 'Amazon streaming TV',
+    'com.amazon.kindle.otter.oobe': 'Device setup',
+    'com.amazon.tahoe': 'Amazon Kids',
+    'com.amazon.zico': 'Documents',
+    'com.android.calculator2': 'Calculator',
+    'com.android.camera2': 'Camera',
+    'com.android.deskclock': 'Clock',
+}
+
+# Package identifiers observed in the ordinary Windows v46 preset branches.
+# The preview separately identifies protected infrastructure such as device setup.
+_STANDARD = tuple(sorted((
+    'com.amazon.ags.app', 'com.amazon.alexa.youtube.app', 'com.amazon.avod',
+    'com.amazon.csapp', 'com.amazon.geo.client.maps', 'com.amazon.iris', 'com.amazon.kindle',
+    'com.amazon.kindle.personal_video', 'com.amazon.mp3', 'com.amazon.ods.kindleconnect',
+    'com.amazon.photos', 'com.amazon.photos.importer', 'com.amazon.smartgenie',
+    'com.amazon.weather', 'com.amazon.webapp', 'com.amazon.windowshop', 'com.android.music',
+    'com.audible.application.kindle', 'com.goodreads.kindle', 'com.kingsoft.office.amz',
+    'com.washingtonpost.rainbow', 'org.mopria.printplugin',
+)))
+_COMPLETE = tuple(sorted((*_STANDARD,
+    'com.amazon.cloud9', 'com.amazon.dee.app', 'com.amazon.imdb.tv.mobile.app',
+    'com.amazon.kindle.otter.oobe', 'com.amazon.tahoe', 'com.amazon.venezia', 'com.amazon.zico',
+    'com.android.calculator2', 'com.android.calendar', 'com.android.camera2',
+    'com.android.contacts', 'com.android.deskclock', 'com.android.email',
+)))
+DEBLOAT_PROFILES = {
+    'standard': _STANDARD, 'complete': _COMPLETE,
+    'standard-v0.2': tuple(_PREVIOUS_STANDARD), 'complete-v0.2': (*_PREVIOUS_STANDARD, *_PREVIOUS_EXTRA),
+}
+APP_LABELS = {**_LABELS, STOCK_HOME: 'Fire Launcher', OFFERS: 'Special Offers',
               UPDATERS[0]: 'Fire OS updater', UPDATERS[1]: 'Fire OS updater override'}
 
 _CORE = {

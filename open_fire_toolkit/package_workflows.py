@@ -10,7 +10,7 @@ import re
 import tempfile
 
 from .adb import AdbError
-from .apk import ApkError, GOOGLE_SIGNER_SHA256, MAX_APK_BYTES, _open_regular_file, file_sha256
+from .apk import ApkError, MAX_APK_BYTES, PLAY_PACKAGES, _open_regular_file, file_sha256, google_signer_is_trusted
 from .package_catalog import APP_LABELS, DEBLOAT_PROFILES, OFFERS, STOCK_HOME, UPDATERS, is_protected
 from .workflows import WorkflowPlan
 
@@ -27,7 +27,6 @@ _PARAMS = {
     'debloat': {'profile', 'mode', 'list_file'}, 'launcher-set': {'component', 'disable_stock'},
     'keyboard-set': {'component'}, 'sideload': {'paths', 'signer'}, 'system-update': {'paths', 'signer'},
 }
-_GOOGLE = {'com.google.android.gsf', 'com.google.android.gsf.login', 'com.google.android.gms', 'com.android.vending'}
 _STATE_LIMIT = 1024 * 1024
 _STATES = {'enabled', 'disabled', 'uninstalled'}
 
@@ -72,18 +71,44 @@ def _limited_read(path, limit):
     return data
 
 
-def _optional_packages(profile, list_file):
+def _optional_packages(profile, list_file, mode):
+    if mode not in {'auto', 'disable', 'uninstall', 'enable'}:
+        raise _error('Choose auto, disable, uninstall or enable for this list.')
     if profile != 'custom':
         if profile not in DEBLOAT_PROFILES or list_file:
-            raise _error('Choose standard, complete or a custom package list.')
-        return DEBLOAT_PROFILES[profile]
+            raise _error('Select a built-in profile or a custom package list.')
+        return DEBLOAT_PROFILES[profile], 'disable' if mode == 'auto' else mode
     if not list_file:
         raise _error('Select a custom package list.')
-    text = _limited_read(Path(list_file), 128 * 1024).decode('utf-8-sig')
-    entries = [line for raw in text.splitlines() if (line := raw.partition('#')[0].strip())]
+
+    path = Path(list_file)
+    data = _limited_read(path, 128 * 1024)
+    encoding = 'utf-16' if data.startswith((b'\xfe\xff', b'\xff\xfe')) else 'utf-8-sig'
+    lines = data.decode(encoding).splitlines()
+    toolbox_format = path.suffix.lower() == '.debloat' or any(line.strip().startswith('ListType=') for line in lines)
+    declared = ''
+    entries = []
+    for raw in lines:
+        line = raw.strip()
+        if line.startswith('ListType='):
+            if declared or line not in {'ListType=debloat', 'ListType=restore'}:
+                raise _error('Expected a single ListType=debloat or ListType=restore directive.')
+            declared = line.partition('=')[2]
+            continue
+        if not line or line.startswith(('^', '+', '#')):
+            continue
+        if '#' in line:
+            if toolbox_format:
+                continue  # Toolbox treats an annotated row as a comment, not a target.
+            line = line.partition('#')[0].strip()
+        entries.append(line)
     if not entries:
         raise _error('The custom package list is empty.')
-    return _selection(entries)
+    if mode == 'auto':
+        mode = 'enable' if declared == 'restore' else 'disable'
+    elif (declared == 'restore' and mode != 'enable') or (declared == 'debloat' and mode == 'enable'):
+        raise _error('The selected action conflicts with the file ListType. Choose auto to follow the file.')
+    return _selection(entries), mode
 
 
 def _state_after(op, before):
@@ -297,10 +322,14 @@ class PackageWorkflows:
             saved = record.get('states', {})
             snapshot['undo-digest'] = self._pkg_undo_digest(record)
         if op == 'debloat':
-            mode = params.get('mode', 'disable')
-            if mode not in {'disable', 'uninstall'}:
-                raise _error('Choose disable or uninstall for debloat.')
-            requested = _optional_packages(params.get('profile', 'standard'), params.get('list_file', ''))
+            requested, mode = _optional_packages(params.get('profile', 'standard'), params.get('list_file', ''),
+                                                 params.get('mode', 'auto'))
+            snapshot['list-mode'] = mode
+            # The reviewed input list stays stable on retry even when some apps
+            # already reached the target and drop out of the remaining writes.
+            identity = ('debloat', params.get('profile', 'standard'), mode, requested)
+            snapshot['list-source'] = hashlib.sha256(json.dumps(identity).encode()).hexdigest()
+            details.append(f'List action: {mode} for owner user 0.')
         elif op == 'undo':
             if not saved:
                 raise _error('No package undo state is available for this tablet.')
@@ -312,6 +341,9 @@ class PackageWorkflows:
             if not requested or any(p not in UPDATERS for p in requested):
                 raise _error('Select one or more known Fire OS update packages.')
             warnings.append('Disabling the updater can block security updates. Fire OS may protect these packages.')
+        if OFFERS in requested and op in {'ads-disable', 'ads-restore', 'undo'}:
+            if self._state_key(plan.serial) in self._load_state().get('paired_ads', {}):
+                raise _error('Restore the paired ad controls before changing the Special Offers package separately.')
         if op == 'clear-data':
             warnings.append('This permanently deletes the selected apps’ owner data, preferences and sign-ins.')
         if mode == 'uninstall':
@@ -323,6 +355,9 @@ class PackageWorkflows:
                 raise _error('This firmware does not advertise a package-specific rollback command.')
             system = self._pkg_list(plan.serial, '-s')
         for p in requested:
+            if op == 'debloat' and is_protected(p):
+                details.append(f'Skipped {p}: protected infrastructure or dedicated workflow required.')
+                continue
             guard_op = op
             if op == 'undo' and p in (*UPDATERS, OFFERS):
                 guard_op = 'ads-restore' if p == OFFERS else 'ota-enable'
@@ -417,7 +452,7 @@ class PackageWorkflows:
             raise _error('Choose 1 to 32 local standalone APK files.')
         if any(not isinstance(p, str) or len(p) > 4096 or not Path(p).is_absolute() for p in raw_paths):
             raise _error('Every APK path must be absolute.')
-        verifier = self._verifier()
+        verifier = self._verifier(plan.device.sdk)
         apks = tuple(verifier.inspect(Path(p)) for p in raw_paths)
         self._pkg_validate_apks(plan, requested, apks)
         states = self._pkg_states(plan.serial)
@@ -453,18 +488,19 @@ class PackageWorkflows:
                 raise _error(f'Missing verified signing identity for {apk.package}.')
             if signer and set(apk.signer_sha256) != {signer}:
                 raise _error(f'Signer mismatch for {apk.package}.')
-            if apk.package in _GOOGLE and set(apk.signer_sha256) != {GOOGLE_SIGNER_SHA256}:
+            if apk.package in PLAY_PACKAGES and not google_signer_is_trusted(apk):
                 raise _error(f'Google signing certificate mismatch for {apk.package}.')
 
     def _pkg_install(self, plan, completed):
         self._pkg_validate_apks(plan, plan.packages, plan.apks)
         if not 1 <= len(plan.apks) <= 32 or tuple(apk.package for apk in plan.apks) != plan.packages:
             raise _error('Invalid APK installation plan.')
-        verifier = self._verifier()
-        with tempfile.TemporaryDirectory(prefix='fire-tools-install-') as staging:
+        verifier = self._verifier(plan.device.sdk)
+        with tempfile.TemporaryDirectory(prefix='fire-tools-install-') as temp:
+            staging = Path(temp).resolve(strict=True)
             staged = []
             for index, apk in enumerate(plan.apks):
-                target = Path(staging) / f'{index}.apk'
+                target = staging / f'{index}.apk'
                 with _open_regular_file(apk.path) as (source, size):
                     if not 0 < size <= MAX_APK_BYTES:
                         raise _error('Choose a regular APK of at most 512 MiB.')
@@ -540,16 +576,16 @@ class PackageWorkflows:
         previous = record.get('states', {})
         previous_source = record.get('restore_source')
         undo = plan.operation == 'undo'
-        source = None
+        source = snapshot.get('list-source')
         if restore_steps is not None:
             changes = restore_steps
             source = snapshot['package sha256']
         else:
-            mode = plan.params.get('mode', 'disable') if plan.operation == 'debloat' else plan.operation
+            mode = snapshot['list-mode'] if plan.operation == 'debloat' else plan.operation
             changes = [(p, snapshot[p], previous[p] if undo else _state_after(mode, snapshot[p]))
                        for p in plan.packages]
 
-        # Only retries of the same incomplete snapshot may extend its undo batch.
+        # Only a retry of the same incomplete import or list may extend the undo batch.
         recorded = dict(previous) if source and source == previous_source else {}
         for p, before, target in changes:
             current = self._pkg_states(plan.serial)
@@ -559,7 +595,7 @@ class PackageWorkflows:
                 continue
             if target in {'disabled', 'uninstalled'}:
                 self._pkg_guard_active(plan.serial, (p,), current)
-                if source:
+                if restore_steps is not None:
                     self._guard_optional_package(plan.serial, p)
             self._pkg_device(plan)
             first_change = not undo and not recorded
@@ -594,7 +630,7 @@ class PackageWorkflows:
             self._pkg_save_undo(plan.device, data, remaining)
             completed.append('Previous owner states confirmed for the reviewed packages.')
         elif source and recorded:
-            # This restore completed. A later import starts its own undo batch.
+            # This request completed. A later operation starts its own undo batch.
             self._pkg_save_undo(plan.device, data, recorded)
 
     def _pkg_apply_component(self, plan, completed):

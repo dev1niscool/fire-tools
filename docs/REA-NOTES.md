@@ -19,3 +19,54 @@ The reference was Fire Toolbox 46.0, a managed Windows assembly targeting .NET F
 The observations informed package ordering and the experimental settings workflow. The toolkit implementation is original Python under the MIT license. The initial 0.1 release used local APK inputs with signature verification and a single reversible ad-setting write. Version 0.2 adds the workflows documented in [FEATURES.md](FEATURES.md), including package-based ad controls and the independent source-built helper. Reference binaries, bundled assets, APKs, and raw REA outputs are outside the toolkit distribution. Static inspection establishes the behavior present in the inspected assembly. Hardware compatibility and ad persistence require separate device tests.
 
 The production signing certificate pinned for the Google APKs has SHA-256 `f0fd6c5b410f25cb25c3b53346c8972fae30f8ee7411df910480ad6b2d60db83`. [AndroidX source](https://android.googlesource.com/platform/frameworks/support/+/7be3a623dfcf461ff6e2004799ac2e652c8d23a8) · [Independent apksigner transcript](https://github.com/spytrap-org/spytrap-adb/issues/34)
+
+## Reproducing the v46 workflow comparison
+
+The follow-up inspection selected all four relevant forms in one REA query. Set `toolbox` to the Windows executable with the SHA-256 above and choose a new evidence file. The full evidence record from this run is `ev_99a179be63afd5bad8ba9e2c03e9eae0deec1eca16d9cf135430440da823df76` (provider `rea-dotnet-static` v1). Method tokens below identify rows in this assembly. Supplemental static CIL inspection resolved branch destinations and array sizes. Archive inspection and Android Build Tools supplied the APK observations.
+
+```sh
+npx -y rea-agents@6.10.1 inspect-managed-members "$toolbox" \
+  --type FireToolbox.PlayServices --type FireToolbox.ManageGoogle \
+  --type FireToolbox.RemoveAds --type FireToolbox.ManageAmazon \
+  --detail summary --evidence_output "$PWD/workflows-v46.json" --json
+```
+
+### Installing Google components
+
+`PlayServices.InstallGServices` (`0x060000da`) selects a services bundle using the Android major release and the tablet’s first reported ABI. It looks up the separate Store download, stages the files and issues an install request per APK. Its Google path reserves the first four positions for Account Manager, Services Framework, Play services and Play Store. The Calendar and Contacts checkboxes append optional adapters. Their branches also request that Android enable the corresponding calendar or contacts content provider. The method inspects install output, requests battery exemptions for Google packages, launches the Store and offers a reboot. `ManageGoogle.InstallAdditional_DoWork` (`0x060009ef`) handles additional components later.
+
+The call to `Utils.InstallAPK` passes the tablet user ID. For a fresh installation on its ordinary modern path, v46 requests Android’s grant-runtime-permissions install flag. When a package already exists, the helper also has an install-existing branch for the selected user. Fire Tools targets the adult owner, verifies the local APK and uses Android’s replacement install to preserve existing app data. Its default leaves the app’s runtime permission prompts under the owner’s control.
+
+For Android 11 the catalog embedded in v46 points both architecture labels to the same services archive. The archive records below were downloaded from the catalog’s Codeberg repository and matched the corresponding embedded SHA-256 checksums. These are historical inputs that make the original install path reproducible. Use the README’s package listings to choose a release for your tablet. [Reference archive repository](https://codeberg.org/JSens1998/GAppsInstaller) · [Fire Tools setup](../README.md#install-google-play)
+
+| Catalog input | Verified archive SHA-256 |
+| --- | --- |
+| Android 11 services | `7fda53ec69acfe7079d49f510bc8b58630449d6f4010b439bc1242b2d950e7bb` |
+| Play Store | `a9dd7e20b7ed6ab77055f662d2673c6466313ccd789d41bbb4d168856f014e8f` |
+| Contacts sync variants | `377c6c068c770e998068d31b1b84f511f42a4190d8076c337aa1711376be5480` |
+
+Google Build Tools 36.0.0 `aapt dump badging` and `apksigner verify --verbose --print-certs` identified the following signed members. Minimum API and package identity come from the APK. None of these applications were installed or launched for this inspection.
+
+| Original file | Declared package | Reported version | Minimum API |
+| --- | --- | --- | --- |
+| `AccountMgr7-X32.apk` | `com.google.android.gsf.login` | 7.1.2 | 23 |
+| `ServicesFramework11-X64.apk` | `com.google.android.gsf` | 10-6494331 | 29 |
+| `PlayServices11-X64.apk` | `com.google.android.gms` | 25.20.37 (150400-766884605) | 30 |
+| `Playstore.apk` | `com.android.vending` | 36.3.12-21 | 21 |
+| `ConSync10.apk` | `com.google.android.syncadapters.calendar` | 2021.41.2-406147485-release | 30 |
+
+Two details affect compatibility. The services APK reports `arm64-v8a` as its primary ABI. It contains a smaller set of `armeabi-v7a` libraries that AAPT reports as `alt-native-code`. Its effective signer on API 30 has SHA-256 `7ce83c1b71f3d572fed04c8d40c5cb10ff75e6d87d9df6fbd53f0468c2905053`. Android’s verifier accepted its v3 signature with the SDK range restricted to 30. Reading that APK’s signing lineage with `apksigner lineage --in FILE --print-certs` shows the Google production key pinned above as the first signer and this rotated key as the second. The other four inspected members report the pinned key as their APK signer.
+
+The original Android 11 Contacts branch selects the file named `ConSync10.apk`. The actual file in the checksum-matched archive declares **Calendar Sync**. Installing that file cannot supply the Contacts adapter package. Choose adapters by their declared package IDs. The catalog's separate XDA Calendar download returned HTTP 403 during inspection, so its content remains unverified.
+
+### Suppressing and restoring lock-screen offers
+
+`RemoveAds.ToggleAds` (`0x0600155c`) uses the global `LOCKSCREEN_AD_ENABLED` setting (0 to suppress, 1 to re-enable) and a device-dependent package operation on `com.amazon.kindle.kso`. The restoration branch selects the matching enable/unhide command. Ordinary package branches also contain package-data clears and permission changes. The method warns that a failed package disable can leave only temporary suppression. A separate branch for restricted firmware uses an on-tablet Automate flow. Its restore prompt asks the owner to stop the flow before restoring the setting. Supplemental inspection of `MainMenu.CheckOSVer` found that v46 routes Fire OS 8 version numbers above 8.3.3.7 to the restricted path. This describes v46’s decision for that release family. Ad visibility and persistence on later firmware require a device test.
+
+Fire Tools provides the ordinary setting and package controls and an independent foreground helper. Setting undo restores the recorded original value, including its absence. Stop or restore the helper before undoing a desktop change so a running monitor cannot reapply the setting. Clearing package data and granting unrelated permissions are outside these ad actions. [Lock-screen ads](../README.md#lock-screen-ads-and-optional-apps)
+
+### Debloating Amazon apps
+
+`ManageAmazon.AutoDisHide_DoWork` (`0x060007f6`) builds package arrays containing 22 entries for Standard and 35 for Complete. Both include `org.mopria.printplugin`. Complete also includes Amazon Device Setup (`com.amazon.kindle.otter.oobe`). The method iterates each entry up to the selected count and applies the tablet’s package disable/hide or enable/unhide operation. This changes availability to the Android user. The preset list and saved pre-change package state serve different purposes when restoring apps.
+
+`ReadDebloatFile_DoWork` (`0x06000801`) reads the custom list, previews the described packages and chooses disable or enable from its declared list type. `LineContainsSpecial` (`0x06000803`) separates metadata and notes from package entries, and `CustomDebloat_DoWork` (`0x06000804`) applies the selected operation. The three distributed example lists use one package ID per line and a `ListType=debloat` directive. In two examples the directive is the **last** line. Caret-prefixed descriptions, hash comments, plus-prefixed display text, empty lines, trailing spaces and Windows or Unix newlines are relevant when importing an existing list. A restore list requests re-enabling the named packages. Fire Tools also records prior package states for undo. [Feature coverage](FEATURES.md)

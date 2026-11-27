@@ -261,7 +261,11 @@ class AdvancedTools:
 
     def _browse(self, field, value):
         dialog = getattr(self.app.files, self.FILE_FIELDS[field.kind])
-        selected = dialog(parent=self.app.root, title=field.label)
+        options = {"parent": self.app.root, "title": field.label}
+        if field.key == "list_file":
+            options["filetypes"] = (("Fire Toolbox lists", "*.debloat"), ("Text lists", "*.txt"),
+                                    ("All files", "*"))
+        selected = dialog(**options)
         if selected:
             value.set(json.dumps(list(selected)) if field.kind == "files" else selected)
 

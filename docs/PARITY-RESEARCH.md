@@ -8,7 +8,11 @@ The original `Fire Toolbox V46.0.exe` has SHA-256 `34be37dff0c3bf40cb34155896e92
 
 Relevant local evidence is `/workspace/fire-toolbox-review/static/il_summary.json`, `all.il` and the REA `artifact.json`, `members.json` and `utils.json`. Method/class anchors below identify reproducible evidence without embedding the original implementation. UI strings and matching action methods establish that a workflow exists in the inspected assembly; old handlers can remain in the assembly and are not proof every option is reachable on every tablet. Hardware success and complete click-by-click behavioral equivalence have not been tested.
 
-The [author's XDA thread](https://xdaforums.com/t/windows-linux-tool-fire-toolbox-v46-0.3889604/) could not be read in this research pass: the local cached response is a connection challenge, and the web fetch returned 502. Third-party sites with similar names were not treated as official authority. This audit is consequently grounded primarily in the versioned executable's static behavior, not marketing summaries.
+### XDA setup and download provenance
+
+Datastream33’s opening post describes connecting by USB, enabling ADB and approving the computer’s RSA fingerprint on the tablet. Its compatibility table identifies the 2023 Fire HD 10 as generation 13, Fire OS 8 and Android 11. The FAQ describes Fire OS restrictions on package changes. The post and FAQ were read from the November 8, 2026 archive after the live forum presented a verification page. [Opening post](https://xdaforums.com/t/windows-linux-tool-fire-toolbox-v46-0.3889604/#post-78664542) · [FAQ](https://xdaforums.com/t/windows-linux-tool-fire-toolbox-v46-0.3889604/#post-78664546) · [Archived thread](https://web.archive.org/web/20261108011721/https://xdaforums.com/t/windows-linux-tool-fire-toolbox-v46-0.3889604/)
+
+The author’s Windows v46 table links the same Google Drive and MEGA files reviewed here. Both downloaded ZIPs match the published SHA-256 `6425d9bb6e1ae231d6bf14865790bd8846075795ac334b6d9f05b5f53cbd47af`. This establishes which release was examined. The command ordering, package identities and undo logic below come from static inspection of its Windows executable and associated resources. See the [REA workflow evidence](REA-NOTES.md) and [current implementation status](FEATURES.md).
 
 ## Feature matrix at baseline
 

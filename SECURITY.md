@@ -6,7 +6,7 @@ The toolkit has no telemetry, auto-updater or automatic downloads. Its network-r
 
 Changes require an explicit tablet serial and confirmation. The service checks the selected tablet's manufacturer, model, Android API level and active Android user before making a change. ADB debugging authorization applies to your computer. Revoke that authorization from the tablet when you are finished if it is no longer needed.
 
-Google Play installation verifies all selected APKs with Google's `apksigner.jar` and the pinned Google first-party Android production certificate. The package allowlist, archive and compatibility checks and staged-file rechecks constrain what the installer accepts. A valid signature identifies the signer. It cannot establish that an APK is suitable for your tablet or that its code is safe to run. [AndroidX certificate reference](https://android.googlesource.com/platform/frameworks/support/+/7be3a623dfcf461ff6e2004799ac2e652c8d23a8)
+Google Play installation verifies all selected APKs with Google's `apksigner.jar` for the tablet’s Android API. Fire Tools requires the pinned Google first-party Android production certificate. For the specific Play services key rotation observed in v46 it accepts the known successor only after checking its v3 signature and the two-certificate signing lineage rooted in that pin. The package allowlist, archive and compatibility checks and staged-file rechecks constrain what the installer accepts. A valid signature identifies the signer. It cannot establish that an APK is suitable for your tablet or that its code is safe to run. [AndroidX certificate reference](https://android.googlesource.com/platform/frameworks/support/+/7be3a623dfcf461ff6e2004799ac2e652c8d23a8)
 
 Generic sideloading verifies APK signatures and shows the signer identity; it does not imply that every signer is trusted. An optional expected fingerprint restricts the signer. Core Google Play identities still require the Google certificate. The source-built helper has a locally generated signing identity; its dedicated grant workflow checks the installed helper against the fingerprint you supply. Do not use a fingerprint obtained from an untrusted replacement app.
 
@@ -23,7 +23,7 @@ The optional ad helper declares no network permission, disables Android backup, 
 | Windows | `%LOCALAPPDATA%\open-fire-toolkit` with the user's home directory as fallback |
 | Linux | `$XDG_STATE_HOME/open-fire-toolkit` or `~/.local/state/open-fire-toolkit` |
 
-`state.json` stores the saved lock-screen setting, associated with a hash of the tablet serial and its reported model. Preserve this file while a restore may still be needed. The toolkit does not collect account passwords or Google credentials.
+`state.json` stores the saved lock-screen setting and, for paired suppression, the exact Special Offers package mode, associated with a hash of the tablet serial and its reported model. Preserve this file while a restore may still be needed. The toolkit does not collect account passwords or Google credentials.
 
 `packages-state.json` stores package recovery targets, `device-settings-<serial hash>.json` stores settings undo, and `private-dns-<serial hash>.json` stores the prior resolver configuration. Keep the complete state directory until you finish restoring changes. These files are not part of the source release. State and output directories are pinned during writes; symlinked or reparse-point paths are refused.
 

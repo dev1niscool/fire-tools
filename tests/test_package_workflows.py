@@ -281,6 +281,83 @@ class PackageWorkflowTests(unittest.TestCase):
             with self.assertRaises(ToolkitError):
                 self.plan('debloat', profile='custom', list_file=str(file))
 
+    def test_toolbox_list_footer_and_restore_keep_direction_and_undo(self):
+        custom = self.root / 'selected.debloat'
+        custom.write_text('^Group description\n+Section\n++End\n' + A + ' \n' + B +
+                          '\ncom.android.settings\n#Ignored package\nListType=debloat\n', encoding='utf-16')
+        plan = self.plan('debloat', profile='custom', list_file=str(custom))
+        self.assertEqual(plan.packages, (A, B))
+        self.assertIn('Skipped com.android.settings: protected', ' '.join(plan.details))
+        self.execute(plan)
+        self.assertEqual(self.adb.disabled, {A, B})
+        custom.write_text('ListType=restore\n^Test list\n' + A + '\n' + B + ' # annotated line\n')
+        with self.assertRaises(ToolkitError):
+            self.plan('debloat', profile='custom', list_file=str(custom), mode='disable')
+        restore = self.plan('debloat', profile='custom', list_file=str(custom))
+        self.assertEqual(restore.packages, (A,))
+        self.assertIn('disabled → enabled', ' '.join(restore.details))
+        self.execute(restore)
+        self.assertEqual(self.adb.disabled, {B})
+        self.execute(self.plan('undo'))
+        self.assertEqual(self.adb.disabled, {A, B})
+
+    def test_incomplete_debloat_retry_preserves_original_states(self):
+        custom = self.root / 'apps.debloat'
+        custom.write_text(A + '\n' + B + '\nListType=debloat')
+        for options in ({'profile': 'standard'}, {'profile': 'custom', 'list_file': str(custom)}):
+            with self.subTest(options=options):
+                self.adb.denied = B
+                with self.assertRaisesRegex(ToolkitError, 'Permission Denial'):
+                    self.execute(self.plan('debloat', **options))
+                self.assertEqual(self.adb.disabled, {A})
+                self.adb.denied = ''
+                self.execute(self.plan('debloat', **options))
+                self.assertEqual(self.adb.disabled, {A, B})
+                self.execute(self.plan('undo'))
+                self.assertFalse(self.adb.disabled)
+
+    def test_different_custom_list_starts_its_own_undo_batch(self):
+        custom = self.root / 'apps.debloat'
+        custom.write_text(A + '\n' + B)
+        options = {'profile': 'custom', 'list_file': str(custom)}
+        self.adb.denied = B
+        with self.assertRaisesRegex(ToolkitError, 'Permission Denial'):
+            self.execute(self.plan('debloat', **options))
+        custom.write_text(B)
+        self.adb.denied = ''
+        self.execute(self.plan('debloat', **options))
+        self.execute(self.plan('undo'))
+        self.assertEqual(self.adb.disabled, {A})
+
+    def test_list_direction_change_after_preview_is_rejected(self):
+        custom = self.root / 'apps.debloat'
+        custom.write_text(A + '\nListType=debloat')
+        plan = self.plan('debloat', profile='custom', list_file=str(custom))
+        custom.write_text(A + '\nListType=restore')
+        with self.assertRaises(ToolkitError):
+            self.execute(plan)
+        self.assertFalse(self.adb.writes)
+        for header in ['ListType=other', 'ListType=debloat\nListType=restore']:
+            custom.write_text(A + '\n' + header)
+            with self.assertRaises(ToolkitError):
+                self.plan('debloat', profile='custom', list_file=str(custom))
+
+    def test_standard_complete_and_legacy_membership(self):
+        from open_fire_toolkit.package_catalog import DEBLOAT_PROFILES
+        excluded = {'com.android.contacts', 'com.android.calendar', 'com.android.email', 'com.amazon.dee.app'}
+        self.assertFalse(excluded.intersection(DEBLOAT_PROFILES['standard']))
+        self.assertTrue(excluded.issubset(DEBLOAT_PROFILES['complete']))
+        self.assertTrue(excluded.issubset(DEBLOAT_PROFILES['standard-v0.2']))
+        self.assertIn('org.mopria.printplugin', DEBLOAT_PROFILES['standard'])
+        setup = 'com.amazon.kindle.otter.oobe'
+        self.adb.known.add(setup)
+        self.adb.present.add(setup)
+        self.adb.disabled.add(A)
+        self.assertEqual(self.plan('debloat', profile='standard', mode='enable').packages, (A,))
+        complete = self.plan('debloat', profile='complete')
+        self.assertNotIn(setup, complete.packages)
+        self.assertIn('Skipped ' + setup + ': protected', ' '.join(complete.details))
+
     def test_presets_exclude_updater_and_specialized_targets(self):
         for profile in ('standard', 'complete'):
             plan = self.plan('debloat', profile=profile)
@@ -292,6 +369,49 @@ class PackageWorkflowTests(unittest.TestCase):
             self.assertIn(pkg, self.adb.disabled)
             self.execute(self.plan(prefix + ('-restore' if prefix == 'ads' else '-enable'), **kwargs))
             self.assertNotIn(pkg, self.adb.disabled)
+
+    def test_special_offers_package_plans_wait_for_paired_restore(self):
+        self.execute(self.plan('ads-disable'))
+        stale_restore = self.plan('ads-restore')
+        stale_undo = self.plan('undo')
+        self.start_paired_ads_with_disabled_package()
+        before = list(self.adb.writes)
+        for op in ('ads-restore', 'ads-disable', 'undo'):
+            with self.subTest(op=op), self.assertRaisesRegex(ToolkitError, '[Pp]aired'):
+                self.plan(op)
+        for plan in (stale_restore, stale_undo):
+            with self.assertRaisesRegex(ToolkitError, '[Pp]aired'):
+                self.execute(plan)
+        self.assertEqual(self.adb.writes, before)
+        self.execute(self.tool.plan_ads(SERIAL, restore=True, paired=True))
+        self.execute(self.plan('undo'))
+        self.assertNotIn(ADS, self.adb.disabled)
+
+    def test_paired_ads_allows_unrelated_package_plan_and_undo(self):
+        self.adb.disabled.add(ADS)
+        self.start_paired_ads_with_disabled_package()
+        self.execute(self.plan('disable', (A,)))
+        self.execute(self.plan('undo'))
+        self.assertEqual(self.adb.disabled, {ADS})
+        self.execute(self.tool.plan_ads(SERIAL, restore=True, paired=True))
+
+    def start_paired_ads_with_disabled_package(self):
+        shell = self.adb.shell
+        value = '1'
+        def handle_ads(serial, args, timeout=30):
+            nonlocal value
+            if tuple(args) == ('dumpsys', 'package', ADS):
+                mode = '3' if ADS in self.adb.disabled else '1'
+                return f' User 0: installed=true enabled={mode}'
+            if 'LOCKSCREEN_AD_ENABLED' in args:
+                if 'get' in args:
+                    return value
+                self.assertIn('put', args)
+                value = args[-1]
+                return ''
+            return shell(serial, args, timeout)
+        self.adb.shell = handle_ads
+        self.execute(self.tool.plan_ads(SERIAL, paired=True))
 
     def test_launcher_verifies_replacement_before_disabling_stock_and_restores(self):
         alternate = HOME + '/.Home'
@@ -413,6 +533,8 @@ class PackageWorkflowTests(unittest.TestCase):
         base = ApkInfo(path, A, 5, '5.0', 23, (), hashlib.sha256(b'apk').hexdigest(), ('a' * 64,))
         with patch.object(self.tool, '_verifier') as verifier:
             for changes in [dict(package='com.android.settings'), dict(package='com.google.android.gms'),
+                            dict(package='com.google.android.syncadapters.contacts'),
+                            dict(package='com.google.android.syncadapters.calendar'),
                             dict(min_sdk=31), dict(abis=('x86',)), dict(split=True)]:
                 verifier.return_value.inspect.return_value = replace(base, **changes)
                 with self.subTest(changes=changes), self.assertRaises(ToolkitError):

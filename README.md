@@ -1,6 +1,6 @@
 # Fire Tools
 
-An independent, MIT-licensed desktop and command-line toolkit for Amazon Fire tablets. Version 0.2 expands the original focused release with bulk Amazon app management, reversible debloat presets, launcher and keyboard controls, settings, backups, shared files, screen capture, diagnostics, wireless ADB, and an optional source-built ad helper.
+An independent, MIT-licensed desktop and command-line toolkit for Amazon Fire tablets. Version 0.3 adds the Google sync adapters, Fire Toolbox v46 debloat lists and combined lock-screen ad controls. It also includes launcher and keyboard controls, backups, file transfers, screen capture and wireless ADB.
 
 This release is designed for Fire tablets running Android API 23 or later. Device changes require the primary adult (owner) profile. Compatibility on a physical tablet, including the Fire HD 10, remains unverified.
 
@@ -47,7 +47,7 @@ In PowerShell, prefix the Windows launcher with `.\`. You can also run `python -
 
 1. Install Python 3.11 or later. For the GUI use a Python installation with Tk support. The official Windows installer includes an optional Tcl/Tk component. On Debian or Ubuntu, install `python3-tk` for the distribution's Python. The CLI does not require Tk. [Python downloads](https://www.python.org/downloads/)
 2. Download Google's SDK Platform-Tools and extract the entire archive. For Google Play, also install Android SDK Build Tools using the SDK Manager in Android Studio or Google's SDK command-line tools. Use a JDK compatible with your chosen tools. JDK 17 or newer is a practical starting point. The Build Tools 36.0.0 verifier launched with OpenJDK 21 in a local smoke check. Android Studio's bundled runtime is also an option. The toolkit leaves tool and APK downloads to you. [Platform-Tools](https://developer.android.com/tools/releases/platform-tools) · [SDK Manager](https://developer.android.com/studio/command-line/sdkmanager) · [Build Tools](https://developer.android.com/tools/releases/build-tools)
-3. On the tablet, open **Settings → Device Options → About Fire Tablet**, tap **Serial Number** seven times, then enable USB debugging under **Developer Options**. Names can vary with Fire OS. Connect a USB data cable, unlock the tablet and approve the debugging prompt for your computer.
+3. On the tablet, open **Settings → Device Options → About Fire Tablet**, tap **Serial Number** seven times, then enable USB debugging under **Developer Options**. Names can vary with Fire OS. Connect a USB data cable, unlock the tablet and approve your computer’s RSA fingerprint in the debugging prompt.
 4. In **Connection**, supply the full ADB executable path, choose **Scan devices**, select your tablet, and choose **Use selected tablet**. The view shows its Android API level and supported ABIs. If it reports `unauthorized`, check the prompt on the unlocked tablet. If nothing appears, try a data-capable cable and check your operating system's ADB driver or USB permissions. [Android USB setup](https://developer.android.com/studio/run/device)
 
 | GUI field | Windows example | Linux example |
@@ -61,16 +61,15 @@ Substitute your installed SDK version and browse to the actual Java executable i
 
 ## Install Google Play
 
-Obtain standalone APKs you are legally entitled to use from a source you trust. APKMirror's listings show Android version and architecture for each variant. Choose a single **APK** variant for each package and skip split APKs, APK bundles and formats such as `.apkm` and `.xapk`. Match the tablet's Android API level and at least one supported ABI when an APK contains native libraries.
+Start with the **[Google APK download and verification guide](docs/GOOGLE-APKS.md)**. It links individual standalone APKs for the 2023 Fire HD 10 (Fire OS 8, Android 11) and gives each listing’s package ID, Android requirement and published file SHA-256. You can also look up the links in **Tools → FOSS and app source directory**, even before connecting a tablet. Match the API and processor architectures shown in **Connection**.
 
-| APK | Package | Install order |
-| --- | --- | --- |
-| [Google Account Manager](https://www.apkmirror.com/apk/google-inc/google-account-manager/) | `com.google.android.gsf.login` | First if supplied |
-| [Google Services Framework](https://www.apkmirror.com/apk/google-inc/google-services-framework/) | `com.google.android.gsf` | Required |
-| [Google Play services](https://www.apkmirror.com/apk/google-inc/google-play-services/) | `com.google.android.gms` | Required |
-| [Google Play Store](https://www.apkmirror.com/apk/google-inc/google-play-store/) | `com.android.vending` | Required |
+| Select for installation | Google components |
+| --- | --- |
+| Core files | Google Services Framework, Google Play services, Google Play Store |
+| Additional login component used by the v46 Android 11 bundle | Google Account Manager |
+| Optional account sync | Google Calendar Sync, Google Contacts Sync |
 
-1. On the **Google Play** tab, choose the files and review the install plan. The toolkit checks APK structure, package IDs, minimum Android API level, ABI compatibility and signatures. It verifies that every reported signer matches the pinned Google certificate. Signer verification establishes signing identity. APK behavior and compatibility with Fire OS still depend on the selected release. [AndroidX certificate reference](https://android.googlesource.com/platform/frameworks/support/+/7be3a623dfcf461ff6e2004799ac2e652c8d23a8)
+1. On the **Google Play** tab, choose the files and review the install plan. The toolkit checks APK structure, package IDs, minimum Android API level, ABI compatibility and signatures. It verifies Google’s signing certificate for the selected Android API. For Play services it also recognizes the verified signing-key rotation found in v46’s Android 11 package. Signer verification establishes signing identity. APK behavior and compatibility with Fire OS still depend on the selected release. [AndroidX certificate reference](https://android.googlesource.com/platform/frameworks/support/+/7be3a623dfcf461ff6e2004799ac2e652c8d23a8)
 2. Confirm the plan for the displayed tablet. The toolkit rechecks the tablet and verifies the privately staged copies before installation. Installation targets Android user 0 and uses Android’s replace mode to preserve existing app data when updating a package. Installation stops at the first failure and reports completed packages. Earlier successful installs remain in place.
 3. After a successful install, use **Review reboot** in **Connection** if you want the toolkit to restart the tablet. Then open Play Store on the tablet and sign in there. Amazon does not officially support Google Play on Fire OS. Some apps, sign-in flows, or notifications may fail.
 
@@ -81,6 +80,12 @@ For official Special Offers removal, open **Lock-screen ads** and choose **Open 
 The basic experimental option writes `LOCKSCREEN_AD_ENABLED=0` once. The firmware may ignore the value or reset it. The toolkit saves the prior value locally before writing and can restore it, including deleting the setting if it was originally absent. Keep the local undo file until you have finished experimenting. [Security and local state](SECURITY.md)
 
 Package mode disables or enables `com.amazon.kindle.kso` and confirms its package state. Firmware may protect it. The optional **Fire Tools Ads Helper** is original Java source, built locally with official Android tools. It needs Android API 24 or later and an explicit secure-settings permission grant. Its visible foreground service reapplies the setting and can stop or restore the original value. Build, verify and install it using the [helper guide](companion/README.md); use the printed signer fingerprint in the desktop helper setup. The helper's setting readback still does not establish actual ad visibility.
+
+To try the v46 package method, open **Lock-screen ads → Suppress with setting and package**. Fire Tools saves both originals, writes the global setting and disables Special Offers for the owner. **Undo setting and package** restores its exact prior package mode and setting, including an originally absent setting. A refused package change can leave the setting changed. Use the same undo after a partial result. If the helper is monitoring the setting, stop or restore it on the tablet first.
+
+For the **Fire HD 10 (13th generation)**, Amazon’s downloadable update page listed **Fire OS 8.3.3.8** on November 27, 2026. Fire Toolbox v46 treats Fire OS 8 builds above 8.3.3.7 as restricted and uses a fallback. On that firmware the package method may be refused and the setting may reset. The official Special Offers removal option is the reliable choice where available. Installing Google APKs is a separate operation. Store sign-in and ad visibility on this firmware still need a physical tablet test. [Amazon software updates](https://digprjsurvey.amazon.com/csad/help/node/G2JXLC4L34GX73TE) · [v46 behavior and XDA sources](docs/PARITY-RESEARCH.md#xda-setup-and-download-provenance) · [REA findings](docs/REA-NOTES.md#suppressing-and-restoring-lock-screen-offers)
+
+**Apps → Debloat presets** offers v46’s **Standard** (22 package IDs) and **Complete** (35). Review which packages are installed and which are protected. Complete skips Amazon Device Setup. Choose **custom** to import a Toolbox `.debloat` file. The default **auto** action follows `ListType=debloat` (disable) or `ListType=restore` (enable). **Tools → Undo saved package changes** restores the states recorded before your batch. The older Fire Tools selections remain available as `standard-v0.2` and `complete-v0.2`.
 
 The **Apps** tab retains quick controls for common Amazon apps and links to the full inventory and debloat tools. The full package picker supports multiple targets. Disabling leaves the package and its data on the tablet. Package undo retains the recorded target states even when a batch stops partway through; read its preview before restoring.
 
@@ -94,6 +99,8 @@ python3 -m open_fire_toolkit --adb /path/to/adb devices
 python3 -m open_fire_toolkit --adb /path/to/adb info --serial TABLET_SERIAL
 python3 -m open_fire_toolkit --adb /path/to/adb ads --serial TABLET_SERIAL
 python3 -m open_fire_toolkit --adb /path/to/adb ads --serial TABLET_SERIAL --restore
+python3 -m open_fire_toolkit --adb /path/to/adb ads --serial TABLET_SERIAL --with-package
+python3 -m open_fire_toolkit --adb /path/to/adb ads --serial TABLET_SERIAL --with-package --restore
 python3 -m open_fire_toolkit --adb /path/to/adb apps --serial TABLET_SERIAL --disabled-only
 python3 -m open_fire_toolkit --adb /path/to/adb reboot --serial TABLET_SERIAL
 python3 -m open_fire_toolkit --adb /path/to/adb --aapt /path/to/aapt \

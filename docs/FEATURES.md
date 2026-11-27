@@ -1,4 +1,4 @@
-# Feature coverage for Fire Tools 0.2
+# Feature coverage for Fire Tools 0.3
 
 This release implements the workflows below in original source. Automated tests exercise their commands, validation and failure handling through simulated tablets; desktop smoke tests exercise their forms and confirmation. No physical Fire tablet has been attached, so **implemented does not mean verified on your firmware**.
 
@@ -8,9 +8,9 @@ The original v46 inventory is in [PARITY-RESEARCH.md](PARITY-RESEARCH.md). That 
 
 | Area | Implemented | Limits |
 | --- | --- | --- |
-| Google Play | Google certificate-pinned local component installer; generic account/settings and app-management tools; battery exemption | User obtains APKs. No automatic firmware-specific version selection or account credentials handled on the computer. |
-| Amazon debloat | 20-entry standard and 29-entry complete lists, custom lists, selected app disable/enable/remove-for-owner/restore, saved undo | Profiles are reviewed optional-package sets, not copies of the original lists. Protected packages may refuse changes. System images remain on the tablet. |
-| Ads | One-shot setting with undo; Special Offers package controls; independent source-built foreground helper | All experimental. Helper requires API 24+, a verified local signing identity, secure-settings grant and visible notification. No ad-visibility or update-persistence guarantee. |
+| Google Play | Verified local installer for the three core Google components, Account Manager and optional Calendar/Contacts sync; generic account/settings and app-management tools; battery exemption | User obtains APKs. No automatic firmware-specific version selection or account credentials handled on the computer. |
+| Amazon debloat | 22-entry v46 Standard and 35-entry Complete lists, Toolbox debloat and restore files, legacy v0.2 lists, selected app disable/enable/remove-for-owner/restore, saved undo | The v46 identifiers match the Windows presets. Preview skips protected packages, including Device Setup. Protected packages may refuse changes. System images remain on the tablet. |
+| Ads | Setting and Special Offers together with exact undo, setting-only and package-only controls; independent source-built foreground helper | All experimental. Helper requires API 24+, a verified local signing identity, secure-settings grant and visible notification. No ad-visibility or update-persistence guarantee. |
 | Apps | Inventory filters, batch operations, clear data, force stop, launch, permission/app-op controls, standalone APK sideload/update, system update rollback | No split APKM/XAPK installation. Guided package management protects infrastructure; expert shell remains powerful. |
 | Launcher and keyboard | Select installed HOME/IME, verify replacement before stock launcher disable, restore Fire launcher, widget binding, keys/taps | No original launcher downgrade, Launcher Hijack or exploit-specific workaround reproduction. Firmware can reject defaults. |
 | Settings and privacy | Database list/get/change/delete/undo; supported backup/import; display, animation, rotation, timeout, privacy and selected sounds | No guarantee hidden Amazon settings are honored or that telemetry is eliminated. Restore deliberately validates supported portable keys. |
