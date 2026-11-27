@@ -400,6 +400,40 @@ class ExtraWorkflowTests(unittest.TestCase):
         with self.assertRaisesRegex(ToolkitError, 'saved|undo'):
             self.plan('private-dns-undo')
 
+    def test_dns_presets_preview_then_apply_the_documented_hosts_and_restore_the_original(self):
+        feature = BY_KEY['private-dns']
+        original = {'private_dns_mode': 'hostname', 'private_dns_specifier': 'my.resolver.example'}
+        self.tablet.setting_values.update(original)
+        default = run_feature(self.tool, self.serial, feature, feature_values(feature, []))
+        self.assertEqual({'mode': 'opportunistic'}, default.params)
+        presets = {
+            'cloudflare': 'one.one.one.one',
+            'cloudflare-family': 'family.cloudflare-dns.com',
+            'quad9': 'dns.quad9.net',
+            'adguard': 'dns.adguard-dns.com',
+            'adguard-family': 'family.adguard-dns.com',
+            'mullvad-adblock': 'adblock.dns.mullvad.net',
+        }
+        mode_field = next(field for field in feature.fields if field.key == 'mode')
+        self.assertTrue(presets.keys() <= set(mode_field.choices), 'Presets must be selectable in the catalog.')
+        for mode, hostname in presets.items():
+            with self.subTest(mode=mode):
+                before = list(self.tablet.writes)
+                plan = run_feature(self.tool, self.serial, feature, feature_values(feature, [f'mode={mode}']))
+                self.assertIn(hostname, '\n'.join(plan.details))
+                self.assertIn('queries', ' '.join(plan.warnings).lower())
+                self.assertEqual(before, self.tablet.writes)
+                self.run_plan(plan)
+                self.assertEqual({'private_dns_mode': 'hostname', 'private_dns_specifier': hostname},
+                                 self.tablet.setting_values)
+        self.run_plan(self.plan('private-dns-undo'))
+        self.assertEqual(original, self.tablet.setting_values)
+
+    def test_dns_preset_refuses_a_conflicting_custom_host(self):
+        with self.assertRaisesRegex(ToolkitError, 'only to hostname mode'):
+            self.plan('private-dns', mode='quad9', hostname='different.example')
+        self.assertEqual([], self.tablet.writes)
+
     def test_private_dns_stops_if_profile_changes_between_writes(self):
         plan = self.plan('private-dns', mode='hostname', hostname='resolver.example.com')
         self.tablet.switch_after_setting_write = True

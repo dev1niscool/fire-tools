@@ -13,7 +13,7 @@ from .adb import AdbError
 from .apk import ApkError, PLAY_PACKAGES, _open_regular_file, file_sha256, google_signer_is_trusted, stage_apk
 from .package_catalog import (
     APP_LABELS, DEBLOAT_COMPLETE_WARNING, DEBLOAT_PROFILES, DEBLOAT_RESTORE_DESCRIPTION,
-    OFFERS, STOCK_HOME, UPDATERS, canonical_debloat_profile, debloat_plan_title, is_protected,
+    OFFERS, PROTECTED_SERVICES, STOCK_HOME, UPDATERS, canonical_debloat_profile, debloat_plan_title, is_protected,
     package_display_name,
 )
 from .workflows import WorkflowPlan
@@ -136,7 +136,9 @@ def _optional_packages(profile, list_file, mode):
     path = Path(list_file)
     data = _limited_read(path, 128 * 1024)
     encoding = 'utf-16' if data.startswith((b'\xfe\xff', b'\xff\xfe')) else 'utf-8-sig'
-    lines = data.decode(encoding).splitlines()
+    # An annotation can contain other Unicode separators. Only physical file
+    # newlines start a package or ListType directive.
+    lines = re.split(r'\r\n?|\n', data.decode(encoding))
     toolbox_format = path.suffix.lower() == '.debloat' or any(line.strip().startswith('ListType=') for line in lines)
     declared = ''
     entries = []
@@ -191,6 +193,8 @@ def _owner_target(operation, before, saved=None):
 
 def _guard_selection(name, operation):
     _package(name)
+    if operation == 'undo' and name in PROTECTED_SERVICES:
+        return  # Older journals may restore availability; preview checks the saved target.
     if operation.startswith('ota-') and name in UPDATERS:
         return
     if operation.startswith('ads-') and name == OFFERS:
@@ -426,6 +430,9 @@ class PackageWorkflows:
             raise _error('Switch to another working HOME activity first.')
 
     def plan_package_action(self, serial, operation, packages=(), **parameters):
+        if operation == 'sideload-folder':
+            from .batch_folder import plan_sideload_folder
+            return plan_sideload_folder(self, serial, packages, **parameters)
         if operation not in _SIMPLE | _STATE_OPS | _APK_OPS | {'launcher-set', 'launcher-restore', 'keyboard-set'}:
             raise _error('Unknown package operation.')
         if parameters.keys() - _PARAMS.get(operation, set()):
@@ -529,6 +536,9 @@ class PackageWorkflows:
                 guard_op = 'ads-restore' if p == OFFERS else 'ota-enable'
             _guard_selection(p, guard_op)
             before = states.get(p, 'missing')
+            if op == 'undo' and p in PROTECTED_SERVICES and saved[p] not in {'enabled', before}:
+                details.append(f'Skipped {p}: protected service. Its undo record will be kept.')
+                continue
             if check_updaters and p in UPDATERS:
                 if op == 'undo' and (before not in {'enabled', 'disabled'} or p not in system_updaters):
                     details.append(f'Skipped {p}: not an installed system package for owner user 0. '
@@ -673,7 +683,9 @@ class PackageWorkflows:
                 raise _error(f'{apk.package} does not support this device ABI.')
             if not apk.signer_sha256 or any(not re.fullmatch('[0-9a-f]{64}', s) for s in apk.signer_sha256):
                 raise _error(f'Missing verified signing identity for {apk.package}.')
-            if signer and set(apk.signer_sha256) != {signer}:
+            if len(set(apk.signer_sha256)) != len(apk.signer_sha256):
+                raise _error(f'Duplicate signer certificate for {apk.package}.')
+            if signer and apk.signer_sha256 != (signer,):
                 raise _error(f'Signer mismatch for {apk.package}.')
             if apk.package in PLAY_PACKAGES and not google_signer_is_trusted(apk):
                 raise _error(f'Google signing certificate mismatch for {apk.package}.')

@@ -24,13 +24,22 @@
     <li><strong>Choose Review.</strong> Inspect the owner’s before/after states and skipped items. The preview filters out absent apps and protected packages.</li>
     <li><strong>Choose Confirm and run.</strong> In <strong>Apps → Package inventory</strong>, select <code>disabled</code> and choose <strong>Read</strong> to verify.</li>
   </ol>
+  <h3>Load an annotated Debloat.txt</h3>
+  <p>Save a local copy of the list. Keep one package ID per line, for example <code>com.amazon.kindle  # Kindle books</code>. In a plain text file, spaces or tabs can separate the ID from its comment. Put <code>#</code> at the start of a row to leave that app alone. In a Toolbox <code>.debloat</code> file or a list with a <code>ListType=</code> directive, a row containing <code>#</code> is skipped in full. <a href="https://github.com/mrhaydendp/Fire-Tools/blob/3a03e71b792878ec24d7118a6aeac0c7237a1431/Fire-Tools/Debloat.txt">View the reference Debloat.txt</a>.</p>
+  <p>Choose <strong>Load From File...</strong>, select your copy and review the automatic action. Fire Tools matches exact IDs against the tablet’s owner inventory. The preview identifies protected services such as app verification, VoiceView and Device Setup. Confirming disables the listed eligible apps and keeps their data. To reverse this batch, choose <strong>Undo saved package changes</strong>.</p>
 </section>
 <section id="restore">
   <h2>Restore your apps</h2>
   <ul>
-    <li><strong>To reverse your last batch,</strong> choose <strong>Apps → Undo saved package changes → Review</strong> on the same computer and tablet. This restores the saved states, even if the batch stopped partway through. Review and confirm before a new batch replaces the record.</li>
+    <li><strong>To reverse your last batch,</strong> choose <strong>Apps → Undo saved package changes → Review</strong> on the same computer and tablet. This restores saved states after an interrupted batch. If an older record would disable or remove a newly protected service, Fire Tools skips that change and keeps its record. Review and confirm before a new batch replaces the record.</li>
     <li><strong>To enable eligible apps across the Complete preset,</strong> choose <strong>Apps → Restore Everything → Review</strong>. Check the disabled apps it proposes to enable, including any you disabled separately. This works without a saved batch.</li>
     <li><strong>Choose Tools → Restore apps removed for owner</strong> and review the package. Built-in apps retain their system image. If a third-party package has disappeared from storage, restoring it may require the original signed APK.</li>
     <li><strong>Keep <code>packages-state.json</code></strong> for batch undo. Fire Tools saves the file in the desktop user’s state directory. Undo restores package states. Clearing app data is irreversible. <a href="https://github.com/dev1niscool/fire-tools/blob/main/SECURITY.md#undo-state-and-operation-lock">Find the state directory</a>.</li>
   </ul>
+</section>
+
+<section id="install-folder">
+  <h2>Install a folder of standalone APKs</h2>
+  <p>Put only the APKs you want to install in an otherwise empty folder. Select your tablet in <strong>Connection</strong>, then open <strong>Tools → Install a folder of APKs</strong>. Choose the folder and review every filename, package ID and signer. A valid signature identifies the key used to sign the file. Compare its fingerprint with the publisher’s record, or enter a trusted fingerprint to require a match for every APK. Confirm after checking the list. Android handles runtime permission requests when you use each app.</p>
+  <p>For Google Play, use the <a href="google-play.html">Google Play guide</a> and its dedicated installer, which checks Google’s signer and component order.</p>
 </section>

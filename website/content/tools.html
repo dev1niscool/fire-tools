@@ -26,6 +26,18 @@
   <p>Choose <strong>Settings → Read one setting</strong> before using <strong>Change or delete a setting</strong>. To undo, enter the same database and key in <strong>Restore a saved setting</strong>. <a href="resources.html#undo-files">Where to find undo files</a></p>
 </section>
 
+<section id="private-dns">
+  <h2>Choose a Private DNS resolver</h2>
+  <p>On Android 9 or newer, open <strong>Network → Configure private DNS</strong>. Choose a provider under <strong>DNS mode or provider</strong>, or choose <code>hostname</code> and enter your own DNS-over-TLS hostname. The preview shows the exact destination. The connection encrypts system DNS queries in transit, and the provider can see the domains requested.</p>
+  <ul>
+    <li><strong>Cloudflare</strong> offers an unfiltered resolver and a family option that filters malware and adult domains. <a href="https://developers.cloudflare.com/1.1.1.1/setup/android/">Cloudflare resolver details</a></li>
+    <li><strong>Quad9</strong> filters known malicious domains. <a href="https://docs.quad9.net/services/">Quad9 resolver details</a></li>
+    <li><strong>AdGuard</strong> filters advertising and tracking domains. Its family option also filters adult domains and enables Safe Search where supported. <a href="https://adguard-dns.io/en/public-dns.html">AdGuard resolver details</a></li>
+    <li><strong>Mullvad Adblock</strong> filters advertising and tracking domains. <a href="https://mullvad.net/en/help/dns-over-https-and-dns-over-tls">Mullvad resolver details</a></li>
+  </ul>
+  <p>To preview Quad9 from the command line, run <code>python -m open_fire_toolkit tool private-dns --serial SERIAL --param mode=quad9</code>. After applying a change, try opening a website on the tablet. To recover the settings saved before your first change, choose <strong>Network → Restore private DNS configuration</strong>.</p>
+</section>
+
 <section id="capture">
   <h2>Capture the screen or diagnose a problem</h2>
   <p>Unlock the tablet, then choose <strong>Screen and diagnostics → Save a screenshot</strong> (PNG) or <strong>Record the screen</strong> (silent MP4, 1–180 seconds). Protected video may appear blank.</p>

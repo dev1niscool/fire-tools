@@ -1,14 +1,14 @@
 # Fire Tools
 
-An independent, MIT-licensed desktop and command-line toolkit for Amazon Fire tablets. Install Google Play, manage lock-screen ads, compare debloat presets, and back up settings and files. Version 0.4.1 fixes tablet selection, upload verification and recovery after interrupted changes. [What the REA review found in Fire Toolbox v46](docs/REA-AUDIT.md)
+An independent, MIT-licensed desktop and command-line toolkit for Amazon Fire tablets. Install Google Play, manage lock-screen ads, compare debloat presets, and back up settings and files. Version 0.5.0 recognizes 33 Amazon model IDs offline, previews a folder of APKs for installation, and adds six optional Private DNS presets. [Comparison with Hayden Plumley’s Fire-Tools](docs/HAYDEN-REVIEW.md) · [Original Fire Toolbox v46 review](docs/REA-AUDIT.md)
 
 [Read the Fire tablet field guide](https://dev1niscool.github.io/fire-tools/) for setup, model compatibility and step-by-step tool guides.
 
-This release is designed for Fire tablets running Android API 23 or later. Device changes require the primary adult (owner) profile. Compatibility on a physical tablet, including the Fire HD 10, remains unverified.
+Use Windows or Linux for changes on a tablet. macOS supports the offline demo and local checks. This release is designed for Fire tablets running Android API 23 or later. Device changes require the primary adult (owner) profile. Compatibility on a physical tablet, including the Fire HD 10, remains unverified.
 
 ## Checking your download
 
-Fire Tools runs from Python source on your computer. Extract the folder containing the launchers. The optional Android helper ships as Java source, and Google apps are separate downloads. Compare your ZIP with the published SHA-256. [Download Fire Tools 0.4.1](https://github.com/dev1niscool/fire-tools/archive/refs/tags/v0.4.1.zip) · [Release notes and ZIP checksum](https://github.com/dev1niscool/fire-tools/releases/tag/v0.4.1) · [Verification record](https://github.com/dev1niscool/fire-tools/blob/main/docs/TESTING.md#code-review-release-041)
+Fire Tools runs from Python source on your computer. Extract the folder containing the launchers. The optional Android helper ships as Java source, and Google apps are separate downloads. Compare your ZIP with the published SHA-256. [Download Fire Tools 0.5.0](https://github.com/dev1niscool/fire-tools/archive/refs/tags/v0.5.0.zip) · [Release notes and ZIP checksum](https://github.com/dev1niscool/fire-tools/releases/tag/v0.5.0) · [Verification record](https://github.com/dev1niscool/fire-tools/blob/main/docs/TESTING.md#comparison-release-050)
 
 **Before connecting the tablet**, open **Google Play → Choose APKs → Check scan records**. This reads the files locally and shows whether their SHA-256 hashes match files examined in the project audit. The command-line equivalent is `./launch-linux.sh check-apks file.apk` or `.\launch-windows.cmd check-apks "C:\Downloads\file.apk"` in PowerShell. For Google components, use the **Google Play** tab. It checks Google’s signing identity and verifies the installed bytes. The general **sideload** tool also accepts apps from other publishers. [Links to the six scanned builds](docs/GOOGLE-APKS.md#files-with-a-local-scan-record) · [Audit and scan results](docs/TESTING.md)
 
@@ -19,6 +19,7 @@ After setting the AAPT, APK signer and Java paths, choose **Verify Google signat
 | Goal | Where to find it | What it does |
 | --- | --- | --- |
 | Install Google Play | **Google Play** | Verifies locally selected Google components against the pinned Google signing certificate, checks compatibility and installs them in dependency order. |
+| Install a folder of apps | **Tools → Install a folder of APKs** | Choose a folder containing standalone APKs. Review each package and signer before installing. Use the dedicated Google Play workflow for Google components. |
 | Manage firmware updates | **System updates** | Read updater package states, review a disable request and restore changes. A disabled package can delay security patches. Fire OS controls which changes take effect. [Step-by-step guide](https://dev1niscool.github.io/fire-tools/updates.html) |
 | Debloat Amazon apps | **Apps → Debloat Amazon apps** | Choose Standard (Recommended), Complete or a custom list. Review the installed targets and skipped packages before disabling or removing apps for the owner. |
 | Disable lock-screen ads | **Lock-screen ads** | Temporary setting, Special Offers package disable/restore, or optional [source-built helper](companion/README.md). All depend on firmware; no mode guarantees that ads disappear. |
@@ -49,11 +50,11 @@ Some v46 workflows still differ. For example, Fire Tools extracts installed spli
 
 Extract the source ZIP. From the extracted directory, run the command for your platform. The demo uses a fictional tablet and sample APK names. It needs no tablet, Android tools, or APK files.
 
-| Windows | Linux |
+| Windows | macOS and Linux |
 | --- | --- |
-| `launch-windows.cmd gui --demo` | `sh launch-linux.sh gui --demo` |
+| `launch-windows.cmd gui --demo` | `sh launch.sh gui --demo` |
 
-In PowerShell, prefix the Windows launcher with `.\`. You can also run `python -m open_fire_toolkit gui --demo` using your Python 3.11+ interpreter. On Linux the interpreter is typically named `python3`. Start the regular interface by running the launcher with no arguments.
+In PowerShell, prefix the Windows launcher with `.\`. You can also run `python -m open_fire_toolkit gui --demo` using your Python 3.11+ interpreter. On macOS and Linux the interpreter is typically named `python3`. The previous Linux launcher still works. Start the regular interface by running the launcher with no arguments.
 
 ![Open Fire Toolkit offline demo](docs/images/demo.png)
 

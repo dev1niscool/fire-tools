@@ -34,6 +34,7 @@ class CliTests(unittest.TestCase):
         self.assertIn(f'serial: {serial}', output)
         self.assertNotIn(info.hardware_serial_sha256, output)
         self.assertNotIn('hardware_serial_sha256', output)
+        self.assertIn('product: Fire HD 10 (2023, 13th gen)', output)
 
     def test_info_identifies_documented_amazon_build_models(self):
         base = DemoToolkit().device_info('DEMO_FIRE_HD10')

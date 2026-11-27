@@ -100,6 +100,17 @@ APP_LABELS = {
     UPDATERS[0]: 'Fire OS updater', UPDATERS[1]: 'Fire OS updater override',
 }
 
+# Older releases allowed these services in package batches. An existing undo
+# record may still need to reinstall or re-enable one for the owner.
+PROTECTED_SERVICES = {
+    'com.amazon.application.compatibility.enforcer': 'Update compatibility checker',
+    'com.amazon.appverification': 'App verification (Device Scan)',
+    'com.amazon.cloud9.systembrowserprovider': 'System browser provider',
+    'com.amazon.imp': 'Identity Mobile Platform',
+    'com.amazon.logan': 'VoiceView screen reader',
+    'com.amazon.securitysyncclient': 'Security sync client',
+    'com.android.carrierconfig': 'Carrier configuration',
+}
 _CORE = {
     'android', 'com.android.phone', 'com.android.bluetooth', 'com.android.shell',
     'com.android.systemui', 'com.android.settings', 'com.android.server.telecom',
@@ -110,7 +121,7 @@ _CORE = {
     'com.google.android.documentsui', 'com.amazon.device.settings', 'com.amazon.h2settingsfortablet',
     'com.amazon.kindle.rdmdeviceadmin', 'com.amazon.parentalcontrols', 'com.amazon.pm',
     'com.amazon.platform', 'com.amazon.fireinputdevices', 'com.amazon.identity.auth.device.authorization',
-    'com.amazon.tv.launcher', STOCK_HOME, OFFERS, *UPDATERS,
+    'com.amazon.tv.launcher', STOCK_HOME, OFFERS, *UPDATERS, *PROTECTED_SERVICES,
 }
 _CORE_TREES = (
     'com.android.providers', 'com.amazon.providers', 'com.google.android.providers',
@@ -142,9 +153,8 @@ def debloat_plan_title(profile: str, mode: str) -> str:
 
 
 def package_display_name(package: str) -> str:
-    if package in APP_LABELS:
-        return f'{APP_LABELS[package]} ({package})'
-    return package
+    label = APP_LABELS.get(package) or PROTECTED_SERVICES.get(package)
+    return f'{label} ({package})' if label else package
 
 
 def debloat_preset_comparison() -> str:

@@ -23,11 +23,17 @@ Run `python3 -m open_fire_toolkit gui --demo` in a desktop session with Tk. On L
 
 ## Release archive
 
-The GitHub release page provides the checksum for GitHub’s tagged source ZIP. If you build the separate source-only distribution using `scripts/package_release.py`, compare that ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c fire-tools-0.4.1.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\fire-tools-0.4.1.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `fire-tools-0.4.1.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
+The GitHub release page provides the checksum for GitHub’s tagged source ZIP. If you build the separate source-only distribution using `scripts/package_release.py`, compare that ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c fire-tools-0.5.0.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\fire-tools-0.5.0.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `fire-tools-0.5.0.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
 
-On Linux, use an archive utility that preserves executable permissions, such as `unzip`, when running launcher tests. To start Fire Tools from a folder extracted without Unix permissions, use `sh launch-linux.sh`.
+On macOS, run `shasum -a 256 fire-tools-0.5.0.zip` to display the download hash. On macOS and Linux, use an archive utility that preserves executable permissions, such as `unzip`, when running launcher tests. Start Fire Tools with `sh launch.sh` if the archive utility did not preserve permissions.
 
 The checksum verifies that the ZIP matches the checksum you obtained. Obtain both files from a source you trust.
+
+## Comparison release 0.5.0
+
+The macOS 15 runner passed the isolated launcher check. Its filesystem did not supply the stable directory handles Fire Tools requires for device changes and recovery journals. Windows and Linux are the supported tablet-management hosts. [Native macOS diagnostic](https://github.com/dev1niscool/fire-tools/actions/runs/46084012866)
+
+The [Hayden Fire-Tools review](HAYDEN-REVIEW.md) identifies the exact source and release artifacts examined. Tests cover offline model lookup, folder installation, protected debloat entries and the Private DNS presets. The [release notes](https://github.com/dev1niscool/fire-tools/releases/tag/v0.5.0) record the published source ZIP checksum, scan and verification results.
 
 ## Code review release 0.4.1
 

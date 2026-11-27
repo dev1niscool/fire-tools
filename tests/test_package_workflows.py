@@ -386,6 +386,65 @@ Disabled system packages:
             with self.assertRaises(ToolkitError):
                 self.plan('debloat', profile='custom', list_file=str(file))
 
+    def test_annotated_plain_list_only_changes_installed_eligible_owner_apps(self):
+        path = self.root / 'Debloat.txt'
+        services = ('com.amazon.appverification', 'com.amazon.application.compatibility.enforcer',
+                    'com.amazon.imp', 'com.amazon.securitysyncclient', 'com.amazon.logan',
+                    'com.amazon.cloud9.systembrowserprovider', 'com.android.carrierconfig',
+                    'com.amazon.parentalcontrols', 'com.amazon.platform.fdra')
+        self.adb.known.update(services)
+        self.adb.present.update(services)
+        self.adb.disabled.add(B)
+        listed = (A, *services, B, 'org.example.absent', 'org.example.removed')
+        path.write_bytes(('\ufeff# Optional apps\r\n' + ''.join(
+            f'  {package}\t  # local note\r\n' for package in listed)).encode('utf-8'))
+        plan = self.plan('debloat', profile='custom', list_file=str(path))
+        self.assertEqual(plan.packages, (A,))
+        self.assertFalse(self.adb.writes)
+        for package in services:
+            self.assertTrue(any(package in row and 'protected' in row for row in plan.details))
+        path.write_text(path.read_text(encoding='utf-8-sig').replace('local note', 'different note'))
+        self.execute(plan)
+        self.assertEqual(self.adb.writes, [('pm', 'disable-user', '--user', '0', A)])
+        self.execute(self.plan('undo'))
+        self.assertEqual(self.adb.writes[-1], ('pm', 'enable', '--user', '0', A))
+        self.assertEqual(self.adb.disabled, {B})
+
+    def test_plain_annotations_cannot_add_targets_or_change_list_type(self):
+        path = self.root / 'Debloat.txt'
+        for sep in ('\v', '\x1c', '\x85', '\u2028', '\u2029'):
+            with self.subTest(separator=repr(sep)):
+                path.write_text(A + ' # note' + sep + B + '\n# note' + sep + 'ListType=restore', encoding='utf-8')
+                plan = self.plan('debloat', profile='custom', list_file=str(path))
+                self.assertEqual(plan.packages, (A,))
+                self.assertEqual(dict(plan.snapshot)['list-mode'], 'disable')
+        for invalid in (A + ' ' + B, A + '; id', A + '\x00' + B, A + '/' + B):
+            with self.subTest(row=repr(invalid)):
+                path.write_text(invalid + ' # note')
+                with self.assertRaisesRegex(ToolkitError, 'identifier'):
+                    self.plan('debloat', profile='custom', list_file=str(path))
+        self.assertFalse(self.adb.writes)
+
+    def test_older_undo_can_restore_protected_service_availability(self):
+        verifier, enforcer = 'com.amazon.appverification', 'com.amazon.application.compatibility.enforcer'
+        self.adb.known.update((verifier, enforcer))
+        self.adb.present.add(enforcer)
+        self.adb.disabled.add(A)
+        saved = {verifier: 'enabled', enforcer: 'disabled', A: 'enabled'}
+        self.tool._pkg_save_undo(self.adb.device, {'schema': 1, 'devices': {}}, saved)
+        for operation in ('disable', 'uninstall', 'clear-data', 'force-stop'):
+            with self.subTest(operation=operation), self.assertRaisesRegex(ToolkitError, 'Protected'):
+                self.plan(operation, (enforcer,))
+        plan = self.plan('undo')
+        self.assertEqual(set(plan.packages), {A, verifier})
+        self.assertTrue(any(enforcer in row and 'protected' in row for row in plan.details))
+        self.execute(plan)
+        self.assertIn(verifier, self.adb.present)
+        self.assertFalse(self.adb.disabled)
+        _, record = self.tool._pkg_undo_record(self.adb.device)
+        self.assertEqual(record['states'], {enforcer: 'disabled'})
+        self.assertTrue(all(args[-1] != enforcer for args in self.adb.writes))
+
     def test_toolbox_list_footer_and_restore_keep_direction_and_undo(self):
         custom = self.root / 'selected.debloat'
         custom.write_text('^Group description\n+Section\n++End\n' + A + ' \n' + B +

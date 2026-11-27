@@ -31,7 +31,7 @@ class Page:
 
 PAGES = (
     Page("index", "Overview", "A field guide to setting up and managing Amazon Fire tablets.", "book", "Get started", "start home documentation"),
-    Page("setup", "Setup", "Install Fire Tools on your computer and connect your tablet over USB.", "plug", "Get started", "install launcher windows linux demo adb driver usb debugging developer options"),
+    Page("setup", "Setup", "Install Fire Tools on your computer and connect your tablet over USB.", "plug", "Get started", "install launcher windows linux macos demo adb driver usb debugging developer options"),
     Page("drivers", "USB drivers", "Find out whether Windows needs an ADB driver and what the driver audit verified.", "plug", "Get started", "windows 10 11 linux mac usb mtp rsa unauthorized driver installation amazon adb signature catalog dpinst xda"),
     Page("compatibility", "Tablet models", "Identify your Fire tablet generation, Android API level and processor architecture.", "tablet", "Get started", "compatibility model generation android sdk abi hd 10 hd 8 max 11 fire 7"),
     Page("firmware", "Firmware support", "Check which Fire Tools features your model and installed Fire OS build can use.", "layers", "Get started", "compatibility hd 10 8 max 11 fire 7 google play ads debloat restricted android 8.3.3.8 8.3.3.7 7.3.3.1 7.3.2.2 5.3.7.3 5.3.6.4 5.3.6.2 firmware updates"),

@@ -49,7 +49,7 @@ class _DemoPackagePreview(PackageWorkflows):
 
 class DemoToolkit:
     def __init__(self):
-        self.identity = DeviceInfo('DEMO_FIRE_HD10', 'Fire HD 10 (simulated)', 'Amazon',
+        self.identity = DeviceInfo('DEMO_FIRE_HD10', 'KFTUWI', 'Amazon',
                                    '8.3.3.8', '11', 30, ('arm64-v8a', 'armeabi-v7a'), 0)
         self.disabled: set[str] = {'com.android.calendar'}
         self.value = '1'

@@ -11,6 +11,7 @@ on:
       - 'companion/**'
       - 'scripts/**'
       - 'launch-*'
+      - 'launch.sh'
       - 'pyproject.toml'
       - 'release-files.txt'
       - 'README.md'

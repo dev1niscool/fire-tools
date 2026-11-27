@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 import re
 
+from .extra_workflows import DNS_MODES
 from .package_catalog import DEBLOAT_RESTORE_DESCRIPTION, debloat_preset_comparison
 
 
@@ -78,6 +79,12 @@ FEATURES = (
     _package('packages-stop', 'Force-stop apps', 'force-stop', (PACKAGES,)),
     _package('packages-launch', 'Launch apps', 'launch', (PACKAGES,)),
     _package('sideload', 'Verify and install local APKs', 'sideload', (Field('paths', 'Standalone APK files', kind='files'), Field('signer', 'Expected signer SHA-256 (optional)')), 'Checks signatures, SDK and ABI. Review the actual signer fingerprints; a signature does not prove safe behavior.'),
+    _package('sideload-folder', 'Install a folder of APKs', 'sideload-folder',
+             (Field('folder', 'Folder containing only standalone APK files', kind='directory'),
+              Field('signer', 'Expected signer SHA-256 for every APK (optional)')),
+             'Review up to 32 standalone APKs in filename order, up to 512 MiB each and 2 GiB combined. '
+             'Desktop metadata is ignored. Bundles, subfolders, links and other files stop the preview. '
+             'Use the individual APK picker for a mixed folder.'),
     _package('system-update', 'Install a system app update', 'system-update', (PACKAGES, Field('paths', 'Standalone APK files', kind='files'), Field('signer', 'Expected signer SHA-256 (optional)')), 'Choose exactly one installed system package. Android enforces signing continuity, but an unsuitable update can break that service.'),
     _package('system-rollback', 'Revert system app updates', 'rollback-system', (PACKAGES,), 'May discard app data or newer app functionality; firmware must support this command.'),
     _package('ads-package-disable', 'Disable Special Offers app', 'ads-disable', description='Experimental: firmware may protect the app. Package state does not establish ad visibility.', category='Lock-screen ads'),
@@ -155,7 +162,10 @@ FEATURES = (
     _extra('file-rename', 'Rename a shared-storage file or folder', 'file-rename', (Field('remote', 'Existing tablet path'), Field('destination', 'New tablet path')), category='Files'),
     _extra('file-delete', 'Delete a shared-storage file', 'file-delete', (Field('remote', 'Existing tablet file path'),), 'Permanently deletes one file. Folder trees and shared-storage roots are refused.', 'Files'),
     _extra('network-info', 'Read Wi-Fi network metering identifiers', 'network-info', category='Network', read_only=True),
-    _extra('private-dns', 'Configure private DNS', 'private-dns', (Field('mode', 'DNS mode', 'opportunistic', ('off', 'opportunistic', 'hostname')), Field('hostname', 'DNS-over-TLS hostname (hostname mode only)')), 'A wrong resolver can break connectivity. Fire OS may not support Android private DNS.', 'Network'),
+    _extra('private-dns', 'Configure private DNS', 'private-dns',
+           (Field('mode', 'DNS mode or provider', 'opportunistic', DNS_MODES),
+            Field('hostname', 'Custom DNS-over-TLS hostname (hostname mode only)')),
+           'Select a provider or choose hostname to enter your own resolver. Requires Android 9 or newer.', 'Network'),
     _extra('private-dns-undo', 'Restore private DNS configuration', 'private-dns-undo', category='Network'),
     _extra('data-saver', 'Toggle background data saver', 'data-saver', (Field('enabled', 'Enable data saver', 'true', ('true', 'false')),), category='Network'),
     _extra('wifi-metered', 'Set a Wi-Fi network metering override', 'wifi-metered', (Field('network_id', 'Identifier from network-info'), Field('metered', 'Metered override', 'undefined', ('true', 'false', 'undefined'))), 'Metered networks can delay app downloads and updates.', 'Network'),

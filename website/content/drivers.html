@@ -16,7 +16,7 @@
     <dt>File Explorer sees the tablet, but the scan is empty</dt><dd>File Explorer uses MTP for file transfers. ADB has its own USB interface. Confirm USB debugging is on, then look for <strong>Android Composite ADB Interface</strong> in Windows Device Manager. A Fire entry with a yellow warning under <strong>Other devices</strong> can indicate a missing ADB driver.</dd>
   </dl>
   <p>If the interface is missing, check Windows Update for applicable optional driver updates. If one is still needed, use the Amazon download and the signature checks below. <a href="https://developer.amazon.com/docs/fire-tablets/connecting-adb-to-device#install_usb_driver">Amazon’s driver download and instructions</a> · <a href="https://developer.amazon.com/docs/fire-tablets/connecting-adb-to-device#confirm-the-fire-driver-is-installed-correctly">Device Manager check</a></p>
-  <p><strong>Linux and macOS.</strong> Android’s Linux instructions cover USB permissions and udev rules. On Ubuntu, check the <code>plugdev</code> group if ADB reports “no permissions.” macOS needs no separate USB driver for ADB. Fire Tools provides launchers for Windows and Linux. <a href="https://developer.android.com/studio/run/device#setting-up">Android hardware setup</a></p>
+  <p><strong>Linux and macOS.</strong> Android’s Linux instructions cover USB permissions and udev rules. On Ubuntu, check the <code>plugdev</code> group if ADB reports “no permissions.” macOS needs no separate USB driver for ADB. Fire Tools supports tablet changes on Windows and Linux. The macOS launcher supports the offline demo. <a href="https://developer.android.com/studio/run/device#setting-up">Android hardware setup</a></p>
 </section>
 
 <section id="audit">

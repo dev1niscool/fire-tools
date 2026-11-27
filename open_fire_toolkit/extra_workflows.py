@@ -34,6 +34,16 @@ SETTINGS_PAGES = {
 DNS_KEYS = ('private_dns_specifier', 'private_dns_mode')
 DNS_STATE_SCHEMA = 'fire-tools.private-dns-undo.v1'
 DNS_STATE_LIMIT = 8192
+DNS_PRESETS = {
+    'cloudflare': ('one.one.one.one', 'Cloudflare 1.1.1.1 provides unfiltered DNS.'),
+    'cloudflare-family': ('family.cloudflare-dns.com', 'Cloudflare for Families filters malware and adult domains.'),
+    'quad9': ('dns.quad9.net', 'Quad9 filters known malicious domains.'),
+    'adguard': ('dns.adguard-dns.com', 'AdGuard DNS filters advertising and tracking domains.'),
+    'adguard-family': ('family.adguard-dns.com', 'AdGuard Family filters ads, trackers and adult domains '
+                      'and enables Safe Search where supported.'),
+    'mullvad-adblock': ('adblock.dns.mullvad.net', 'Mullvad filters advertising and tracking domains.'),
+}
+DNS_MODES = ('off', 'opportunistic', 'hostname', *DNS_PRESETS)
 NETWORK_OVERRIDES = ('undefined', 'true', 'false')
 AMBIGUOUS_NETWORK = 'multiple saved configurations'
 HOST_TRANSPORT_OPERATIONS = {'wireless-connect': 'connect', 'wireless-disconnect': 'disconnect'}
@@ -492,6 +502,7 @@ class ExtraWorkflows:
     def _preview_private_dns(self, device, operation, params):
         current = self._read_private_dns(device)
         _, journal = self._private_dns_state(device)
+        details = []
         if operation == 'private-dns-undo':
             _args(params)
             if journal is None:
@@ -500,22 +511,30 @@ class ExtraWorkflows:
             title = 'Restore saved Private DNS settings'
         else:
             _args(params, ('mode',), ('hostname',))
-            mode = _choice(params['mode'], ('off', 'opportunistic', 'hostname'), 'Private DNS mode')
+            mode = _choice(params['mode'], DNS_MODES, 'Private DNS mode')
+            if 'hostname' in params and mode != 'hostname':
+                _fail('A resolver hostname applies only to hostname mode.')
             if mode == 'hostname':
                 _args(params, ('mode', 'hostname'))
                 host = _hostname(params['hostname'], dotted=True)
+            elif mode in DNS_PRESETS:
+                host, description = DNS_PRESETS[mode]
+                details.append(description)
+                mode = 'hostname'
             else:
-                if 'hostname' in params:
-                    _fail('A resolver hostname applies only to hostname mode.')
                 host = current['private_dns_specifier']
             target = dict(private_dns_mode=mode, private_dns_specifier=host)
             title = 'Configure Private DNS'
-        details = [f'{key}: {current[key] if current[key] is not None else "(not set)"} → '
-                   f'{target[key] if target[key] is not None else "(not set)"}' for key in DNS_KEYS]
-        return title, details, [
+        details.extend(f'{key}: {current[key] if current[key] is not None else "(not set)"} → '
+                       f'{target[key] if target[key] is not None else "(not set)"}' for key in DNS_KEYS)
+        warnings = [
             'A resolver that is unreachable or lacks DNS-over-TLS can break network access. Readback checks the stored configuration.',
-        ], {'current': _json(current), 'target': _json(target),
-            'undo': _json(journal.fingerprint if journal is not None else None)}
+        ]
+        if target['private_dns_mode'] == 'hostname' and target['private_dns_specifier']:
+            warnings.append(f"System DNS queries are encrypted on their way to {target['private_dns_specifier']}. "
+                            'Its operator can see the domain names requested.')
+        return title, details, warnings, {'current': _json(current), 'target': _json(target),
+                                          'undo': _json(journal.fingerprint if journal is not None else None)}
 
     def _read_data_saver(self, serial):
         raw = self._device_shell(serial, ['cmd', 'netpolicy', 'get', 'restrict-background'])
