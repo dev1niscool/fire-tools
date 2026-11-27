@@ -37,4 +37,8 @@ for directory in "$found_in" "${resolved%/*}"; do
         exit 1
     fi
 done
+if ! "$interpreter" -I -S -c 'import sys; sys.exit(sys.version_info < (3, 11))' >/dev/null 2>&1; then
+    echo 'Install Python 3.11 or later. The desktop also needs Tcl/Tk.' >&2
+    exit 1
+fi
 exec "$interpreter" -I -S "$root/open_fire_toolkit/__main__.py" "$@"
