@@ -8,7 +8,7 @@ This release is designed for Fire tablets running Android API 23 or later. Devic
 
 ## Checking your download
 
-Fire Tools runs from Python source on your computer. Download the current source and extract the folder containing the launchers. The ClamAV results in the desktop audit cover the earlier 0.3.1 snapshot. The optional Android helper ships as Java source. Google apps are separate downloads. [Current source ZIP](https://github.com/dev1niscool/fire-tools/archive/refs/heads/main.zip) · [Audited 0.3.1 source](https://github.com/dev1niscool/fire-tools/archive/312709c2bc93df00500232a5c8aa02e43cd46b4e.zip)
+Fire Tools runs from Python source on your computer. Extract the folder containing the launchers. The optional Android helper ships as Java source, and Google apps are separate downloads. ClamAV reported zero detections for the linked 0.3.2 source ZIP. [Download Fire Tools 0.3.2](https://github.com/dev1niscool/fire-tools/archive/43eaeac695623313fc5ba8afbd6c3a1751854633.zip) · [Checksums and scan record](docs/TESTING.md#fire-toolbox-debloat-preset-checks-032-2026-11-27)
 
 **Before connecting the tablet**, open **Google Play → Choose APKs → Check scan records**. This reads the files locally and shows whether their SHA-256 hashes match files examined in the project audit. The command-line equivalent is `./launch-linux.sh check-apks file.apk` or `.\launch-windows.cmd check-apks "C:\Downloads\file.apk"` in PowerShell. For Google components, use the **Google Play** tab. It checks Google’s signing identity and verifies the installed bytes. The general **sideload** tool also accepts apps from other publishers. [Links to the six scanned builds](docs/GOOGLE-APKS.md#files-with-a-local-scan-record) · [Audit and scan results](docs/TESTING.md)
 
