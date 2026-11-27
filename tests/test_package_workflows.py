@@ -131,6 +131,87 @@ class PackageWorkflowTests(unittest.TestCase):
     def execute(self, plan):
         return self.tool.execute(plan, confirmed=True, log=lambda message: None)
 
+    def test_cli_confirms_the_reviewed_files_signers_and_selection(self):
+        import contextlib
+        import io
+        import re
+        from open_fire_toolkit.cli import main
+
+        def run(args):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+                result = main(args)
+            return result, output.getvalue()
+
+        paths = [self.root / 'a.apk', self.root / 'b.apk']
+        packages = ['org.example.first', 'org.example.second']
+        certificates = dict(zip(packages, ('a' * 64, 'b' * 64)))
+        for path, package in zip(paths, packages):
+            path.write_text(package)
+
+        def inspect(path):
+            path = Path(path)
+            name = path.read_text()
+            return ApkInfo(path, name, 1, '1', 23, (), hashlib.sha256(path.read_bytes()).hexdigest(),
+                           (certificates[name],))
+
+        with patch('open_fire_toolkit.cli.Toolkit', return_value=self.tool), patch.object(self.tool, '_verifier') as verifier:
+            verifier.return_value.inspect.side_effect = inspect
+            args = ['tool', 'sideload', '--serial', SERIAL, '--param', 'paths=' + json.dumps(list(map(str, paths)))]
+            result, preview = run(args)
+            self.assertEqual(result, 0, preview)
+            match = re.search(r'--confirm-token ([0-9a-f]{64})', preview)
+            self.assertIsNotNone(match, preview)
+            confirm = ['--yes', '--confirm-token', match[1]]
+            self.assertEqual(run(args + ['--yes'])[0], 1)
+            certificates[packages[1]] = 'c' * 64
+            self.assertEqual(run(args + confirm)[0], 1)
+            self.assertEqual(self.adb.installs, [])
+            certificates[packages[1]] = 'b' * 64
+            self.assertEqual(run(args + confirm)[0], 0)
+            self.assertEqual(self.adb.installs, packages)
+
+            custom = self.root / 'apps.txt'
+            custom.write_text(A)
+            args = ['tool', 'debloat', '--serial', SERIAL, '--param', 'profile=custom', '--param', 'list_file=' + str(custom)]
+            result, preview = run(args)
+            self.assertEqual(result, 0, preview)
+            token = re.search(r'--confirm-token ([0-9a-f]{64})', preview)[1]
+            custom.write_text(B)
+            self.assertEqual(run(args + ['--yes', '--confirm-token', token])[0], 1)
+            self.assertEqual(self.adb.disabled, set())
+
+    def test_accepted_last_package_write_survives_disconnect_or_identity_change(self):
+        self.adb.change_after = A
+        with self.assertRaisesRegex(ToolkitError, 'Completed:.*accepted.*' + A):
+            self.execute(self.plan('disable', (A,)))
+        self.assertEqual(self.adb.disabled, {A})
+        self.adb.device = replace(self.adb.device, model='Fire')
+        self.adb.change_after = ''
+        self.execute(self.plan('undo'))
+        shell = self.adb.shell
+        def inventory(serial, args):
+            if B in self.adb.disabled and tuple(args[:3]) == ('pm', 'list', 'packages'):
+                raise OSError('tablet disconnected')
+            return shell(serial, args)
+        with patch.object(self.adb, 'shell', side_effect=inventory):
+            with self.assertRaisesRegex(ToolkitError, 'Completed:.*' + A + '.*accepted.*' + B):
+                self.execute(self.plan('disable', (A, B)))
+        self.assertEqual(self.adb.disabled, {A, B})
+        self.execute(self.plan('undo'))
+        self.assertEqual(self.adb.disabled, set())
+
+    def test_last_component_and_factory_rollback_verify_reviewed_identity(self):
+        for op, packages, params, target in (
+            ('launcher-set', (), {'component': HOME + '/.Home'}, HOME + '/.Home'),
+            ('rollback-system', (A,), {}, A),
+        ):
+            with self.subTest(operation=op):
+                self.adb.device = replace(self.adb.device, model='Fire')
+                self.adb.change_after = target
+                with self.assertRaisesRegex(ToolkitError, 'Completed:.*accepted.*' + target):
+                    self.execute(self.plan(op, packages, **params))
+
     def test_inventory_distinguishes_disabled_and_removed(self):
         self.adb.disabled.add(B)
         for mode, expected in [('third-party', {HOME, IME}), ('uninstalled', {'org.example.removed'}),

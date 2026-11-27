@@ -2,31 +2,33 @@
 """Create a deterministic source-only archive and checksums. Never package tools/APKs."""
 import argparse
 import hashlib
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+import re
 import zipfile
 
-ROOT_FILES = {'README.md', 'SECURITY.md', 'LICENSE', 'pyproject.toml',
-              'launch-windows.cmd', 'launch-linux.sh', '.gitignore'}
+INVENTORY = 'release-files.txt'
+
+
+def _source_path(root, name):
+    relative = PurePosixPath(name)
+    if (not re.fullmatch(r'[A-Za-z0-9._/-]+', name) or relative.is_absolute()
+            or '..' in relative.parts or relative.as_posix() != name or name == '.'):
+        raise ValueError(f'Invalid release path: {name!r}')
+    path = root
+    for part in relative.parts:
+        path = path / part
+        if path.is_symlink():
+            raise ValueError(f'Refusing symlinked release input: {name}')
+    if not path.is_file():
+        raise ValueError(f'Missing release input: {name}')
+    return path
 
 
 def source_files(root: Path):
-    found = []
-    for path in root.rglob('*'):
-        relative = path.relative_to(root)
-        parts = relative.parts
-        allowed = (len(parts) == 1 and parts[0] in ROOT_FILES) or (
-            parts[0] in {'open_fire_toolkit', 'tests', 'scripts'}
-            and path.suffix == '.py' and '__pycache__' not in parts
-        ) or (parts[0] == 'docs' and path.suffix in {'.md', '.txt', '.png'}) or (
-            parts[0] == 'companion' and path.suffix in {'.java', '.xml', '.md'}
-            and not any(part in {'build', 'out', 'dist', '.gradle'} for part in parts)
-        )
-        if allowed:
-            if path.is_symlink() or any(parent.is_symlink() for parent in path.parents if parent != root):
-                raise ValueError(f'Refusing symlinked release input: {relative}')
-            if path.is_file():
-                found.append((relative.as_posix(), path))
-    return sorted(found)
+    names = _source_path(root, INVENTORY).read_text(encoding='utf-8').splitlines()
+    if INVENTORY not in names or len(names) != len(set(names)) or 'SHA256SUMS' in names:
+        raise ValueError('The release inventory must include itself, use unique paths and omit SHA256SUMS.')
+    return [(name, _source_path(root, name)) for name in sorted(names)]
 
 
 def build_release(root: Path, destination: Path) -> Path:

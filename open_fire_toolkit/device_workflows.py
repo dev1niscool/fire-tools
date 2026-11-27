@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from contextlib import ExitStack, contextmanager, nullcontext
+from contextvars import ContextVar
 import ctypes
 import errno
 import hashlib
@@ -18,6 +19,8 @@ from time import monotonic
 import uuid
 
 from .workflows import WorkflowPlan
+
+_EXECUTION_DIRECTORY = ContextVar("execution_directory", default=None)
 
 JSON_LIMIT = 1024 * 1024
 FILE_LIMIT = 512 * 1024 * 1024
@@ -388,6 +391,39 @@ def _command(args):
 
 
 class DeviceWorkflows:
+    @contextmanager
+    def _execution_directory(self):
+        with _pinned_directory(self.state_dir, create=True) as held:
+            token = _EXECUTION_DIRECTORY.set((self, held))
+            try:
+                yield held
+            finally:
+                _EXECUTION_DIRECTORY.reset(token)
+
+    def _require_execution_directory(self):
+        from .service import ToolkitError
+        active = _EXECUTION_DIRECTORY.get()
+        if active is None or active[0] is not self:
+            return None
+        held = active[1]
+        try:
+            with _pinned_directory(self.state_dir) as current:
+                if current.samefile(held):
+                    return held
+        except (OSError, ToolkitError):
+            pass
+        _fail('The operation state directory changed. Preserve its undo records and review again.')
+
+    @contextmanager
+    def _journal_directory(self, *, create=False):
+        held = self._require_execution_directory()
+        if held is None:
+            with _pinned_directory(self.state_dir, create=create) as directory:
+                yield directory
+        else:
+            yield held
+            self._require_execution_directory()
+
     def _device_shell(self, serial, args, timeout=30):
         output = self.adb.shell(serial, args, timeout)
         if DENIED.search(output):
@@ -459,7 +495,7 @@ class DeviceWorkflows:
         name = 'device-settings-' + ident['serial_sha256'] + '.json'
         if parent is None:
             try:
-                with _pinned_directory(self.state_dir) as pinned:
+                with self._journal_directory() as pinned:
                     return self._device_undo(device, pinned)
             except FileNotFoundError:
                 return name, empty
@@ -480,7 +516,7 @@ class DeviceWorkflows:
         return name, data
 
     def _device_save_undo(self, device, updates):
-        with _pinned_directory(self.state_dir, create=True) as parent:
+        with self._journal_directory(create=True) as parent:
             name, undo = self._device_undo(device, parent)
             for field, value, forget in updates:
                 if forget:
@@ -743,6 +779,8 @@ class DeviceWorkflows:
                 from .package_catalog import APP_LABELS, is_protected
                 digest, states = self._import_snapshot(path / 'packages.json' if combined else path, device, 'packages')
                 bindings['package sha256'] = digest
+                _, record = self._pkg_undo_record(device)
+                bindings['undo-digest'] = self._pkg_undo_digest(record)
                 current = self._snapshot_packages(device)['packages']
                 skipped = []
                 for name, target in sorted(states.items()):
@@ -768,8 +806,7 @@ class DeviceWorkflows:
                 _choice(p['mode'], ('settings',), 'lockscreen mode')
                 action = 'android.settings.SECURITY_SETTINGS'
             elif op == 'parental-settings':
-                _args(p, ('mode',))
-                _choice(p['mode'], ('show', 'hide'), 'parental settings mode')
+                _args(p)
                 action = 'android.settings.SETTINGS'
                 warnings.append('Fire OS parental-control visibility has no verified ordinary ADB switch. Locate parental controls and authenticate on the tablet.')
             else:
@@ -991,9 +1028,16 @@ class DeviceWorkflows:
                     self._device_guard(plan)
                     _write_json(dest / (kind + '.json') if combined else dest, document)
             return
+        package_changes = []
         for step in steps:
+            if step[0] == 'package-state':
+                package_changes.append(step[1:])
+            else:
+                self._device_guard(plan)
+                self._apply_device_step(plan, step, completed)
+        if 'package sha256' in dict(current.snapshot):
             self._device_guard(plan)
-            self._apply_device_step(plan, step, completed)
+            self._pkg_apply_state(plan, completed, restore_steps=package_changes)
         if not steps:
             completed.append('No supported changes were needed.')
 
@@ -1015,21 +1059,6 @@ class DeviceWorkflows:
             completed[-1] = f'Confirmed {ns}/{key} by settings readback.'
             if restoring:
                 self._device_save_undo(plan.device, [(ns+'/'+key, None, True)])
-        elif kind == 'package-state':
-            name, original, target = values
-            actual = self._snapshot_packages(plan.device)['packages']
-            if actual.get(name) != original:
-                _fail(f'{name} changed after preview.')
-            if target == 'disabled':
-                self._guard_optional_package(serial, name)
-            self._device_guard(plan)
-            cmd = 'enable' if target == 'enabled' else 'disable-user'
-            self._device_shell(serial, ['pm', cmd, '--user', '0', name])
-            completed.append(f'Package {cmd} request accepted for {name}. Readback pending.')
-            self._device_guard(plan)
-            if self._snapshot_packages(plan.device)['packages'].get(name) != target:
-                _fail(f'{name} state could not be confirmed.')
-            completed[-1] = f'Confirmed {name} is {target}.'
         elif kind in ('push', 'pull', 'screenshot', 'screenrecord', 'extract-apk', 'storage-backup'):
             self._transfer_step(plan, kind, values, completed)
         elif kind == 'display':

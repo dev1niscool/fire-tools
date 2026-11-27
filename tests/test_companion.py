@@ -1,5 +1,7 @@
 import os
-from pathlib import Path
+import json
+import shlex
+from pathlib import Path, PurePosixPath
 import runpy
 import shutil
 import subprocess
@@ -15,6 +17,21 @@ STATE_SOURCE = ROOT / "companion/src/org/firetools/adshelper/AdsState.java"
 
 
 class CompanionBuildTests(unittest.TestCase):
+    def test_setup_uses_the_source_build_signer_for_the_privileged_grant(self):
+        guide = (ROOT / 'companion/README.md').read_text()
+        self.assertIn('helper-start', guide)
+        self.assertIn('signer=', guide)
+        self.assertNotIn('shell pm grant', guide)
+        from open_fire_toolkit.cli import parser
+        previews = [parser().parse_args(shlex.split(line)[3:]) for line in guide.splitlines()
+                    if line.startswith('python -m open_fire_toolkit')]
+        install, grant = previews
+        self.assertEqual([install.feature, grant.feature], ['sideload', 'helper-start'])
+        options = dict(item.split('=', 1) for item in install.param)
+        helper_path, = json.loads(options['paths'])
+        self.assertTrue(PurePosixPath(helper_path).is_absolute())
+        self.assertIn('signer=CERTIFICATE_SHA256', grant.param)
+
     def run_builder(self, *args):
         return subprocess.run(
             [sys.executable, str(BUILD_SCRIPT), *map(str, args)],

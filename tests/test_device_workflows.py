@@ -11,6 +11,7 @@ from open_fire_toolkit.adb import DeviceInfo
 from open_fire_toolkit.service import ToolkitError
 
 from open_fire_toolkit.device_workflows import DeviceWorkflows
+from open_fire_toolkit.package_workflows import PackageWorkflows
 
 
 class Tablet:
@@ -55,6 +56,8 @@ class Tablet:
         assert serial == self.info.serial
         args = list(args)
         op = args[0]
+        if args[:3] == ['pm', 'list', 'packages']:
+            return '\n'.join('package:' + p for p in self.packages(serial, '-d' in args))
         if op == 'stat':
             if args[3] in self.files:
                 return str(len(self.files[args[3]])) if args[2] == '%s' else 'regular file'
@@ -166,7 +169,7 @@ class Tablet:
         raise AssertionError(args)
 
 
-class Harness(DeviceWorkflows):
+class Harness(DeviceWorkflows, PackageWorkflows):
     def _writable_device(self, serial):
         if self.adb.info.user_id:
             raise ToolkitError('owner profile changed')
@@ -322,6 +325,47 @@ class DeviceWorkflowTests(unittest.TestCase):
             self.run_plan(self.plan(op, local=str(dest), **args))
             self.assertGreater(dest.stat().st_size, 12)
             self.assertEqual(original, tablet.files)
+
+    def test_snapshot_restore_keeps_original_states_across_partial_retry(self):
+        tablet = self.tool.adb
+        tablet.package_state['com.amazon.weather'] = True
+        for combined in (False, True):
+            with self.subTest(combined=combined):
+                tablet.package_state.update({'com.amazon.weather': True, 'com.amazon.kindle': True})
+                local = str(self.host / ('all' if combined else 'packages.json'))
+                self.run_plan(self.plan('backup' if combined else 'package-backup', local=local))
+                tablet.package_state.update({'com.amazon.weather': False, 'com.amazon.kindle': False})
+                operation = 'restore-backup' if combined else 'package-restore'
+                shell = tablet.shell
+                def partial(serial, args, timeout=30):
+                    if tuple(args[:2]) == ('pm', 'enable') and args[-1] == 'com.amazon.weather':
+                        return 'Failure [Permission Denial]'
+                    return shell(serial, args, timeout)
+                tablet.shell = partial
+                try:
+                    with self.assertRaises(ToolkitError):
+                        self.run_plan(self.plan(operation, local=local))
+                finally:
+                    tablet.shell = shell
+                self.assertTrue(tablet.package_state['com.amazon.kindle'])
+                journal = self.tool.state_dir / 'packages-state.json'
+                self.assertTrue(journal.is_file())
+                self.run_plan(self.plan(operation, local=local))
+                undo = self.tool.plan_package_action(self.serial, 'undo')
+                self.tool._execute_package_workflow(undo, self.done, lambda _: None)
+                self.assertFalse(tablet.package_state['com.amazon.kindle'])
+                self.assertFalse(tablet.package_state['com.amazon.weather'])
+                tablet.package_state.update({'com.amazon.weather': True, 'com.amazon.kindle': True})
+
+    def test_parental_settings_is_a_general_settings_shortcut(self):
+        from open_fire_toolkit.feature_catalog import BY_KEY
+        feature = BY_KEY['parental-settings']
+        self.assertFalse(feature.fields)
+        plan = self.plan('parental-settings')
+        self.assertIn('android.settings.SETTINGS', str(plan.details))
+        self.assertIn('authenticate', str(plan.warnings))
+        with self.assertRaises(ToolkitError):
+            self.plan('parental-settings', mode='hide')
 
     def test_combined_restore_changes_only_supported_packages_and_settings(self):
         tablet = self.tool.adb

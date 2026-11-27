@@ -117,9 +117,16 @@ class PackageWorkflows:
         if self._writable_device(plan.serial) != plan.device:
             raise _error('Tablet identity or owner profile changed since preview.')
 
-    def _pkg_write(self, plan, *args):
+    def _pkg_write(self, plan, completed, *args):
         self._pkg_device(plan)
-        return self._pkg_shell(plan.serial, *args)
+        result = self._pkg_shell(plan.serial, *args)
+        completed.append('Android accepted ' + ' '.join(args) + '.')
+        self._pkg_device(plan)
+        return result
+
+    def _pkg_confirm(self, plan, completed, message):
+        self._pkg_device(plan)
+        completed[-1] = message
 
     def _pkg_list(self, serial, *flags):
         output = self._pkg_shell(serial, 'pm', 'list', 'packages', *_OWNER, *flags)
@@ -150,11 +157,11 @@ class PackageWorkflows:
         return [dict(package=p, label=APP_LABELS.get(p, p), state=states[p]) for p in sorted(names)]
 
     def _pkg_undo_record(self, device):
-        from .device_workflows import _pinned_directory, _read_file
+        from .device_workflows import _read_file
         path = self.state_dir / 'packages-state.json'
         key = self._state_key(device.serial)
         try:
-            with _pinned_directory(self.state_dir.absolute()) as directory:
+            with self._journal_directory() as directory:
                 _, encoded = _read_file(directory / path.name, _STATE_LIMIT, content=True)
             data = json.loads(encoded)
             if data['schema'] != 1 or not isinstance(data['devices'], dict):
@@ -162,6 +169,9 @@ class PackageWorkflows:
             for digest, record in data['devices'].items():
                 if not re.fullmatch('[0-9a-f]{64}', digest) or not isinstance(record['model'], str):
                     raise ValueError('Invalid device record.')
+                for field in ('restore_source', 'pending_source'):
+                    if field in record and not re.fullmatch('[0-9a-f]{64}', record[field]):
+                        raise ValueError('Invalid package snapshot digest.')
                 states, pending = record['states'], record.get('pending', {})
                 if not isinstance(states, dict) or not isinstance(pending, dict):
                     raise ValueError('Invalid saved package states.')
@@ -178,29 +188,44 @@ class PackageWorkflows:
         record = data['devices'].get(key, {})
         if record and record['model'] != device.model:
             raise _error('The saved package state belongs to a different tablet model.')
-        states = record.get('states', {})
         pending = record.get('pending')
         if pending:
             # The process could have stopped on either side of the first write.
             package, before = next(iter(pending.items()))
-            if self._pkg_states(device.serial).get(package, 'missing') != before:
-                states = pending
-        return data, states
+            if self._writable_device(device.serial) != device:
+                raise _error('Device changed while recovering package undo.')
+            changed = self._pkg_states(device.serial).get(package, 'missing') != before
+            if self._writable_device(device.serial) != device:
+                raise _error('Device changed while recovering package undo.')
+            if changed:
+                record['states'] = pending
+                record.pop('restore_source', None)
+                if 'pending_source' in record:
+                    record['restore_source'] = record['pending_source']
+            record.pop('pending')
+            record.pop('pending_source', None)
+        return data, record
 
-    def _pkg_save_undo(self, device, data, states, pending=None):
-        from .device_workflows import _pinned_directory
+    def _pkg_undo_digest(self, record):
+        return hashlib.sha256(json.dumps(record, sort_keys=True).encode()).hexdigest()
+
+    def _pkg_save_undo(self, device, data, states, pending=None, *, source=None, pending_source=None):
         key = self._state_key(device.serial)
         if states or pending:
             record = {'model': device.model, 'states': states}
+            if source:
+                record['restore_source'] = source
             if pending:
                 record['pending'] = pending
+                if pending_source:
+                    record['pending_source'] = pending_source
             data['devices'][key] = record
         else:
             data['devices'].pop(key, None)
         encoded = json.dumps(data, separators=(',', ':')).encode()
         if len(encoded) > _STATE_LIMIT:
             raise _error('Package undo state exceeds the storage limit.')
-        with _pinned_directory(self.state_dir.absolute(), create=True) as directory:
+        with self._journal_directory(create=True) as directory:
             fd, name = tempfile.mkstemp(dir=directory, prefix='.packages-')
             try:
                 with os.fdopen(fd, 'wb') as stream:
@@ -268,8 +293,9 @@ class PackageWorkflows:
         mode = op
         saved = {}
         if op in _STATE_OPS:
-            _, saved = self._pkg_undo_record(plan.device)
-            snapshot['undo-digest'] = hashlib.sha256(json.dumps(saved, sort_keys=True).encode()).hexdigest()
+            _, record = self._pkg_undo_record(plan.device)
+            saved = record.get('states', {})
+            snapshot['undo-digest'] = self._pkg_undo_digest(record)
         if op == 'debloat':
             mode = params.get('mode', 'disable')
             if mode not in {'disable', 'uninstall'}:
@@ -471,6 +497,7 @@ class PackageWorkflows:
                 self._pkg_device(plan)
                 self.adb.install(plan.serial, apk.path)
                 completed.append(f'Android accepted the install request for {apk.package}.')
+                self._pkg_device(plan)
                 if apk.package not in self._pkg_list(plan.serial):
                     raise _error(f'{apk.package} was not found in the owner package inventory after installation.')
                 paths = self._pkg_paths(plan.serial, apk.package)
@@ -482,104 +509,123 @@ class PackageWorkflows:
                     if file_sha256(installed) != apk.sha256:
                         raise _error(f'The installed bytes for {apk.package} do not match the reviewed APK.')
                 # The installed bytes match the signed APK whose manifest supplied this version.
-                completed[-1] = f'Verified installed {apk.package} version {apk.version_code} for owner user 0.'
+                self._pkg_confirm(plan, completed, f'Verified installed {apk.package} version {apk.version_code} for owner user 0.')
 
     def _pkg_move(self, plan, p, before, target, completed):
         if target == before:
             return
         if before == 'uninstalled':
-            self._pkg_write(plan, 'cmd', 'package', 'install-existing', *_OWNER, p)
+            self._pkg_write(plan, completed, 'cmd', 'package', 'install-existing', *_OWNER, p)
             before = self._pkg_states(plan.serial).get(p, 'missing')
             if before not in {'enabled', 'disabled'}:
                 raise _error(f'Installation for user 0 could not be confirmed for {p}.')
-            if before != target:
-                completed.append(f'Reinstalled {p} for user 0 and verified its {before} state.')
+            self._pkg_confirm(plan, completed, f'Reinstalled {p} for user 0 and verified its {before} state.')
         if before != target:
             if target == 'uninstalled':
-                self._pkg_write(plan, 'pm', 'uninstall', '-k', *_OWNER, p)
+                self._pkg_write(plan, completed, 'pm', 'uninstall', '-k', *_OWNER, p)
             else:
-                self._pkg_write(plan, 'pm', 'disable-user' if target == 'disabled' else 'enable', *_OWNER, p)
+                self._pkg_write(plan, completed, 'pm', 'disable-user' if target == 'disabled' else 'enable', *_OWNER, p)
             after = self._pkg_states(plan.serial).get(p, 'missing')
             # A third-party package with no other installations can disappear from -u too.
             if after != target and (target, after) != ('uninstalled', 'missing'):
                 raise _error(f'Android did not confirm {p} as {target}. Saved undo information was retained.')
+            self._pkg_confirm(plan, completed, f'{p}: {target} for user 0.')
 
-    def _pkg_apply_state(self, plan, completed):
+    def _pkg_apply_state(self, plan, completed, restore_steps=None):
         from .service import ToolkitError
-        data, previous = self._pkg_undo_record(plan.device)
-        recorded = {}
+        data, record = self._pkg_undo_record(plan.device)
         snapshot = dict(plan.snapshot)
-        saved_digest = hashlib.sha256(json.dumps(previous, sort_keys=True).encode()).hexdigest()
-        if saved_digest != snapshot['undo-digest']:
+        if self._pkg_undo_digest(record) != snapshot['undo-digest']:
             raise _error('The saved package undo state changed since preview.')
-        op = plan.operation
-        for p in plan.packages:
-            before = snapshot[p]
+        previous = record.get('states', {})
+        previous_source = record.get('restore_source')
+        undo = plan.operation == 'undo'
+        source = None
+        if restore_steps is not None:
+            changes = restore_steps
+            source = snapshot['package sha256']
+        else:
+            mode = plan.params.get('mode', 'disable') if plan.operation == 'debloat' else plan.operation
+            changes = [(p, snapshot[p], previous[p] if undo else _state_after(mode, snapshot[p]))
+                       for p in plan.packages]
+
+        # Only retries of the same incomplete snapshot may extend its undo batch.
+        recorded = dict(previous) if source and source == previous_source else {}
+        for p, before, target in changes:
             current = self._pkg_states(plan.serial)
             if current.get(p, 'missing') != before:
                 raise _error(f'{p} changed since preview. Review a fresh plan.')
-            target = (previous[p] if op == 'undo' else
-                      _state_after(plan.params.get('mode', 'disable') if op == 'debloat' else op, before))
-            if before != target:
-                if target in {'disabled', 'uninstalled'}:
-                    self._pkg_guard_active(plan.serial, (p,), current)
-                self._pkg_device(plan)
-                first_change = op != 'undo' and not recorded
-                if op != 'undo':
-                    recorded[p] = before
-                    if first_change:
-                        self._pkg_save_undo(plan.device, data, previous, pending=recorded)
-                    else:
-                        self._pkg_save_undo(plan.device, data, recorded)
-                try:
-                    self._pkg_move(plan, p, before, target, completed)
-                except (ToolkitError, AdbError, OSError, RuntimeError) as exc:
-                    if first_change:
-                        try:
-                            self._pkg_device(plan)
-                            after = self._pkg_states(plan.serial).get(p, 'missing')
-                        except (ToolkitError, AdbError, OSError, RuntimeError):
-                            raise _error(f'{exc} The first change is unverified. Both undo records were retained.') from exc
-                        self._pkg_save_undo(plan.device, data, previous if after == before else recorded)
-                    raise
-                completed.append(f'{p}: {target} for user 0.')
+            if before == target:
+                continue
+            if target in {'disabled', 'uninstalled'}:
+                self._pkg_guard_active(plan.serial, (p,), current)
+                if source:
+                    self._guard_optional_package(plan.serial, p)
+            self._pkg_device(plan)
+            first_change = not undo and not recorded
+            if not undo:
+                recorded.setdefault(p, before)
                 if first_change:
-                    self._pkg_save_undo(plan.device, data, recorded)
-        if op == 'undo':
+                    self._pkg_save_undo(plan.device, data, previous, pending=recorded,
+                                        source=previous_source, pending_source=source)
+                else:
+                    self._pkg_save_undo(plan.device, data, recorded, source=source)
+            try:
+                self._pkg_move(plan, p, before, target, completed)
+            except (ToolkitError, AdbError, OSError, RuntimeError) as exc:
+                if first_change:
+                    try:
+                        self._pkg_device(plan)
+                        after = self._pkg_states(plan.serial).get(p, 'missing')
+                        self._pkg_device(plan)
+                    except (ToolkitError, AdbError, OSError, RuntimeError):
+                        raise _error(f'{exc} The first change is unverified. Both undo records were retained.') from exc
+                    if after == before:
+                        self._pkg_save_undo(plan.device, data, previous, source=previous_source)
+                    else:
+                        self._pkg_save_undo(plan.device, data, recorded, source=source)
+                raise
+            if first_change:
+                self._pkg_save_undo(plan.device, data, recorded, source=source)
+
+        if undo:
+            self._pkg_device(plan)
             remaining = {p: state for p, state in previous.items() if p not in plan.packages}
             self._pkg_save_undo(plan.device, data, remaining)
             completed.append('Previous owner states confirmed for the reviewed packages.')
+        elif source and recorded:
+            # This restore completed. A later import starts its own undo batch.
+            self._pkg_save_undo(plan.device, data, recorded)
 
     def _pkg_apply_component(self, plan, completed):
         snap = dict(plan.snapshot)
         target = snap['target']
         if plan.operation == 'keyboard-set':
-            self._pkg_write(plan, 'ime', 'enable', target)
-            completed.append(f'Android accepted enabling keyboard {target}.')
-            self._pkg_write(plan, 'ime', 'set', target)
+            self._pkg_write(plan, completed, 'ime', 'enable', target)
+            self._pkg_write(plan, completed, 'ime', 'set', target)
             if _component(self._pkg_keyboard(plan.serial)) != _component(target):
                 raise _error('Android did not confirm the requested default keyboard.')
-            completed.append('Default keyboard confirmed: ' + target)
+            self._pkg_confirm(plan, completed, 'Default keyboard confirmed: ' + target)
             return
         if plan.operation == 'launcher-restore' and snap['stock'] == 'disabled':
-            self._pkg_write(plan, 'pm', 'enable', *_OWNER, STOCK_HOME)
+            self._pkg_write(plan, completed, 'pm', 'enable', *_OWNER, STOCK_HOME)
             if self._pkg_states(plan.serial).get(STOCK_HOME) != 'enabled':
                 raise _error('Stock Fire launcher enablement could not be confirmed.')
-            completed.append('Enabled the stock Fire launcher.')
+            self._pkg_confirm(plan, completed, 'Enabled the stock Fire launcher.')
         if _component(self._pkg_activity(plan.serial, 'HOME', target.split('/')[0])) != _component(target):
             raise _error('The requested HOME activity no longer resolves.')
-        self._pkg_write(plan, 'pm', 'set-home-activity', *_OWNER, target)
+        self._pkg_write(plan, completed, 'pm', 'set-home-activity', *_OWNER, target)
         if _component(self._pkg_activity(plan.serial, 'HOME')) != _component(target):
             raise _error('Android did not confirm the requested HOME activity.')
-        completed.append('Confirmed HOME activity ' + target)
+        self._pkg_confirm(plan, completed, 'Confirmed HOME activity ' + target)
         if plan.params.get('disable_stock') == 'true' and snap['stock'] == 'enabled':
             if (_component(self._pkg_activity(plan.serial, 'HOME')) != _component(target)
                     or self._pkg_states(plan.serial).get(target.split('/')[0]) != 'enabled'):
                 raise _error('Replacement HOME is unavailable. Stock launcher remains enabled.')
-            self._pkg_write(plan, 'pm', 'disable-user', *_OWNER, STOCK_HOME)
+            self._pkg_write(plan, completed, 'pm', 'disable-user', *_OWNER, STOCK_HOME)
             if self._pkg_states(plan.serial).get(STOCK_HOME) != 'disabled':
                 raise _error('Could not confirm that Fire Launcher is disabled.')
-            completed.append('Confirmed the stock Fire launcher is disabled.')
+            self._pkg_confirm(plan, completed, 'Confirmed the stock Fire launcher is disabled.')
 
     def _execute_package_workflow(self, plan, completed, log):
         op = plan.operation
@@ -604,31 +650,31 @@ class PackageWorkflows:
             if op in {'clear-data', 'force-stop', 'rollback-system'}:
                 self._pkg_guard_active(plan.serial, (p,), states)
             if op == 'clear-data':
-                output = self._pkg_write(plan, 'pm', 'clear', *_OWNER, p)
+                output = self._pkg_write(plan, completed, 'pm', 'clear', *_OWNER, p)
                 if output != 'Success':
                     raise _error('Android did not confirm clearing app data.')
-                completed.append(f'Android confirmed clearing owner data for {p}.')
+                self._pkg_confirm(plan, completed, f'Android confirmed clearing owner data for {p}.')
             elif op == 'force-stop':
-                self._pkg_write(plan, 'am', 'force-stop', *_OWNER, p)
+                self._pkg_write(plan, completed, 'am', 'force-stop', *_OWNER, p)
                 status = self._pkg_shell(plan.serial, 'dumpsys', 'package', p)
                 if not re.search(r'^\s*User 0:.*\bstopped=true\b', status, re.M):
                     raise _error(f'Stop command issued but the stopped state could not be verified for {p}.')
-                completed.append(f'Confirmed {p} stopped for owner user 0.')
+                self._pkg_confirm(plan, completed, f'Confirmed {p} stopped for owner user 0.')
             elif op == 'launch':
                 activity = self._pkg_activity(plan.serial, 'LAUNCHER', p)
                 if activity != snap['activity/' + p]:
                     raise _error('Launch activity changed since preview.')
-                output = self._pkg_write(plan, 'am', 'start', '-W', *_OWNER, '-n', activity)
+                output = self._pkg_write(plan, completed, 'am', 'start', '-W', *_OWNER, '-n', activity)
                 if not re.search(r'^Status:\s*ok\s*$', output, re.M):
                     raise _error('Android did not confirm the activity launch.')
-                completed.append(f'Android accepted launching {activity}.')
+                self._pkg_confirm(plan, completed, f'Android accepted launching {activity}.')
             elif op == 'rollback-system':
                 if '\n'.join(self._pkg_paths(plan.serial, p)) != snap['paths/' + p]:
                     raise _error('System APK locations changed since preview.')
-                self._pkg_write(plan, 'pm', 'uninstall-system-updates', p)
+                self._pkg_write(plan, completed, 'pm', 'uninstall-system-updates', p)
                 paths = self._pkg_paths(plan.serial, p)
                 if not all(path.startswith(('/system/', '/product/', '/system_ext/', '/vendor/', '/odm/', '/oem/')) for path in paths):
                     raise _error(f'The factory version of {p} could not be confirmed.')
-                completed.append(f'Confirmed factory APK locations for {p}.')
+                self._pkg_confirm(plan, completed, f'Confirmed factory APK locations for {p}.')
             else:
                 raise _error('Unknown package workflow.')

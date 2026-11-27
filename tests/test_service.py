@@ -1,3 +1,6 @@
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from dataclasses import replace
@@ -91,6 +94,44 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(self.adb.value, '1')
         self.assertEqual(list(destination.iterdir()), [])
 
+    @unittest.skipUnless(os.name == 'posix', 'Windows holds directory handles without delete sharing')
+    def test_displaced_operation_directory_stops_ads_before_mutation(self):
+        plan = self.app.plan_ads('SERIAL123')
+        folder = self.app.state_dir
+        retired = folder.with_name('retired')
+        read_ads = self.app._read_ads
+        def read_and_rotate(serial):
+            if not retired.exists():
+                self.assertTrue((folder / 'operation.lock').exists())
+                # The lock owner keeps its handle as another process rotates the directory.
+                subprocess.run([sys.executable, '-c',
+                                'import os,sys; os.rename(sys.argv[1], sys.argv[2]); os.mkdir(sys.argv[1])',
+                                str(folder), str(retired)], check=True, timeout=10)
+            return read_ads(serial)
+        with patch.object(self.app, '_read_ads', side_effect=read_and_rotate):
+            with self.assertRaisesRegex(ToolkitError, 'directory changed'):
+                self.app.execute(plan, True)
+        self.assertEqual(self.adb.value, '1')
+        self.assertEqual(list(folder.iterdir()), [])
+        self.assertFalse((retired / 'operation.lock').exists())
+
+    @unittest.skipUnless(os.name == 'posix', 'Windows holds directory handles without delete sharing')
+    def test_all_journals_reject_a_different_directory_while_executing(self):
+        plan = self.app.plan_ads('SERIAL123')
+        folder = self.app.state_dir
+        def inspect_journal_boundaries(_):
+            folder.rename(folder.with_name('retired'))
+            folder.mkdir()
+            for reader, args in ((self.app._load_state, ()), (self.app._pkg_undo_record, (plan.device,)),
+                                 (self.app._device_undo, (plan.device,)), (self.app._private_dns_state, (plan.device,))):
+                with self.subTest(reader=reader.__name__), self.assertRaisesRegex(ToolkitError, 'directory changed'):
+                    reader(*args)
+            self.app._writable_device(plan.serial)
+        with patch.object(self.app, '_apply_ads', side_effect=inspect_journal_boundaries):
+            with self.assertRaisesRegex(ToolkitError, 'directory changed'):
+                self.app.execute(plan, True)
+        self.assertEqual(list(folder.iterdir()), [])
+
     def test_lock_recovery_message_names_persistent_state_path(self):
         self.app.state_dir.mkdir()
         lock = self.app.state_dir / 'operation.lock'
@@ -130,6 +171,14 @@ class ServiceTests(unittest.TestCase):
     def test_unknown_setting_refused(self):
         self.adb.value='Permission denied'
         with self.assertRaises(ToolkitError):self.app.plan_ads('SERIAL123')
+    def test_legacy_package_rejection_is_excluded_from_accepted_progress(self):
+        plan = self.app.plan_package('SERIAL123', 'com.amazon.kindle')
+        with patch.object(self.adb, 'shell', return_value='Failure [Permission Denial]'):
+            with self.assertRaises(ToolkitError) as error:
+                self.app.execute(plan, True)
+        self.assertIn('Permission Denial', str(error.exception))
+        self.assertNotIn('Android accepted', str(error.exception))
+
     def test_protected_package_refused(self):
         for name in ('com.amazon.firelauncher','com.android.settings','com.amazon.device.software.ota','x;reboot'):
             with self.assertRaises(ToolkitError): self.app.plan_package('SERIAL123',name)

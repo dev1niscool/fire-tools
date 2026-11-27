@@ -27,7 +27,7 @@ python -m open_fire_toolkit --demo tool debloat --serial DEMO_FIRE_HD10 --param 
 python -m open_fire_toolkit tool source-catalog
 ```
 
-For a real tablet, put the tool paths before `tool`, include `--serial` from `devices`, and provide the listed `--param key=value` arguments. Mutations default to preview. Add `--yes` only after reviewing the action. Source links and Wi-Fi endpoint connection do not require a selected tablet; connecting does not automatically select it.
+For a real tablet, put the tool paths before `tool`, include `--serial` from `devices`, and provide the listed `--param key=value` arguments. Mutations default to preview. Review the preview and repeat the command with its printed `--yes --confirm-token TOKEN` arguments. Each token binds the tablet, inputs, targets and state shown by that plan. Source links and Wi-Fi endpoint connection do not require a selected tablet; connecting does not automatically select it.
 
 See [feature coverage and remaining differences](docs/FEATURES.md), [original Toolbox comparison](docs/PARITY-RESEARCH.md), and [verification](docs/TESTING.md). **This is not a verified drop-in replacement for every Fire Toolbox 46 option.** The original's privileged exploits, several companion-assisted workarounds, automatic version-selected APK downloads, split APK bundle installation and some device-profile options are not reproduced. A settings-page shortcut is labeled as a shortcut, not as successful device configuration.
 
@@ -101,7 +101,7 @@ python3 -m open_fire_toolkit --adb /path/to/adb --aapt /path/to/aapt \
   play --serial TABLET_SERIAL framework.apk play-services.apk play-store.apk
 ```
 
-The change commands above preview their actions. To apply an action you reviewed, repeat the command with `--yes` after its subcommand. To preview disabling an allowed app, use `apps --serial TABLET_SERIAL --disable com.amazon.mp3`. Use `--enable` to re-enable it.
+The change commands above preview their actions. To apply an action you reviewed, repeat the command with `--yes --confirm-token TOKEN` after its subcommand, using the token printed by that preview. If any reviewed input changes, run a fresh preview. To preview disabling an allowed app, use `apps --serial TABLET_SERIAL --disable com.amazon.mp3`. Use `--enable` to re-enable it.
 
 ## Project notes
 

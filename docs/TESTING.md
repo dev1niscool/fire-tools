@@ -29,7 +29,7 @@ The checksum verifies that the ZIP matches the checksum you obtained. Obtain bot
 
 ## Expanded release validation (0.2, 2026-11-27)
 
-- The integrated Linux suite passed 202 tests with a JDK available, with no skips. Python compilation and whitespace checks passed. These tests include simulated device responses and do not establish physical-tablet compatibility.
+- The integrated Linux suite passed 212 tests with a JDK available, with no skips. Python compilation and whitespace checks passed. These tests include simulated device responses and do not establish physical-tablet compatibility.
 - Both rendered Tk smoke scripts passed under Xvfb: `tests/gui_smoke.py` and `tests/gui_expanded_smoke.py`. The expanded script visits all 85 catalog forms, tests parameter capture, selection, package picking, previews, cancellation, read-only output, source links without a tablet, and connection-only plans. Simulation does not access hardware or save screenshots to the selected user path.
 - The controller independently verified the final API-24 helper with real Google `aapt` and `apksigner` through the product's verifier. The signed test artifact SHA-256 was `748557ca7c4120d83c100dc1543ae791d7d387a7b2c4418fefabdab127b9a563`; its test-key signer was `c1d6a57d46c25e365898e368fcd482587b56a08fdfb30f3ff098fea7351e2d2d`. This is test evidence, not a fingerprint users should trust for their own separately signed builds.
 - Helper tests exercise its Java state logic on the host; SDK build/signature checks do not exercise Android lifecycle, notifications, boot behavior, permission grant or actual ad visibility.
@@ -47,4 +47,4 @@ The checksum verifies that the ZIP matches the checksum you obtained. Obtain bot
 - Google Platform-Tools 37.0.3 (`adb` 1.0.41) was also exercised through the real CLI device-listing path. It correctly reported no connected devices. Its archive SHA-1 matched Google's HTTPS manifest (`e1579b288a7ae4e9bc28dedec6a154d78b3c04ed`). No tablet command was issued.
 - No physical Fire tablet, actual Google account sign-in, ad visibility/persistence, Windows runtime, or Windows GUI was tested. These are release limitations, not passing checks.
 
-Run `python3 scripts/package_release.py` to recreate the deterministic source archive. The archive uses explicit file allowlists, fixed timestamps, an internal file manifest, and an external ZIP checksum. A checksum is integrity evidence, not malware certification.
+Run `python3 scripts/package_release.py` to recreate the deterministic source archive. The builder reads the exact paths in `release-files.txt` and checks that each input exists. When adding a distribution file, review its contents and add its repository-relative path to that inventory. The archive includes the inventory, fixed timestamps, an internal SHA-256 manifest and an external ZIP checksum. A checksum is integrity evidence, not malware certification.

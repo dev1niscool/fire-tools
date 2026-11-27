@@ -16,7 +16,7 @@ from typing import Callable, Sequence
 from .adb import AdbClient, AdbError, DeviceInfo
 from .apk import ApkInfo, ApkVerifier, ApkError, MAX_APK_BYTES, file_sha256, google_play_order
 from .package_workflows import PackageWorkflows
-from .device_workflows import DeviceWorkflows, _pinned_directory, _read_file
+from .device_workflows import DeviceWorkflows, _read_file
 from .extra_workflows import ExtraWorkflows
 from .workflows import TransportPlan
 
@@ -108,6 +108,7 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
             raise ToolkitError('Switch the tablet to its primary adult/owner profile (user 0) first.')
         if device.sdk < 23:
             raise ToolkitError('This release supports Android API 23 or newer Fire tablets only.')
+        self._require_execution_directory()
         return device
 
     def _verifier(self) -> ApkVerifier:
@@ -137,7 +138,7 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
     def _load_state(self) -> dict:
         path = self.state_dir / 'state.json'
         try:
-            with _pinned_directory(self.state_dir) as parent:
+            with self._journal_directory() as parent:
                 _, content = _read_file(parent / 'state.json', 1024 * 1024, content=True)
             data = json.loads(content)
             if not isinstance(data, dict) or data.get('schema') != 1 or not isinstance(data.get('ads'), dict):
@@ -157,7 +158,7 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
             raise ToolkitError(f'Undo state is unreadable: {path}. Preserve it and resolve the error before making changes.') from exc
 
     def _save_state(self, state: dict) -> None:
-        with _pinned_directory(self.state_dir, create=True) as parent:
+        with self._journal_directory(create=True) as parent:
             fd, name = tempfile.mkstemp(prefix='.state-', suffix='.json', dir=parent)
             try:
                 with os.fdopen(fd, 'w', encoding='utf-8') as stream:
@@ -222,7 +223,7 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
         owns_file_lock = False
         completed: list[str] = []
         try:
-            pinned_state = pinned_handles.enter_context(_pinned_directory(self.state_dir, create=True))
+            pinned_state = pinned_handles.enter_context(self._execution_directory())
             lock_path = pinned_state / 'operation.lock'
             try:
                 fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
@@ -256,13 +257,14 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
                 if plan.package not in self.adb.packages(plan.serial):
                     raise ToolkitError('Package is no longer installed. Review again.')
                 verb = 'enable' if plan.action == 'enable' else 'disable-user'
-                self.adb.shell(plan.serial, ('pm', verb, '--user', '0', plan.package))
+                self._pkg_write(plan, completed, 'pm', verb, '--user', '0', plan.package)
                 if plan.package not in self.adb.packages(plan.serial):
                     raise ToolkitError('Package disappeared during the operation; its state was not confirmed.')
                 disabled = plan.package in self.adb.packages(plan.serial, True)
                 if disabled != (plan.action == 'disable'):
                     raise ToolkitError('The requested app state was not confirmed; firmware may protect this package.')
-                completed.append(f'{plan.package}: {"disabled" if disabled else "enabled"} for owner user 0.')
+                state = 'disabled' if disabled else 'enabled'
+                self._pkg_confirm(plan, completed, f'{plan.package}: {state} for owner user 0.')
             elif plan.action == 'reboot':
                 self.adb.reboot(plan.serial)
                 completed.append('Restart command accepted. Wait for the tablet to reconnect.')
@@ -316,10 +318,9 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
                 staged.append(checked)
             staged_order = google_play_order(staged, plan.device.sdk, plan.device.abis)
             for apk in staged_order:
-                if self._writable_device(plan.serial) != plan.device:
-                    raise ToolkitError('Tablet identity changed during installation; stopped.')
                 if file_sha256(apk.path) != apk.sha256:
                     raise ToolkitError('Staged APK changed during installation; stopped.')
+                self._device_guard(plan)
                 self.adb.install(plan.serial, apk.path)
                 message = f'Installed {apk.package}'
                 completed.append(message)
@@ -348,9 +349,12 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
             args = ('settings', '--user', '0', 'delete', 'global', ADS_KEY)
         else:
             args = ('settings', '--user', '0', 'put', 'global', ADS_KEY, target)
+        self._device_guard(plan)
         self.adb.shell(plan.serial, args)
         try:
+            self._device_guard(plan)
             actual = self._read_ads(plan.serial)
+            self._device_guard(plan)
         except (ToolkitError, AdbError) as exc:
             raise ToolkitError('The ad setting command was issued, but readback failed. Undo information was retained; the tablet may have changed. ' + str(exc)) from exc
         if actual != target:

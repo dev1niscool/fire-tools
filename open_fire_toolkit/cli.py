@@ -1,5 +1,8 @@
-"""Command-line interface; changes are previews unless --yes is supplied."""
+"""Preview tablet operations and confirm the exact reviewed plan."""
 import argparse
+import hashlib
+import json
+import os
 import sys
 from dataclasses import asdict
 
@@ -8,6 +11,11 @@ from .adb import AdbError
 from .apk import ApkError
 from .service import ToolConfig, Toolkit, ToolkitError
 from .feature_catalog import BY_KEY, FEATURES, feature_values, run_feature
+
+
+def _confirmation_options(command):
+    command.add_argument('--yes', action='store_true', help='Apply the reviewed action')
+    command.add_argument('--confirm-token', help='Confirmation token from the reviewed preview')
 
 
 def parser() -> argparse.ArgumentParser:
@@ -28,14 +36,14 @@ def parser() -> argparse.ArgumentParser:
     tool.add_argument('feature', choices=sorted(BY_KEY))
     tool.add_argument('--serial', default='', help='Required for tablet operations; not for source links or endpoint connection')
     tool.add_argument('--param', action='append', default=[], metavar='KEY=VALUE')
-    tool.add_argument('--yes', action='store_true', help='Confirm the displayed action')
+    _confirmation_options(tool)
     for name, text in (('info', 'Show device identity'), ('play', 'Verify/install local Google Play APKs'),
                        ('ads', 'Preview temporary ad-setting suppression or restore'),
                        ('apps', 'List or enable/disable optional apps'), ('reboot', 'Preview a normal restart')):
         sub = subs.add_parser(name, help=text)
         sub.add_argument('--serial', required=True, help='Explicit ADB serial from devices')
         if name != 'info':
-            sub.add_argument('--yes', action='store_true', help='Confirm the displayed changes')
+            _confirmation_options(sub)
         if name == 'play':
             sub.add_argument('apks', nargs='+', help='Local APK files (three required components, optional Account Manager)')
         if name == 'ads':
@@ -57,6 +65,23 @@ def _show_plan(plan):
         print('Note: ' + warning)
 
 
+def _confirm_plan(toolkit, plan, args, demo):
+    _show_plan(plan)
+    # Include every immutable field, even snapshot and signer details that
+    # might be abbreviated in the human-readable preview.
+    payload = json.dumps([type(plan).__name__, asdict(plan)], sort_keys=True,
+                         separators=(',', ':'), default=os.fspath).encode('utf-8')
+    token = hashlib.sha256(payload).hexdigest()
+    if not args.yes:
+        flags = '--yes' if demo else f'--yes --confirm-token {token}'
+        print('Preview only — no changes made. After review, repeat with ' + flags)
+        return 0
+    if not demo and args.confirm_token != token:
+        raise ValueError('Confirmation token is missing or the reviewed plan changed. Run a fresh preview and review it.')
+    toolkit.execute(plan, confirmed=True)
+    return 0
+
+
 def main(argv=None) -> int:
     args = parser().parse_args(argv)
     demo = args.demo or getattr(args, 'gui_demo', False)
@@ -66,7 +91,7 @@ def main(argv=None) -> int:
             print(f'{feature.key}: {feature.label} [{feature.category}]')
             if args.feature:
                 print(feature.description)
-                print('Read only' if feature.read_only else 'Preview first; --yes confirms the action.')
+                print('Read only' if feature.read_only else 'Preview first. Apply with --yes and the displayed --confirm-token.')
                 for field in feature.fields:
                     choices = ' Choices: ' + ', '.join(field.choices) if field.choices else ''
                     print(f'  --param {field.key}=VALUE: {field.label}. Default: {field.default!r}.{choices}')
@@ -108,12 +133,7 @@ def main(argv=None) -> int:
                 else:
                     print(result)
                 return 0
-            _show_plan(result)
-            if not args.yes:
-                print('Preview only — no changes made. Run again with --yes to apply this action.')
-                return 0
-            toolkit.execute(result, confirmed=True)
-            return 0
+            return _confirm_plan(toolkit, result, args, demo)
         if args.command == 'devices':
             devices = toolkit.devices()
             if not devices:
@@ -137,12 +157,7 @@ def main(argv=None) -> int:
             plan = toolkit.plan_package(args.serial, args.enable or args.disable, enable=bool(args.enable))
         else:
             plan = toolkit.plan_reboot(args.serial)
-        _show_plan(plan)
-        if not args.yes:
-            print('Preview only — no changes made. Run again with --yes to apply this action.')
-            return 0
-        toolkit.execute(plan, confirmed=True)
-        return 0
+        return _confirm_plan(toolkit, plan, args, demo)
     except (ToolkitError, AdbError, ApkError, OSError, ValueError) as exc:
         print(f'Error: {exc}', file=sys.stderr)
         return 1

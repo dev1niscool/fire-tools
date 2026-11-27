@@ -381,7 +381,7 @@ class ExtraWorkflows:
     def _private_dns_state(self, device, parent=None):
         identity = _identity(device)
         name = 'private-dns-' + identity['serial_sha256'] + '.json'
-        directory_context = _pinned_directory(self.state_dir.absolute()) if parent is None else nullcontext(parent)
+        directory_context = self._journal_directory() if parent is None else nullcontext(parent)
         try:
             with directory_context as directory:
                 return name, self._read_private_dns_journal(directory / name, identity)
@@ -601,6 +601,7 @@ class ExtraWorkflows:
             _fail('Expected a reviewed host ADB transport plan.')
         endpoint = plan.params['endpoint']
         verb = HOST_TRANSPORT_OPERATIONS[plan.operation]
+        self._require_execution_directory()
         result = self.adb._run([verb, endpoint])
         expected = {f'disconnected {endpoint}'} if verb == 'disconnect' else {
             f'connected to {endpoint}', f'already connected to {endpoint}',
@@ -659,7 +660,7 @@ class ExtraWorkflows:
         if target['private_dns_mode'] != 'hostname':
             keys.reverse()
         identity = _identity(plan.device)
-        with _pinned_directory(self.state_dir.absolute(), create=not restoring) as parent:
+        with self._journal_directory(create=not restoring) as parent:
             name, journal = self._private_dns_state(plan.device, parent)
             if _json(journal.fingerprint if journal is not None else None) != snapshot['undo']:
                 _fail('The saved Private DNS configuration changed after preview.')

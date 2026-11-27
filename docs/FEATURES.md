@@ -15,7 +15,7 @@ The original v46 inventory is in [PARITY-RESEARCH.md](PARITY-RESEARCH.md). That 
 | Launcher and keyboard | Select installed HOME/IME, verify replacement before stock launcher disable, restore Fire launcher, widget binding, keys/taps | No original launcher downgrade, Launcher Hijack or exploit-specific workaround reproduction. Firmware can reject defaults. |
 | Settings and privacy | Database list/get/change/delete/undo; supported backup/import; display, animation, rotation, timeout, privacy and selected sounds | No guarantee hidden Amazon settings are honored or that telemetry is eliminated. Restore deliberately validates supported portable keys. |
 | Lockscreen, wallpaper, parental controls | Explicit tablet Settings entry points; related settings editor | Some actions are shortcuts requiring on-tablet selection. They do not reproduce the original wallpaper/provisioning/parental-hiding companions or bypass authentication. |
-| Backups and files | Configuration/package snapshots, supported restore, APK extraction including all splits, shared storage backup, file copy, mkdir/rename/delete | No full firmware/private-app-data image. Package snapshot restore is limited to supported optional apps; APK files are separate. |
+| Backups and files | Configuration/package snapshots, supported restore, APK extraction including all splits, shared storage backup, file copy, mkdir/rename/delete | No full firmware/private-app-data image. Restoring a snapshot records the previous states of supported optional apps for `packages-undo`. APK files are separate. |
 | Screen and diagnostics | PNG capture, timed silent MP4 recording, task list, battery/memory/storage diagnostics, recent logs, bounded device commands | No screenshot editor, interactive shell history/aliases or continuous log viewer. DRM content can be blank. |
 | Connectivity and network | Host-only connect/disconnect; selected-device legacy TCP/USB control; private DNS undo, metering, data saver | No encrypted Android pairing workflow or automatic VPN/certificate setup. Legacy TCP is for trusted private networks. |
 | Profiles and power | List/create/switch/remove supported profiles, normal/recovery/bootloader restart, shutdown | Owner/current deletion refused. Device changes and installs use owner user 0; other-profile install management is not reproduced. |
@@ -72,7 +72,7 @@ The original Google Play, temporary-ad-setting and quick-app tabs remain availab
 | `sound` | Notification, alarm or ringtone sound | Display and sounds | `kind`, `value` |
 | `wallpaper` | Open tablet wallpaper chooser | Display and sounds | None |
 | `lockscreen` | Open tablet security settings | Settings | `mode` |
-| `parental-settings` | Parental-control settings | Settings | `mode` |
+| `parental-settings` | Open Settings for parental controls | Settings | None |
 | `assistant` | Configure installed voice assistant | Google and assistants | `component` |
 | `accessibility` | Configure an accessibility service | Settings | `component`, `enable` |
 | `users` | List tablet profiles (read) | Profiles | None |

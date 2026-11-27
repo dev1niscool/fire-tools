@@ -1,0 +1,154 @@
+Independent whole-branch review, 2026-11-27
+
+Base 95fe9e49c0c22fce1c8b376bf6db901326fe496e
+Head 21d52bea9fbb6d2d8de2e8fbde00f3664001b9d5
+
+Verdict — changes required before publication. Four high-severity findings,
+two medium-severity findings and one low-severity finding.
+
+High
+
+1. CLI confirmation can install a different APK and signer from the preview.
+   open_fire_toolkit/cli.py lines 102–115 and package_workflows.py lines
+   412–431. The documented two-invocation procedure regenerates the plan
+   on the --yes invocation and executes immediately. With the real CLI and
+   Toolkit, the synthetic APK verifier and a simulated tablet, I previewed
+   a file signed by A, changed that input to a file signed by B and repeated
+   the same command with --yes. It exited 0 and installed B. The staged-file
+   verification correctly matched B to the second, automatically accepted
+   plan. The same two-invocation design permits the target set of a custom
+   debloat operation to change. Bind execution to a digest of the reviewed
+   plan, or allow confirmation of the same in-memory preview. Retain a way
+   to confirm a reviewed batch of APKs with different signers.
+
+2. The operation lock and undo records can refer to different directories.
+   open_fire_toolkit/service.py lines 225, 140 and 160. The lock is held in
+   the initial directory. Each undo reader/writer opens the canonical path
+   again. Device and package journals also open it independently. In a POSIX
+   temporary directory, I paused a confirmed ads action after lock creation,
+   renamed the state directory and recreated its original name as an ordinary
+   directory. A second Toolkit accepted a reboot plan while the first lock
+   still existed. The first then changed the ads setting and put state.json
+   in the replacement directory. Both actions reported success. Bind journal
+   access to the directory held for execution and check that the configured
+   location still names it before writes. A directory replacement should
+   invalidate the active operation and preserve its recovery records.
+
+3. Package workflows omit accepted writes and can confirm the wrong device.
+   open_fire_toolkit/package_workflows.py lines 485–505, 535–546, 557–582,
+   612–616 and 628–632. With the existing Tablet.change_after fixture, a
+   one-package disable returned a confirmed disabled state even though the
+   model changed from Fire to Other immediately after the command. With two
+   packages, a disconnect on the first inventory read after disabling Photos
+   produced a partial report listing only Kindle. The fixture showed both
+   apps disabled. The system-update rollback and component paths also perform
+   diagnostic reads before recording accepted commands. Record each accepted
+   mutation and target immediately, then verify tablet identity and owner
+   before trusting readback. Upgrade the progress entry after verification.
+
+4. The recommended helper setup can grant the elevated settings permission
+   to a previously installed APK. companion/README.md lines 21–26 present
+   three independent shell commands. If installation fails, a paste into
+   the documented shell continues with the unverified package-name grant.
+   This occurs, for example, when a previous installation remains under a
+   different signing key. The desktop already verifies the installed bytes
+   and user-supplied signer before granting WRITE_SECURE_SETTINGS. Route the
+   setup instructions through helper-start and the signer printed by the
+   local build, including first-install and existing-install cases.
+
+Medium
+
+5. Restoring a package snapshot bypasses package undo. In
+   open_fire_toolkit/device_workflows.py lines 748–758 and 1018–1032 the
+   standalone and combined restore paths apply package-state steps directly.
+   The pre-restore state exists in the preview but never enters a journal.
+   An isolated package export followed by changing Kindle's state and
+   restoring the file changed the app back and created no undo directory.
+   The input snapshot contains the target state, so it cannot recover the
+   pre-restore state. Route these steps through the existing package journal
+   semantics, retaining the pre-restore states after partial completion.
+
+6. Source archive generation includes private local files by extension.
+   scripts/package_release.py lines 12–30 select all .png/.txt files below
+   docs and most .xml/.md files below companion. A temporary source tree
+   containing docs/images/my-tablet.png, docs/local-logcat.txt and
+   companion/local-notes.xml selected all three for publication. A screenshot
+   saved to the first path through the new tool would be included in the ZIP.
+   The actual reviewed checkout had no such files or untracked selected
+   entries. Use a distribution inventory that identifies intended repository
+   files, works in the extracted source tree, and excludes local additions.
+   Exercise inclusion of the demo screenshot and exclusion of private images
+   and text records in the release tests.
+
+Low
+
+7. The parental-control form offers two options with identical behavior.
+   open_fire_toolkit/feature_catalog.py line 94 and device_workflows.py
+   lines 768–776. Through the public catalog, both show and hide previewed
+   exactly one action, opening android.settings.SETTINGS. The preview warning
+   and feature matrix explain the firmware limitation. Label the form as a
+   Settings shortcut and remove the ineffective visibility choice from the
+   public catalog. Existing command-line aliases can retain their explicit
+   limitation message if compatibility is desired.
+
+Verification
+
+Read the feature specification, implementation plan, progress ledger,
+coverage matrix and scoped reviews. Traced catalog and desktop/CLI dispatch,
+APK staging and signer checks, the host TransportPlan exception, state and
+lock lifetimes, package progress, helper manifest and lifecycle, and archive
+selection. Host transport revalidates a concrete TransportPlan and restricts
+the host command and endpoint. The helper has private service/receiver
+components, backup disabled, no network permission, an explicit stop action
+and notification availability checks before each enforcement pass.
+
+Independently ran the full unittest suite on Linux with the local JDK.
+202 tests passed with no skips. git diff --check passed for the review range.
+The catalog contained 85 entries. The release selector for the reviewed head
+contained 78 source paths, all tracked, before adding this review file. No
+APK, SDK executable, JAR, signing key, state JSON or log file was present in
+those tracked paths. Targeted checks above used existing simulated devices,
+synthetic APK metadata and temporary host files. Physical Fire OS behavior,
+native Windows/macOS execution and hosted CI results were outside these
+verification runs.
+
+Scoped re-review of the consolidated fixes, 2026-11-27
+
+Verdict — approved for source publication. All seven findings above are
+resolved. No further defect was found in the changes addressing them.
+Reviewed fix diff SHA-256
+808f4fe4750d112966f04db9ef33e634b595db4b673bc4a64b9570b3d2a8337f.
+
+1. Real CLI confirmation now binds the complete immutable plan to the digest
+   supplied on the apply invocation. The tests reject an altered signer or
+   debloat selection and accept an unchanged batch with two distinct signers.
+2. The execution-scoped handle is shared by the lock and all four journal
+   paths. I repeated the two-Toolkit rotation check from the initial review.
+   After the directory moved, the original ads operation stopped before the
+   write, the tablet's original setting survived and both directories were
+   clean after lock release.
+3. I repeated the single final-write identity change and the interrupted
+   second-package readback. Both returned an error identifying the accepted
+   command and package. In the two-package case, the earlier verified
+   change also appeared in the result. Launcher and rollback regression
+   tests exercise the same confirmation guard.
+4. The helper guide uses the local build's expected signer in both steps.
+   Its examples parse through the CLI and direct the privileged operation
+   through the installed-helper verification workflow.
+5. Package snapshot restores register original states in the ordinary
+   package journal. The regression check partially restores two packages,
+   retries from the same snapshot and recovers both original states through
+   package undo, for standalone and combined backups.
+6. The explicit distribution inventory includes 81 intended source paths.
+   The archive regression test added private images, logs, companion notes,
+   a key, an APK and an extra script to an extracted tree. The rebuilt ZIP
+   was byte-identical to the archive before those additions.
+7. The public catalog and actual backend expose a parameter-free Settings
+   shortcut for parental controls. Its preview describes on-tablet selection
+   and authentication.
+
+I independently ran the complete 212-test suite on Linux with JDK 21 and
+no skips. The working-tree diff passed git diff --check against 21d52be.
+This approval covers the source and simulated workflows. Physical Fire
+tablet results, Windows/macOS runtime behavior and hosted CI outcomes
+remain unverified by this re-review.

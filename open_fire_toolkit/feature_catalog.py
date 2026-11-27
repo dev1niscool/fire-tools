@@ -91,7 +91,7 @@ FEATURES = (
     _device('sound', 'Notification, alarm or ringtone sound', 'sound', (Field('kind', 'Sound', 'notification', ('notification', 'alarm', 'ringtone')), Field('value', 'Tablet content:// or file:// audio URI')), category='Display and sounds'),
     _device('wallpaper', 'Open tablet wallpaper chooser', 'wallpaper', description='Finish selection on the tablet. This does not bypass Amazon lock-screen wallpaper restrictions.', category='Display and sounds'),
     _device('lockscreen', 'Open tablet security settings', 'lockscreen', (Field('mode', 'Action', 'settings', ('settings',)),), 'Change lock credentials on the tablet. No credential bypass.', 'Settings'),
-    _device('parental-settings', 'Parental-control settings', 'parental-settings', (Field('mode', 'Visibility request', 'show', ('show', 'hide')),), 'Does not bypass parent authentication or remove management policies.', 'Settings'),
+    _device('parental-settings', 'Open Settings for parental controls', 'parental-settings', (), 'Find parental controls and authenticate on the tablet. Fire OS determines which options are available.', 'Settings'),
     _device('assistant', 'Configure installed voice assistant', 'assistant', (COMPONENT,), 'Requires a compatible installed voice interaction service. Online assistant support is separate.', 'Google and assistants'),
     _device('accessibility', 'Configure an accessibility service', 'accessibility', (COMPONENT, Field('enable', 'Enable', 'true', ('true', 'false'))), 'Enabling opens the tablet settings for your consent. Accessibility can read screen content and act on your behalf. Disabling retains other service bindings.', 'Settings'),
     _device('users', 'List tablet profiles', 'users', category='Profiles', read_only=True),

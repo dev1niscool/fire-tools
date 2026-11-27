@@ -1,0 +1,66 @@
+Final review fixes, 2026-11-27
+
+Base 21d52bea9fbb6d2d8de2e8fbde00f3664001b9d5
+
+1. Real CLI changes require --yes and the SHA-256 token printed by the
+   reviewed preview. The token covers the frozen plan type and all fields,
+   including the device, parameters, targets, previous values, file hashes
+   and signer certificates. The simulated demo retains --yes. The CLI test
+   reviews two APKs with distinct signers, checks refusal after a signer
+   change, applies the unchanged batch, and checks a changed debloat list.
+
+2. Execution holds one state directory through lock release. Undo reads and
+   writes use that same handle and check the configured directory identity.
+   Device guards check the directory after querying tablet identity. A POSIX
+   subprocess rotates the directory during a simulated ads action. The action
+   stops before the mutation and removes its own lock through the held handle.
+   Separate tests exercise rejection by all four undo readers. Windows still
+   holds path components without delete sharing.
+
+3. Package operations add each accepted command and its target to progress
+   before diagnostic reads. Identity and owner are checked before readback
+   and again before reporting confirmation. Reinstall and subsequent state
+   changes retain independent progress. Tests cover a final target changing
+   identity, a disconnect after accepting the second batch write, launcher
+   selection, factory rollback and an explicit Android rejection.
+
+4. The companion guide uses the certificate fingerprint from the local build
+   for verified sideload and helper-start. A matching existing installation
+   can use helper-start directly. The documented commands use the real CLI
+   options and an absolute APK path. The privileged grant is available only
+   after the helper's installed bytes and expected signer are verified by
+   this setup flow.
+
+5. Package-only and combined snapshot restores send reviewed state changes
+   through the package undo journal. The previous batch remains available
+   across an unsuccessful first write. A partial import records its snapshot
+   hash so a retry can extend the same undo batch. Completing the import
+   ends that association. Tests partially restore two apps, retry the same
+   import, then use ordinary package undo to recover both pre-import states.
+
+6. release-files.txt lists each intended distribution path, including the
+   demo screenshot, helper source, reviews, inventory and this report. The
+   source builder uses that file in a checkout and after ZIP extraction.
+   Reproducibility tests rebuild an extracted tree after adding local images,
+   log text, companion notes, an APK, a signing key and an extra script.
+   The rebuilt ZIP is byte-identical. Inner and outer SHA-256 checks remain.
+
+7. The catalog labels parental-settings as a shortcut to Settings. It takes
+   no parameters. The preview identifies the general Settings intent and
+   explains that the owner must locate parental controls and authenticate on
+   the tablet. The public form, backend validation and feature matrix agree.
+
+Verification
+
+New regression cases failed on the prior behavior and passed after the
+corresponding changes. Linux ran 212 unittest cases with a JDK and no skips.
+Python compilation and git diff --check passed. Source packaging tests check
+deterministic rebuilds, included paths and manifest hashes. Device commands
+were exercised with simulated tablets. Hardware, native Windows/macOS and
+hosted CI runs remain outside this verification.
+
+Release maintenance
+
+An edit to an already listed report or ledger needs only a fresh archive
+and checksum build. A newly named distribution file needs its exact
+repository-relative path added to release-files.txt before packaging.
