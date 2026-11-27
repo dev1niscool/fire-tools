@@ -1,7 +1,12 @@
 import contextlib
 import io
+import json
+import os
+from pathlib import Path
+import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -32,6 +37,53 @@ class CliTests(unittest.TestCase):
     def test_unknown_demo_serial_refused(self):
         code,out,err=self.call(['--demo','info','--serial','another'])
         self.assertEqual(code,1);self.assertIn('serial',err.lower())
+    def test_source_launcher_isolates_python_and_forwards_arguments(self):
+        if os.name != 'nt' and not sys.platform.startswith('linux'):
+            self.skipTest('Source launchers target Linux and Windows')
+        project = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve() / 'source with spaces'
+            package = root / 'open_fire_toolkit'
+            package.mkdir(parents=True)
+            downloads = root.parent / 'Downloads'
+            downloads.mkdir()
+            filename = 'file with spaces.apk'
+            (downloads / filename).write_bytes(b'caller file')
+            (root / filename).write_bytes(b'different source file')
+            shutil.copy(project / 'open_fire_toolkit' / '__main__.py', package)
+            (package / '__init__.py').write_text('', encoding='utf-8')
+            (package / 'cli.py').write_text(
+                'import json, sys\n'
+                'from pathlib import Path\n'
+                'def main():\n'
+                '    print(json.dumps([sys.flags.isolated, sys.flags.no_site, sys.argv[1:], sys.path, '
+                'Path(sys.argv[2]).read_bytes().hex()]))\n'
+                '    return 19\n', encoding='utf-8')
+            options = ['check-apks', filename]
+            if os.name == 'nt':
+                # The extracted folder may contain unrelated files with interpreter names.
+                for filename in ('py.exe', 'python.exe', 'py.cmd', 'python.cmd'):
+                    (root / filename).touch()
+                    (downloads / filename).touch()
+                shutil.copy(project / 'launch-windows.cmd', root)
+                command = [os.environ['COMSPEC'], '/d', '/c', 'call', str(root / 'launch-windows.cmd')]
+            else:
+                launcher = root / 'launch-linux.sh'
+                shutil.copy(project / launcher.name, launcher)
+                link = root.parent / 'link to launcher'
+                link.symlink_to(launcher)
+                command = [str(link)]
+            env = dict(os.environ, PYTHONHOME=directory, PYTHONPATH=directory)
+            result = subprocess.run([*command, *options], cwd=downloads, env=env, capture_output=True,
+                                    text=True, timeout=20)
+            self.assertEqual(result.returncode, 19, result.stderr or result.stdout)
+            isolated, no_site, received, imports, read_bytes = json.loads(result.stdout)
+            self.assertEqual(bytes.fromhex(read_bytes), b'caller file')
+            self.assertEqual((isolated, no_site), (1, 1))
+            self.assertEqual(received, options)
+            self.assertNotIn(str(root), imports)
+            self.assertNotIn(directory, imports)
+
     def test_real_cli_help_and_demo_subprocess(self):
         for args in (['--help'],['--demo','devices']):
             result=subprocess.run([sys.executable,'-m','open_fire_toolkit',*args],capture_output=True,text=True,timeout=10)

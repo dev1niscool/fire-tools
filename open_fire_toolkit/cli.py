@@ -29,6 +29,8 @@ def parser() -> argparse.ArgumentParser:
     subs = p.add_subparsers(dest='command')
     gui = subs.add_parser('gui', help='Open the desktop interface (default)')
     gui.add_argument('--demo', dest='gui_demo', action='store_true', help='Offline simulation')
+    check = subs.add_parser('check-apks', help='Compare local files with documented scan hashes before connecting a tablet')
+    check.add_argument('apks', nargs='+', help='Local APK file paths')
     subs.add_parser('devices', help='List ADB devices without selecting one')
     catalog = subs.add_parser('tools', help='List all tools and their parameters; no device required')
     catalog.add_argument('--feature', choices=sorted(BY_KEY), help='Show parameters for one tool')
@@ -87,6 +89,14 @@ def _confirm_plan(toolkit, plan, args, demo):
 def main(argv=None) -> int:
     args = parser().parse_args(argv)
     demo = args.demo or getattr(args, 'gui_demo', False)
+    if args.command == 'check-apks':
+        if demo:
+            print('Run check-apks without --demo to hash your local files.', file=sys.stderr)
+            return 1
+        from .apk_checks import check_apk_files
+        report, matched = check_apk_files(args.apks)
+        print(report)
+        return 0 if matched else 1
     if args.command == 'tools':
         selected = [BY_KEY[args.feature]] if args.feature else FEATURES
         for feature in selected:

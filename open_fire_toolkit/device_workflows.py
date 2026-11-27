@@ -859,18 +859,15 @@ class DeviceWorkflows:
             steps.append(['request', args])
             return
         if op in ('helper-start', 'helper-stop', 'helper-restore'):
-            _args(p, () if op == 'helper-stop' else ('signer',))
-            if op == 'helper-stop':
-                if HELPER not in self.adb.packages(serial):
-                    _fail('Install the source-built helper on the owner profile first.')
-            else:
-                digest = self._helper_identity(device, p['signer'])
+            _args(p, ('signer',))
+            digest = self._helper_identity(device, p['signer'])
+            if op != 'helper-stop':
                 previous = self._permission_state(serial, HELPER, HELPER_PERMISSION)
                 steps.append(['helper-grant', digest, previous])
                 if previous is None:
                     warnings.append('The tablet did not expose the prior helper permission state.')
                 warnings.append('WRITE_SECURE_SETTINGS grants this installed helper broad settings access. Compare the signer to your own source build.')
-            steps.append(['helper-open'])
+            steps.append(['helper-open', digest])
             warnings.append('On the tablet press ' + {'helper-start':'Enable', 'helper-stop':'Stop', 'helper-restore':'Restore'}[op]
                             + '. Opening the activity does not confirm that action.')
             return
@@ -1078,7 +1075,13 @@ class DeviceWorkflows:
             result = self._device_shell(serial, args)
             completed.append((result if result else 'Command accepted.') if kind == 'shell' else 'Tablet accepted the command.')
         elif kind == 'launch' or kind == 'helper-open':
-            args = ['-a', values[0]] if kind == 'launch' else ['-n', HELPER + '/.MainActivity']
+            if kind == 'helper-open':
+                if self._helper_identity(plan.device, plan.params['signer']) != values[0]:
+                    _fail('Installed helper changed since preview. Refusing to open it.')
+                self._device_guard(plan)
+                args = ['-n', HELPER + '/.MainActivity']
+            else:
+                args = ['-a', values[0]]
             self._device_shell(serial, ['am', 'start', '--user', '0', *args])
             completed.append('Activity launch requested. Complete the selection on the tablet.')
         elif kind == 'helper-grant':
@@ -1333,7 +1336,7 @@ def _describe_step(step):
     if kind == 'launch':
         return 'Open on the tablet: ' + v[0]
     if kind == 'helper-open':
-        return 'Open ' + HELPER + '/.MainActivity on the tablet.'
+        return f'Open {HELPER}/.MainActivity after rechecking APK SHA-256 {v[0]}.'
     if kind == 'helper-grant':
         return f'Grant WRITE_SECURE_SETTINGS to the verified helper APK with SHA-256 {v[0]}. Prior grant: {v[1] or "unavailable"}.'
     if kind == 'permission':

@@ -2,7 +2,20 @@
 
 On a Fire HD 10, open **Connection → Scan devices**, then select the tablet and choose **Use selected tablet**. Note its model, Android API level and supported ABIs (processor architectures). Amazon lists the 2023 13th-generation Fire HD 10 as `KFTUWI`, with Fire OS 8, Android 11 (API 30) and 32-bit and 64-bit app support. The examples below use that model. For any other model, choose variants for the API and ABIs reported by your tablet. Amazon’s 2026 **Alexa Tablet** 8, 11 and 12 Pro already include Google Play. [Fire HD 10 specifications](https://developer.amazon.com/docs/device-specs/ft-device-specifications-firehd-models?v=firehd10_2023) · [Alexa Tablet announcement](https://www.aboutamazon.com/news/devices/new-amazon-alexa-tablets-alexa-plus)
 
-## Pick your components
+## Files with a local scan record
+
+These are the six exact builds examined in the project audit. Before enabling USB debugging, open **Google Play → Choose APKs → Check scan records** to compare your downloads by SHA-256. The CLI offers the same check. A match identifies the bytes examined on November 27, 2026. Version changes, including security updates, produce a different hash. [Scan scope and results](TESTING.md)
+
+| Google component | Scanned build |
+| --- | --- |
+| Google Account Manager (legacy login) | [7.1.2, API 23+, noarch](https://www.apkmirror.com/apk/google-inc/google-account-manager/google-account-manager-7-1-2-release/google-account-manager--7-1-2-android-apk-download/) |
+| Google Services Framework | [10-6494331, API 29+, noarch](https://www.apkmirror.com/apk/google-inc/google-services-framework/google-services-framework-10-6494331-release/google-services-framework-10-6494331-android-apk-download/) |
+| Google Play services | [25.20.37](https://www.apkmirror.com/apk/google-inc/google-play-services/google-play-services-25-20-37-release/google-play-services-25-20-37-150400-766884605-android-apk-download/) |
+| Google Play Store | [36.3.12-21](https://www.apkmirror.com/apk/google-inc/google-play-store/google-play-store-36-3-12-release/google-play-store-36-3-12-21-0-pr-542033711-2-android-apk-download/) |
+| Google Calendar Sync (optional) | [2021.23.3](https://gitlab.opengapps.org/opengapps/all/-/blob/b458223777512c97639cb6bb54bfad93047406d7/app/com.google.android.syncadapters.calendar/30/nodpi/2017005136.apk) |
+| Google Contacts Sync (optional) | [11](https://gitlab.opengapps.org/opengapps/all/-/blob/b458223777512c97639cb6bb54bfad93047406d7/app/com.google.android.syncadapters.contacts/30/nodpi/30.apk) |
+
+## Other download options and device requirements
 
 For a fresh setup following the Fire Toolbox Android 11 workflow, select **Google Account Manager**, **Google Services Framework**, **Google Play services** and **Google Play Store**. Fire Tools also accepts a three-file plan with the legacy Account Manager omitted. Calendar and Contacts Sync are optional for people who want to sync that data.
 

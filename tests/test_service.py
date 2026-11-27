@@ -27,6 +27,9 @@ class FakeAdb:
         self.fail_install = None
         self.disabled = set()
         self.present = set(OPTIONAL_APPS)
+        self.system = {'com.android.providers.calendar', 'com.android.providers.contacts'}
+        self.installed_bytes = {}
+        self.package_by_bytes = {}
         self.before_install = None
         self.ignore_setting = False
     def devices(self): return [Device('SERIAL123','device','KFTUWI')]
@@ -35,6 +38,13 @@ class FakeAdb:
     def shell(self, serial, args, timeout=30):
         args = tuple(args)
         self.commands.append(args)
+        if args[:5] == ('pm', 'list', 'packages', '--user', '0'):
+            names = self.present if len(args) == 5 else self.system & self.present
+            return '\n'.join('package:' + name for name in sorted(names))
+        if args[:4] == ('pm', 'path', '--user', '0'):
+            return f'package:/data/app/{args[-1]}/base.apk'
+        if args[:3] == ('stat', '-c', '%s'):
+            return str(len(self.installed_bytes[args[3].split('/')[-2]]))
         if args[:4] == ('settings','--user','0','get'): return self.value
         if args[:4] == ('settings','--user','0','put'):
             if not self.ignore_setting: self.value=args[-1]
@@ -50,8 +60,16 @@ class FakeAdb:
     def install(self, serial, apk):
         if self.before_install: self.before_install(apk)
         if len(self.installed)==self.fail_install: raise RuntimeError('install rejected')
+        contents = Path(apk).read_bytes()
+        name = self.package_by_bytes[contents]
+        self.present.add(name)
+        self.installed_bytes[name] = contents
         self.installed.append(Path(apk).name)
         return 'Success'
+    def _run_device(self, serial, args, timeout):
+        if args[0] != 'pull':
+            raise AssertionError(args)
+        Path(args[2]).write_bytes(self.installed_bytes[args[1].split('/')[-2]])
     def reboot(self, serial): self.commands.append(('reboot',))
 
 
@@ -72,10 +90,11 @@ class ServiceTests(unittest.TestCase):
         return result
     def verifier(self, apks):
         by_hash={a.sha256:a for a in apks}
+        self.adb.package_by_bytes.update({a.path.read_bytes(): a.package for a in apks})
         def inspect(p):
             p=Path(p)
             return replace(by_hash[file_sha256(p)],path=p)
-        return patch('open_fire_toolkit.service.ApkVerifier',return_value=type('Verifier',(),{'inspect':staticmethod(inspect)})())
+        return patch('open_fire_toolkit.service.ApkVerifier',return_value=type('Verifier',(),{'inspect':staticmethod(inspect), 'inspect_installed_base':staticmethod(inspect)})())
     def test_unconfirmed_plan_cannot_write(self):
         plan=self.app.plan_ads('SERIAL123')
         with self.assertRaises(ToolkitError): self.app.execute(plan)
@@ -332,7 +351,8 @@ class ServiceTests(unittest.TestCase):
                        path=sync_path, sha256=file_sha256(sync_path))
         self.adb.present.update((provider, calendar, *(apk.package for apk in core)))
         self.adb.disabled.update((provider, calendar))
-        with self.verifier([sync]):
+        self.adb.installed_bytes.update({a.package: a.path.read_bytes() for a in core})
+        with self.verifier([*core, sync]):
             self.adb.disabled.add(core[0].package)
             with self.assertRaisesRegex(ToolkitError, 'Framework|com.google.android.gsf'):
                 self.app.plan_google_play('SERIAL123', [sync_path])
@@ -348,6 +368,46 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(self.adb.installed, ['00.apk'])
         self.assertNotIn(provider, self.adb.disabled)
         self.assertIn(calendar, self.adb.disabled)
+
+    def test_adapter_refuses_an_untrusted_existing_core_or_user_provider(self):
+        core = self.make_apks()
+        sync = replace(core[0], path=self.root / 'sync.apk', package='com.google.android.syncadapters.contacts')
+        sync.path.write_bytes(b'sync')
+        sync = replace(sync, sha256=file_sha256(sync.path))
+        provider = 'com.android.providers.contacts'
+        self.adb.present.update([provider, *(a.package for a in core)])
+        self.adb.system.discard(provider)
+        self.adb.installed_bytes.update({a.package: a.path.read_bytes() for a in core})
+        with self.verifier([*core, sync]), self.assertRaisesRegex(ToolkitError, 'system provider'):
+            self.app.plan_google_play('SERIAL123', [sync.path])
+        self.adb.system.add(provider)
+        wrong_store = replace(core[-1], signer_sha256=('b'*64,))
+        with self.verifier([*core[:-1], wrong_store, sync]), self.assertRaisesRegex(ToolkitError, 'com.android.vending'):
+            self.app.plan_google_play('SERIAL123', [sync.path])
+        self.assertEqual(self.adb.installed, [])
+
+    def test_existing_account_manager_must_match_google_before_core_only_install(self):
+        core = self.make_apks()
+        account = 'com.google.android.gsf.login'
+        self.adb.present.add(account)
+        self.adb.installed_bytes[account] = core[0].path.read_bytes()
+        # A valid Google signature for a different package is insufficient.
+        with self.verifier(core), self.assertRaisesRegex(ToolkitError, account):
+            self.app.plan_google_play('SERIAL123', [a.path for a in core])
+        self.assertEqual(self.adb.installed, [])
+
+    def test_play_readback_stops_after_unexpected_installed_bytes(self):
+        apks = self.make_apks()
+        pull = self.adb._run_device
+        def wrong_bytes(serial, args, timeout):
+            pull(serial, args, timeout)
+            p = Path(args[2])
+            p.write_bytes(b'x' * p.stat().st_size)
+        with self.verifier(apks), patch.object(self.adb, '_run_device', side_effect=wrong_bytes):
+            plan = self.app.plan_google_play('SERIAL123', [a.path for a in apks])
+            with self.assertRaisesRegex(ToolkitError, 'do not match.*Android accepted.*com.google.android.gsf'):
+                self.apply(plan)
+        self.assertEqual(self.adb.installed, ['00.apk'])
 
     def test_sync_apk_preflight_refuses_missing_provider_even_in_complete_batch(self):
         core = self.make_apks()
@@ -418,7 +478,7 @@ class ServiceTests(unittest.TestCase):
         with self.verifier(apks):
             plan=self.app.plan_google_play('SERIAL123',[a.path for a in apks])
             with self.assertRaises(ToolkitError) as cm:self.app.execute(plan,True,log=lambda x:None)
-        self.assertIn('Installed com.google.android.gsf',str(cm.exception))
+        self.assertIn('accepted the install request for com.google.android.gsf', str(cm.exception))
         self.assertIn('not rolled back',str(cm.exception))
         self.assertEqual(len(self.adb.installed),1)
     def test_unreadable_setting_after_write_reports_possible_change(self):

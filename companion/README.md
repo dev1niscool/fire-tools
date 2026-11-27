@@ -12,7 +12,7 @@ python scripts/build_ads_helper.py --sdk /path/to/android-sdk --java-home /path/
 
 Use `--android-api` and `--build-tools-version` to select installed versions. The compile platform must be API 28 or newer. The app targets SDK 28 to use the Android 9 foreground service contract on Fire OS. The companion requires Android 7.0 (API 24) or newer because its foreground service relies on Android's public app notification availability check. The desktop toolkit supports API 23 tablets. Android manages the notification channel on Android 8 and newer and the notification consent prompt on Android 13 and newer.
 
-The script builds offline, verifies the signature and APK alignment, and prints the output path, APK SHA-256, and signing certificate SHA-256. It creates a new APK path on a filesystem that supports hard links. The first development build generates a local signing key at `companion/build/ads-helper-development.p12`. Keep it private and retain it for updates signed with the same certificate. A fixed development password makes the file's access controls important. Local signing and build timestamps can change the bytes across builds.
+The script compiles the five named helper Java sources with annotation processing disabled. It builds offline, verifies the signature and APK alignment, and prints the output path, APK SHA-256, and signing certificate SHA-256. It creates a new APK path on a filesystem that supports hard links. The first development build generates a local signing key at `companion/build/ads-helper-development.p12`. Keep it private and retain it for updates signed with the same certificate. A fixed development password makes the file's access controls important. Local signing and build timestamps can change the bytes across builds.
 
 To use your own existing signing keystore, pass `--keystore /path/to/keystore.p12 --key-alias ALIAS`. The Android signing tool prompts for the required passwords. In an unattended build, add `--storepass-env NAME` or `--keypass-env NAME` with the names of environment variables holding the passwords. APKs, signing keys, and SDK dependencies are built or supplied locally.
 
@@ -36,6 +36,8 @@ python -m open_fire_toolkit --adb /path/to/adb --aapt /path/to/aapt --apksigner-
 ```
 
 On the tablet, allow helper notifications if Android asks, then tap **Enable**. The first check saves the original value or records that the setting was absent. While the foreground service runs, it checks the value every four seconds and when the screen turns on. Android can coalesce or delay background work. After a reboot, the service attempts to resume after normal boot completes if you enabled it and the grant is still present. Android or Fire OS may require you to open the app and tap **Enable** again.
+
+Desktop **helper-stop** also asks for the fingerprint and rechecks the installed APK before opening the activity. You can always stop monitoring directly on the tablet.
 
 **Stop** in the app or its notification turns off the service and preserves the saved setting. **Restore** stops enforcement and restores the saved value or deletes the entry if it was originally absent. Use **Restore** before revoking the grant or uninstalling. Uninstalling or clearing app data erases the saved original value.
 

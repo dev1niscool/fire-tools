@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 import xml.etree.ElementTree as ET
 
 
@@ -54,6 +55,38 @@ class CompanionBuildTests(unittest.TestCase):
         minimum = uses_sdk.get("{http://schemas.android.com/apk/res/android}minSdkVersion")
         self.assertGreaterEqual(int(minimum), 24)
         self.assertEqual(runpy.run_path(str(BUILD_SCRIPT))["MIN_ANDROID_API"], minimum)
+
+    def test_builder_excludes_unrelated_local_source_and_annotation_processors(self):
+        builder = runpy.run_path(str(BUILD_SCRIPT))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            shutil.copytree(ROOT / "companion" / "src", root / "src")
+            shutil.copyfile(ROOT / "companion/AndroidManifest.xml", root / "AndroidManifest.xml")
+            extra = root / "src/local/Unrelated.java"
+            extra.parent.mkdir()
+            extra.write_text("class Unrelated {}")
+            args = builder["parse_args"](["--sdk", str(root), "--output", str(root/"new.apk")])
+            tools = builder["Tools"](*([root / "tool"] * 7), keytool=None)
+            build = builder["build"]
+            run = Mock(side_effect=RuntimeError("captured compiler invocation"))
+            with patch.dict(build.__globals__, COMPANION=root, resolve_tools=lambda _: tools, run=run):
+                with self.assertRaisesRegex(RuntimeError, "captured compiler invocation"):
+                    build(args)
+            command, = run.call_args.args
+            self.assertEqual({"AdsService.java", "AdsState.java", "BootReceiver.java",
+                              "HelperSettings.java", "MainActivity.java"},
+                             {Path(arg).name for arg in command if str(arg).endswith(".java")})
+            self.assertIn("-proc:none", command)
+            self.assertIn("-sourcepath", command)
+
+    def test_builder_removes_ambient_java_options_from_signing_subprocess(self):
+        builder = runpy.run_path(str(BUILD_SCRIPT))
+        env = {"JAVA_TOOL_OPTIONS": "example", "JDK_JAVAC_OPTIONS": "example",
+               "JDK_JAVA_OPTIONS": "example", "_JAVA_OPTIONS": "example",
+               "CLASSPATH": "extra.jar", "SIGNING_PASSWORD_FOR_TEST": "placeholder"}
+        with patch("subprocess.run", return_value=subprocess.CompletedProcess([], 0, "")) as invoke:
+            builder["run"](["javac", "-version"], env=env)
+        self.assertEqual({"SIGNING_PASSWORD_FOR_TEST": "placeholder"}, invoke.call_args.kwargs["env"])
 
     def test_reports_a_missing_sdk_platform_jar(self):
         with tempfile.TemporaryDirectory() as directory:

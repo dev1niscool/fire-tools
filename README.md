@@ -4,6 +4,12 @@ An independent, MIT-licensed desktop and command-line toolkit for Amazon Fire ta
 
 This release is designed for Fire tablets running Android API 23 or later. Device changes require the primary adult (owner) profile. Compatibility on a physical tablet, including the Fire HD 10, remains unverified.
 
+## Checking your download
+
+Fire Tools runs from Python source on your computer. Use the launcher included in this repository with an installed copy of Python. The source distribution includes the optional Android helper as Java code. Google apps are separate downloads.
+
+**Before connecting the tablet**, open **Google Play → Choose APKs → Check scan records**. This reads the files locally and shows whether their SHA-256 hashes match files examined in the project audit. The command-line equivalent is `./launch-linux.sh check-apks file.apk` or `.\launch-windows.cmd check-apks "C:\Downloads\file.apk"` in PowerShell. For Google components, use the **Google Play** tab. It checks Google’s signing identity and verifies the installed bytes. The general **sideload** tool also accepts apps from other publishers. [Links to the six scanned builds](docs/GOOGLE-APKS.md#files-with-a-local-scan-record) · [Audit and scan results](docs/TESTING.md)
+
 ## The three main workflows
 
 | Goal | Where to find it | What it does |

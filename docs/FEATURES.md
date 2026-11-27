@@ -47,7 +47,7 @@ The original Google Play, temporary-ad-setting and quick-app tabs remain availab
 | `ads-package-disable` | Disable Special Offers app | Lock-screen ads | None |
 | `ads-package-restore` | Enable Special Offers app | Lock-screen ads | None |
 | `helper-start` | Set up the on-tablet ad helper | Lock-screen ads | `signer` |
-| `helper-stop` | Open helper to stop monitoring | Lock-screen ads | None |
+| `helper-stop` | Open helper to stop monitoring | Lock-screen ads | `signer` |
 | `helper-restore` | Open helper to restore ad setting | Lock-screen ads | `signer` |
 | `ota-disable` | Disable update packages | System updates | `packages` |
 | `ota-enable` | Enable update packages | System updates | `packages` |

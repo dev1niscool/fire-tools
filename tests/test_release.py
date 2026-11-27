@@ -1,4 +1,5 @@
 import importlib.util
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -54,6 +55,37 @@ class ReleaseTests(unittest.TestCase):
             try:(root/'README.md').symlink_to(secret)
             except (OSError,NotImplementedError):self.skipTest('symlinks unavailable')
             with self.assertRaises(ValueError):release.build_release(root,Path(d)/'out.zip')
+
+    def test_inventory_cannot_package_an_apk_or_signing_key(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for name in ('payload.apk', 'debug.p12', 'tools/adb.exe'):
+                with self.subTest(name=name):
+                    local = root / name
+                    local.parent.mkdir(exist_ok=True)
+                    local.write_bytes(b'private')
+                    (root / 'release-files.txt').write_text(f'release-files.txt\n{name}\n')
+                    with self.assertRaisesRegex(ValueError, 'distribution file'):
+                        release.build_release(root, root / 'output.zip')
+
+    def test_build_does_not_overwrite_an_unrelated_link_target(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'release-files.txt').write_text('release-files.txt\n')
+            private = root / 'other-document'
+            private.write_text('keep this')
+            output = root / 'out.zip'
+            checksum = root / 'out.zip.sha256'
+            for dest in (output, checksum):
+                with self.subTest(dest=dest):
+                    # Hard links exercise the write boundary on Windows and POSIX.
+                    os.link(private, dest)
+                    release.build_release(root, output)
+                    self.assertEqual(private.read_text(), 'keep this')
+                    self.assertEqual(checksum.read_text().split()[0],
+                                     hashlib.sha256(output.read_bytes()).hexdigest())
+                    output.unlink()
+                    checksum.unlink()
 
     def test_companion_source_is_shipped_without_keys_or_built_apks(self):
         with tempfile.TemporaryDirectory() as d:

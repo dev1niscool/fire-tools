@@ -530,22 +530,24 @@ class PackageWorkflows:
                         raise _error('System package changed since preview.')
                 if file_sha256(apk.path) != apk.sha256:
                     raise _error('Staged APK changed before installation.')
-                self._pkg_device(plan)
-                self.adb.install(plan.serial, apk.path)
-                completed.append(f'Android accepted the install request for {apk.package}.')
-                self._pkg_device(plan)
-                if apk.package not in self._pkg_list(plan.serial):
-                    raise _error(f'{apk.package} was not found in the owner package inventory after installation.')
-                paths = self._pkg_paths(plan.serial, apk.package)
-                if len(paths) != 1:
-                    raise _error(f'Cannot verify a standalone installed APK for {apk.package}.')
-                with tempfile.TemporaryDirectory(dir=staging, prefix='readback-') as directory:
-                    installed = Path(directory) / 'installed.apk'
-                    self._pull_device_file(plan.device, paths[0], installed, expected_size=apk.path.stat().st_size)
-                    if file_sha256(installed) != apk.sha256:
-                        raise _error(f'The installed bytes for {apk.package} do not match the reviewed APK.')
-                # The installed bytes match the signed APK whose manifest supplied this version.
-                self._pkg_confirm(plan, completed, f'Verified installed {apk.package} version {apk.version_code} for owner user 0.')
+                self._install_verified_apk(plan, apk, completed, staging)
+
+    def _install_verified_apk(self, plan, apk, completed, staging):
+        self._pkg_device(plan)
+        self.adb.install(plan.serial, apk.path)
+        completed.append(f'Android accepted the install request for {apk.package}.')
+        self._pkg_device(plan)
+        if apk.package not in self._pkg_list(plan.serial):
+            raise _error(f'{apk.package} was not found in the owner package inventory after installation.')
+        paths = self._pkg_paths(plan.serial, apk.package)
+        if len(paths) != 1:
+            raise _error(f'Cannot verify a standalone installed APK for {apk.package}.')
+        with tempfile.TemporaryDirectory(dir=staging, prefix='readback-') as directory:
+            installed = Path(directory) / 'installed.apk'
+            self._pull_device_file(plan.device, paths[0], installed, expected_size=apk.path.stat().st_size)
+            if file_sha256(installed) != apk.sha256:
+                raise _error(f'The installed bytes for {apk.package} do not match the reviewed APK.')
+        self._pkg_confirm(plan, completed, f'Verified installed {apk.package} version {apk.version_code} for owner user 0.')
 
     def _pkg_move(self, plan, p, before, target, completed):
         if target == before:

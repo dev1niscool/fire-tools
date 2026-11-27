@@ -23,9 +23,22 @@ Run `python3 -m open_fire_toolkit gui --demo` in a desktop session with Tk. On L
 
 ## Release archive
 
-Compare the source ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c fire-tools-0.3.0.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\fire-tools-0.3.0.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `fire-tools-0.3.0.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
+Compare the source ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c fire-tools-0.3.1.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\fire-tools-0.3.1.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `fire-tools-0.3.1.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
 
 The checksum verifies that the ZIP matches the checksum you obtained. Obtain both files from a source you trust.
+
+## Desktop and tablet safety audit (0.3.1, 2026-11-27)
+
+| What was checked | Result |
+| --- | --- |
+| Desktop startup, application imports, and child processes | Review found no hidden downloads, telemetry, credential collection or PC startup service. The runtime uses Python’s standard library. Source launchers start an already installed Python in isolated mode. ADB, the SDK tools and the Java installation are separate executables selected by the user. |
+| Static analysis | Bandit 1.9.4 scanned all 18 Python application and build-script files. It reported zero high or medium issues. Review of its eight low findings traced seven to subprocess imports and explicit tool calls, and one to a variable containing the name of a password environment variable. |
+| Local APK check | The CLI matched all six previously scanned files by SHA-256. The GUI identified a real Account Manager file with no tablet connected or Android tools configured. An unknown hash has no scan verdict. |
+| Google installer | All six actual APKs passed Google signature verification, staging and installed-byte readback using a simulated tablet. The installer checks the package ID and signer of core apps already installed when adding sync adapters. A sync provider must be a system app before Fire Tools enables it. |
+| Optional ads helper | An offline build using Android Build Tools 36 and JDK 21 produced a v3-signed APK with SHA-256 `549e619e8110685b395a471a382ca43ccfd2800481e5fb02c001a11b6900c0e0`. ClamAV 1.5.5 reported zero detections with main 63, daily 28194 and bytecode 339, with no scanner warnings. The compiled APK contained the project’s Java classes, no native libraries and no internet permission. The on-tablet helper holds a secure-settings permission and can resume its visible service at boot when enabled. Its desktop controls verify the installed file and user-supplied signer before opening it. Each locally signed build has its own hash. |
+| Packaging | The source distribution includes the reviewed source paths, documentation, tests and demo image. The helper APK, private signing key, SDK tools and external Google APKs are excluded. GitHub Actions uses read-only repository permissions and pins its actions to specific commits. |
+
+The [Google APK guide](GOOGLE-APKS.md#files-with-a-local-scan-record) links the exact files used in testing. Of the six APKMirror listings in its alternate table, Account Manager and Framework match locally scanned files. The other four listings were checked for package, signer and published file hashes. We could not retrieve those exact four APKs from the download pages for a local malware scan. An external tool or an APK update obtained later needs its own checks. Physical-tablet execution and Google account sign-in remain untested.
 
 ## Fire Toolbox v46 workflow checks (0.3, 2026-11-27)
 

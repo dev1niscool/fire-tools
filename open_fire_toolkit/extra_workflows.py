@@ -50,17 +50,25 @@ OPTIONAL_FORM_FIELDS = {
     'private-dns': 'hostname',
 }
 SOURCES = (
-    ('Google APKMirror example', 'Google Account Manager (legacy login)', 'com.google.android.gsf.login',
+    ('Scanned file (compare SHA-256)', 'Google Account Manager (legacy login)', 'com.google.android.gsf.login',
      'https://www.apkmirror.com/apk/google-inc/google-account-manager/google-account-manager-7-1-2-release/google-account-manager--7-1-2-android-apk-download/'),
-    ('Google APKMirror example', 'Google Services Framework', 'com.google.android.gsf',
+    ('Scanned file (compare SHA-256)', 'Google Services Framework', 'com.google.android.gsf',
      'https://www.apkmirror.com/apk/google-inc/google-services-framework/google-services-framework-10-6494331-release/google-services-framework-10-6494331-android-apk-download/'),
-    ('Google APKMirror example', 'Google Play services', 'com.google.android.gms',
+    ('Scanned file (compare SHA-256)', 'Google Play services', 'com.google.android.gms',
+     'https://www.apkmirror.com/apk/google-inc/google-play-services/google-play-services-25-20-37-release/google-play-services-25-20-37-150400-766884605-android-apk-download/'),
+    ('Scanned file (compare SHA-256)', 'Google Play Store', 'com.android.vending',
+     'https://www.apkmirror.com/apk/google-inc/google-play-store/google-play-store-36-3-12-release/google-play-store-36-3-12-21-0-pr-542033711-2-android-apk-download/'),
+    ('Scanned file (compare SHA-256)', 'Google Calendar Sync (optional)', 'com.google.android.syncadapters.calendar',
+     'https://gitlab.opengapps.org/opengapps/all/-/blob/b458223777512c97639cb6bb54bfad93047406d7/app/com.google.android.syncadapters.calendar/30/nodpi/2017005136.apk'),
+    ('Scanned file (compare SHA-256)', 'Google Contacts Sync (optional)', 'com.google.android.syncadapters.contacts',
+     'https://gitlab.opengapps.org/opengapps/all/-/blob/b458223777512c97639cb6bb54bfad93047406d7/app/com.google.android.syncadapters.contacts/30/nodpi/30.apk'),
+    ('Listing only (different build)', 'Google Play services', 'com.google.android.gms',
      'https://www.apkmirror.com/apk/google-inc/google-play-services/google-play-services-26-46-32-release/google-play-services-26-46-32-100400-1025220680-3-android-apk-download/'),
-    ('Google APKMirror example', 'Google Play Store', 'com.android.vending',
+    ('Listing only (different build)', 'Google Play Store', 'com.android.vending',
      'https://www.apkmirror.com/apk/google-inc/google-play-store/google-play-store-54-4-11-release/google-play-store-54-4-11-29-0-pr-1025789771-4-android-apk-download/'),
-    ('Google APKMirror example', 'Google Calendar Sync (optional)', 'com.google.android.syncadapters.calendar',
+    ('Listing only (different build)', 'Google Calendar Sync (optional)', 'com.google.android.syncadapters.calendar',
      'https://www.apkmirror.com/apk/google-inc/google-calendar-sync/google-calendar-sync-2026-03-0-857911644-release-release/google-calendar-sync-2026-03-0-857911644-release-2-android-apk-download/'),
-    ('Google APKMirror example', 'Google Contacts Sync (optional)', 'com.google.android.syncadapters.contacts',
+    ('Listing only (different build)', 'Google Contacts Sync (optional)', 'com.google.android.syncadapters.contacts',
      'https://www.apkmirror.com/apk/google-inc/google-contacts-sync/google-contacts-sync-11-release/google-contacts-sync-11-android-apk-download/'),
     ('FOSS', 'F-Droid', 'org.fdroid.fdroid', 'https://f-droid.org/'),
     ('FOSS', 'NewPipe', 'org.schabi.newpipe', 'https://newpipe.net/'),
@@ -83,8 +91,8 @@ SOURCES = (
 
 def source_catalog_text() -> str:
     return '\n'.join([
-        'Google component links are third-party APKMirror listings chosen for the 2023 Fire HD 10 (API 30).',
-        'Check the API and ABI under Connection. Select standalone APKs and verify them in the Google Play tab.',
+        'Google component links point to independent APKMirror or Open GApps records for the 2023 Fire HD 10 (API 30).',
+        'Use Check scan records in Google Play to compare downloaded bytes. Listing-only builds have no project scan record.',
         'Other links are project or store pages. Compatibility depends on the tablet and provider.',
         *(f'{group} | {name} | {package}\n{url}' for group, name, package, url in SOURCES),
     ])

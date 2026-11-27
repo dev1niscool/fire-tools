@@ -46,7 +46,7 @@ class ApkInspectionTests(unittest.TestCase):
         self.verify_code = 0
         self.xmltree = "E: manifest (line=1)\n  E: application (line=2)\n"
 
-    def inspect(self, device_sdk=None, lineage="", lineage_exit=0):
+    def inspect(self, device_sdk=None, lineage="", lineage_exit=0, installed_base=False):
         def run(args, **kwargs):
             self.assertFalse(kwargs.get("shell", False))
             sdk_flags = ("--min-sdk-version", str(device_sdk), "--max-sdk-version", str(device_sdk)) if device_sdk else ()
@@ -72,7 +72,10 @@ class ApkInspectionTests(unittest.TestCase):
             patch("open_fire_toolkit.apk.subprocess.Popen", side_effect=run),
             patch("open_fire_toolkit.apk._read_tool_output", side_effect=lambda proc, *_: proc.output),
         ):
-            return ApkVerifier(self.aapt, self.jar, self.java, device_sdk=device_sdk).inspect(self.apk)
+            verifier = ApkVerifier(self.aapt, self.jar, self.java, device_sdk=device_sdk)
+            if installed_base:
+                return verifier.inspect_installed_base(self.apk)
+            return verifier.inspect(self.apk)
 
     def test_returns_verified_immutable_metadata(self):
         apk = self.inspect()
@@ -150,6 +153,17 @@ class ApkInspectionTests(unittest.TestCase):
         self.xmltree += "    A: android:isSplitRequired(0x01010591)=(type 0x12)0xffffffff\n"
         with self.assertRaises(ApkError):
             self.inspect()
+
+    def test_installed_split_dependent_base_can_be_identified_but_not_sideloaded(self):
+        self.xmltree += "    A: android:isSplitRequired(0x01010591)=(type 0x12)0xffffffff\n"
+        result = self.inspect(installed_base=True)
+        self.assertEqual(result.signer_sha256, (PIN,))
+        self.assertTrue(result.split)
+        with self.assertRaises(ApkError):
+            self.inspect()
+        self.badging = BADGING.replace("versionName='1.2.3'", "versionName='1.2.3' split='en'")
+        with self.assertRaises(ApkError):
+            self.inspect(installed_base=True)
 
     def test_zip_requires_one_unambiguous_manifest(self):
         for names in (("other.xml",), ("AndroidManifest.xml", "../outside"),

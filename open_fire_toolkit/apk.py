@@ -268,14 +268,14 @@ def _run_tool(label: str, args: list[str], *, output_limit: int = _MAX_TOOL_OUTP
         raise ApkError(f"Cannot run or read {label}: {exc}") from exc
 
 
-def _parse_badging(output: str, zip_abis: set[str]) -> tuple[str, int, str, int, tuple[str, ...]]:
+def _parse_badging(output: str, zip_abis: set[str], *, installed_base: bool = False) -> tuple[str, int, str, int, tuple[str, ...]]:
     lines = output.splitlines()
     package_lines = [line for line in lines if line.startswith("package:")]
     package = _PACKAGE.fullmatch(package_lines[0]) if len(package_lines) == 1 else None
     if package is None:
         raise ApkError("aapt did not report valid package and version metadata.")
-    if re.search(r"(?:^| )split\s*=", package_lines[0]) or any(
-        line.startswith("uses-split:") for line in lines
+    if re.search(r"(?:^| )split\s*=", package_lines[0]) or (
+        not installed_base and any(line.startswith("uses-split:") for line in lines)
     ):
         raise ApkError("Split APKs and APKs requiring splits are unsupported.")
 
@@ -338,6 +338,13 @@ class ApkVerifier:
         self._java = _tool(java_path, "Java")
 
     def inspect(self, path: str | Path) -> ApkInfo:
+        return self._inspect(path, installed_base=False)
+
+    def inspect_installed_base(self, path: str | Path) -> ApkInfo:
+        """Identify an installed base APK, which may rely on Android-managed splits."""
+        return self._inspect(path, installed_base=True)
+
+    def _inspect(self, path: str | Path, *, installed_base: bool) -> ApkInfo:
         apk = _local_file(path, "APK")
         if apk.suffix.lower() != ".apk":
             raise ApkError("Choose a standalone .apk file.")
@@ -348,7 +355,7 @@ class ApkVerifier:
         verification = _run_tool("apksigner", [*signer_tool, "verify", *platform, "--verbose", "--print-certs", str(apk)])
         signers = _parse_signers(verification)
         badging = _run_tool("aapt badging", [str(self._aapt), "dump", "badging", str(apk)])
-        package, version_code, version_name, min_sdk, abis = _parse_badging(badging, zip_abis)
+        package, version_code, version_name, min_sdk, abis = _parse_badging(badging, zip_abis, installed_base=installed_base)
         lineage = ()
         if package == "com.google.android.gms" and signers == (_GMS_ROTATED_SIGNER,):
             # apksigner verify validates the v3 signature and proof of rotation.
@@ -372,11 +379,14 @@ class ApkVerifier:
         )
         if not re.search(r"^[ \t]*E: manifest\b", manifest, re.MULTILINE):
             raise ApkError("aapt did not report a readable Android manifest.")
-        if _SPLIT_XML.search(manifest):
+        requires_splits = bool(_SPLIT_XML.search(manifest)) or any(
+            line.startswith("uses-split:") for line in badging.splitlines()
+        )
+        if requires_splits and not installed_base:
             raise ApkError("Split APKs and APKs requiring splits are unsupported.")
         if digest != file_sha256(apk):
             raise ApkError("The APK changed during inspection.")
-        return ApkInfo(apk, package, version_code, version_name, min_sdk, abis, digest, signers, signer_lineage=lineage)
+        return ApkInfo(apk, package, version_code, version_name, min_sdk, abis, digest, signers, split=requires_splits, signer_lineage=lineage)
 
 
 def google_play_order(

@@ -66,7 +66,7 @@ FEATURES = (
     _package('ads-package-disable', 'Disable Special Offers app', 'ads-disable', description='Experimental: firmware may protect the app. Package state does not establish ad visibility.', category='Lock-screen ads'),
     _package('ads-package-restore', 'Enable Special Offers app', 'ads-restore', category='Lock-screen ads'),
     _device('helper-start', 'Set up the on-tablet ad helper', 'helper-start', (SIGNER,), 'Verify the installed source-built helper, grant its setting permission, then press Enable on the tablet. Firmware may ignore the setting.', 'Lock-screen ads'),
-    _device('helper-stop', 'Open helper to stop monitoring', 'helper-stop', description='Opens the helper; press Stop on the tablet. Opening it alone does not stop the service.', category='Lock-screen ads'),
+    _device('helper-stop', 'Open helper to stop monitoring', 'helper-stop', (SIGNER,), description='Verifies and opens the helper; press Stop on the tablet. Opening it alone does not stop the service.', category='Lock-screen ads'),
     _device('helper-restore', 'Open helper to restore ad setting', 'helper-restore', (SIGNER,), 'Verify helper identity, then press Restore on the tablet. Uses the original saved value.', 'Lock-screen ads'),
     _package('ota-disable', 'Disable update packages', 'ota-disable', (PACKAGES,), 'Select the installed updater package IDs explicitly. Blocks security updates if accepted. Some Fire OS versions protect these packages; this is not a guarantee that every update route is blocked.', 'System updates'),
     _package('ota-enable', 'Enable update packages', 'ota-enable', (PACKAGES,), category='System updates'),

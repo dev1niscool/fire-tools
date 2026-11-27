@@ -7,7 +7,6 @@ import hashlib
 import os
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -17,6 +16,9 @@ import zipfile
 COMPANION = Path(__file__).resolve().parents[1] / "companion"
 BUILD_DIR = COMPANION / "build"
 MIN_ANDROID_API = "24"
+JAVA_INPUTS = tuple("src/org/firetools/adshelper/" + name + ".java" for name in
+                    ("AdsService", "AdsState", "BootReceiver", "HelperSettings", "MainActivity"))
+JAVA_ENV_OPTIONS = {"JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS", "JDK_JAVAC_OPTIONS", "CLASSPATH"}
 DEVELOPMENT_ALIAS = "fire-tools-development"
 DEVELOPMENT_PASSWORD_VAR = "FIRE_TOOLS_LOCAL_DEVELOPMENT_KEY_PASSWORD"
 
@@ -69,7 +71,16 @@ def parse_args(argv):
 def require_file(path, label, *, executable=False):
     if not path.is_file() or not os.access(path, os.X_OK if executable else os.R_OK):
         raise ValueError(f"Missing or inaccessible {label}: {path}")
+    if executable and os.name == "nt" and path.resolve(strict=True).suffix.lower() != ".exe":
+        raise ValueError(f"Choose a native Windows executable for {label}: {path}")
     return path
+
+
+def build_input(relative):
+    path = COMPANION / relative
+    if path.resolve(strict=True) != path:
+        raise ValueError(f"Helper build input must not be a symlink: {path}")
+    return require_file(path, "helper source file")
 
 
 def resolve_tools(args):
@@ -82,10 +93,17 @@ def resolve_tools(args):
         if args.java_home:
             path = args.java_home.expanduser().resolve() / "bin" / f"{name}{suffix}"
         else:
-            found = shutil.which(name)
-            if not found:
+            # Search explicit, absolute PATH entries for the actual binary. Windows
+            # executable lookup can otherwise select a current-directory file or batch wrapper.
+            current = Path.cwd().resolve()
+            for folder in map(Path, os.get_exec_path()):
+                if not folder.is_absolute() or folder.resolve() == current:
+                    continue
+                path = folder / f"{name}{suffix}"
+                if path.is_file() and os.access(path, os.X_OK):
+                    break
+            else:
                 raise ValueError(f"JDK tool {name} is missing. Set --java-home or JAVA_HOME.")
-            path = Path(found).absolute()
         return require_file(path, f"JDK {name}", executable=True)
 
     return Tools(
@@ -101,9 +119,11 @@ def resolve_tools(args):
 
 
 def run(command, *, env=None, capture_output=False):
+    environment = {key: value for key, value in (os.environ if env is None else env).items()
+                   if key.upper() not in JAVA_ENV_OPTIONS}
     completed = subprocess.run(
         list(map(os.fspath, command)), shell=False, check=False, text=True,
-        env=env, timeout=180, stdout=subprocess.PIPE if capture_output else None,
+        env=environment, timeout=180, stdout=subprocess.PIPE if capture_output else None,
     )
     if completed.returncode:
         if capture_output and completed.stdout:
@@ -160,10 +180,8 @@ def build(args):
 
     tools = resolve_tools(args)
     output.parent.mkdir(parents=True, exist_ok=True)
-    sources = sorted((COMPANION / "src").rglob("*.java"))
-    manifest = require_file(COMPANION / "AndroidManifest.xml", "helper manifest")
-    if not sources:
-        raise ValueError("No Java sources found in companion/src.")
+    sources = [build_input(name) for name in JAVA_INPUTS]
+    manifest = build_input("AndroidManifest.xml")
 
     with tempfile.TemporaryDirectory(prefix=".ads-helper-", dir=output.parent) as directory:
         stage = Path(directory)
@@ -175,8 +193,11 @@ def build(args):
         aligned = stage / "aligned.apk"
         signed = stage / "signed.apk"
 
-        run([tools.javac, "--release", "8", "-encoding", "UTF-8", "-classpath", tools.android_jar,
-             "-d", classes, *sources])
+        # A separate empty source path confines compilation to the named inputs.
+        sourcepath = stage / "empty-sourcepath"
+        sourcepath.mkdir()
+        run([tools.javac, "--release", "8", "-proc:none", "-sourcepath", sourcepath,
+             "-encoding", "UTF-8", "-classpath", tools.android_jar, "-d", classes, *sources])
         run([tools.java, "-cp", tools.d8, "com.android.tools.r8.D8", "--min-api", MIN_ANDROID_API,
              "--lib", tools.android_jar, "--output", dex, *sorted(classes.rglob("*.class"))])
         run([tools.aapt2, "link", "-o", unsigned, "--manifest", manifest, "-I", tools.android_jar])

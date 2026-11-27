@@ -16,8 +16,9 @@ from typing import Callable, Sequence
 from .adb import AdbClient, AdbError, DeviceInfo
 from .apk import (
     ApkInfo, ApkVerifier, ApkError, MAX_APK_BYTES, PLAY_CORE, PLAY_PACKAGES, SYNC_PROVIDERS,
-    file_sha256, google_play_order,
+    file_sha256, google_play_order, google_signer_is_trusted,
 )
+from .apk_checks import scan_record
 from .package_catalog import OFFERS
 from .package_workflows import PackageWorkflows
 from .device_workflows import DeviceWorkflows, _read_file
@@ -141,13 +142,14 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
             apks = google_play_order([verifier.inspect(Path(p)) for p in paths], device.sdk, device.abis)
         except (ApkError, OSError, ValueError) as exc:
             raise ToolkitError(str(exc)) from exc
-        providers = self._play_providers_to_enable(serial, apks)
+        providers = self._play_providers_to_enable(device, apks, verifier)
         details = []
         for apk in apks:
             details.append(f'Install {apk.package} {apk.version_name} (SDK {apk.min_sdk}+). '
                            f'File SHA-256 {apk.sha256}. Signer SHA-256 {apk.signer_sha256[0]}.')
             if apk.signer_lineage:
                 details.append(f'Verified Google signer rotation from {apk.signer_lineage[0]}.')
+            details.append(scan_record(apk.sha256))
             provider = SYNC_PROVIDERS.get(apk.package)
             if provider in providers:
                 details.append(f'Enable {provider} for the owner profile after installing the adapter.')
@@ -164,23 +166,45 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
         return Plan('Install Google Play components', serial, tuple(details), tuple(warnings),
                     'play', device, tuple(apks), providers_to_enable=providers)
 
-    def _play_providers_to_enable(self, serial, apks):
+    def _play_providers_to_enable(self, device, apks, verifier):
+        serial = device.serial
         packages = {apk.package for apk in apks}
         providers = {provider for adapter, provider in SYNC_PROVIDERS.items() if adapter in packages}
+        installed = set(self.adb.packages(serial))
+        account = 'com.google.android.gsf.login'
+        if account in installed and account not in packages:
+            self._verify_installed_google(device, account, verifier)
         if not providers:
             return ()
-        installed = set(self.adb.packages(serial))
         disabled = set(self.adb.packages(serial, disabled_only=True))
-        missing = providers - installed
+        missing = providers - (installed & self._pkg_list(serial, '-s'))
         if missing:
-            raise ToolkitError('The selected sync adapter needs an installed owner-profile provider: '
+            raise ToolkitError('The selected sync adapter needs a built-in system provider installed for the owner: '
                                + ', '.join(sorted(missing)))
         if packages <= SYNC_PROVIDERS.keys():
             unavailable = set(PLAY_CORE) - (installed - disabled)
             if unavailable:
                 raise ToolkitError('Install or enable these core packages before adding sync adapters: '
                                    + ', '.join(sorted(unavailable)))
+            for name in PLAY_CORE:
+                self._verify_installed_google(device, name, verifier)
         return tuple(sorted(providers & disabled))
+
+    def _verify_installed_google(self, device, package, verifier):
+        paths = self._apk_paths(device.serial, package)
+        # Android's pm path emits ApplicationInfo.sourceDir (the base), followed
+        # by its splitSourceDirs. Package Manager enforces a common signer.
+        with tempfile.TemporaryDirectory(prefix='fire-tools-google-') as temp:
+            local = Path(temp) / 'base.apk'
+            self._pull_device_file(device, paths[0], local)
+            try:
+                info = verifier.inspect_installed_base(local)
+            except ApkError as exc:
+                raise ToolkitError(f'Cannot verify installed {package}: {exc}') from exc
+        if info.package != package or not google_signer_is_trusted(info):
+            raise ToolkitError(f'Installed {package} does not have the expected Google package identity and signer.')
+        if self._writable_device(device.serial) != device or self._apk_paths(device.serial, package) != paths:
+            raise ToolkitError(f'Installed {package} or the tablet changed during inspection. Review again.')
 
     def _state_key(self, serial: str) -> str:
         return hashlib.sha256(serial.encode('utf-8')).hexdigest()
@@ -423,22 +447,21 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
                     raise ToolkitError('Staged APK verification changed; no APKs were installed.')
                 staged.append(checked)
             staged_order = google_play_order(staged, plan.device.sdk, plan.device.abis)
-            if self._play_providers_to_enable(plan.serial, staged_order) != plan.providers_to_enable:
+            if self._play_providers_to_enable(plan.device, staged_order, verifier) != plan.providers_to_enable:
                 raise ToolkitError('Sync provider state changed since preview. Review again.')
             for apk in staged_order:
                 if file_sha256(apk.path) != apk.sha256:
                     raise ToolkitError('Staged APK changed during installation; stopped.')
-                self._device_guard(plan)
-                self.adb.install(plan.serial, apk.path)
-                message = f'Installed {apk.package}'
-                completed.append(message)
-                log(message)
+                self._install_verified_apk(plan, apk, completed, staging)
+                log(completed[-1])
                 provider = SYNC_PROVIDERS.get(apk.package)
                 if provider:
                     self._finish_sync_provider(plan, provider, completed, log)
 
     def _finish_sync_provider(self, plan, provider, completed, log):
         self._device_guard(plan)
+        if provider not in self._pkg_list(plan.serial, '-s'):
+            raise ToolkitError(f'Cannot confirm {provider} is a built-in system package.')
         if provider in plan.providers_to_enable:
             self._pkg_write(plan, completed, 'pm', 'enable', '--user', '0', provider)
         if (provider not in self.adb.packages(plan.serial)

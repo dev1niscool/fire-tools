@@ -52,6 +52,7 @@ open_fire_toolkit/__main__.py
 open_fire_toolkit/adb.py
 open_fire_toolkit/advanced_gui.py
 open_fire_toolkit/apk.py
+open_fire_toolkit/apk_checks.py
 open_fire_toolkit/cli.py
 open_fire_toolkit/demo.py
 open_fire_toolkit/device_workflows.py
@@ -71,6 +72,7 @@ tests/gui_smoke.py
 tests/test_adb.py
 tests/test_advanced_gui.py
 tests/test_apk.py
+tests/test_apk_checks.py
 tests/test_cli.py
 tests/test_companion.py
 tests/test_device_workflows.py

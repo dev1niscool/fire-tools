@@ -286,6 +286,11 @@ class App:
         self._button(
             guides, "Find Google APK sources", lambda: self.advanced.show_feature("source-catalog"),
         ).pack(side="left")
+        if not self.demo:
+            self._button(
+                guides, "Check scan records", self._check_apk_files,
+                condition=lambda: bool(self.apk_paths),
+            ).pack(side="left", padx=6)
         self._button(
             guides, "Battery exemption...", lambda: self.advanced.show_feature("battery-exemption"),
         ).pack(side="left", padx=6)
@@ -667,6 +672,13 @@ class App:
         close.focus_set()
         target = f" for {serial}" if serial else ""
         self._append_log(f"{title} read completed{target}.")
+
+    def _check_apk_files(self):
+        from .apk_checks import check_apk_files
+        paths = tuple(self.apk_paths)
+        title = "APK scan records"
+        self._start(title, lambda _log: check_apk_files(paths)[0],
+                    lambda report: self._show_tool_output(title, "", report))
 
     def _plan_play(self):
         paths = tuple(self.apk_paths)

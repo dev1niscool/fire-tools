@@ -415,6 +415,28 @@ class DeviceWorkflowTests(unittest.TestCase):
         self.run_plan(self.plan('helper-start', signer='b'*64))
         self.assertEqual('true', self.tool.adb.permission_flags['android.permission.WRITE_SECURE_SETTINGS'])
 
+    def test_helper_stop_checks_installed_signer_and_rechecks_reviewed_bytes_before_launch(self):
+        name = 'org.firetools.adshelper'
+        self.tool.adb.extra_apps[name] = ['/data/app/shop/base.apk']
+        signer = 'b'*64
+        info = SimpleNamespace(package=name, split=False, signer_sha256=(signer,), sha256='c'*64)
+        self.tool._verifier = lambda: SimpleNamespace(inspect=lambda apk: info)
+        with self.assertRaisesRegex(ToolkitError, 'signer'):
+            self.plan('helper-stop', signer='a'*64)
+        plan = self.plan('helper-stop', signer=signer)
+        # Call the launch step directly to exercise a change after the plan
+        # recheck: an update with the same signer must still match reviewed bytes.
+        info.sha256 = 'd'*64
+        original_hash = 'c'*64
+        with self.assertRaisesRegex(ToolkitError, 'changed since preview'):
+            self.tool._apply_device_step(plan, ['helper-open', original_hash], self.done)
+        self.assertEqual([], self.tool.adb.writes)
+        info.sha256 = original_hash
+        self.run_plan(plan)
+        self.assertEqual(['am', 'start', '--user', '0', '-n', name + '/.MainActivity'],
+                         self.tool.adb.writes[-1])
+        self.assertEqual({}, self.tool.adb.permission_flags)
+
     def test_accessibility_enable_opens_tablet_consent_and_disable_preserves_others(self):
         tablet = self.tool.adb
         component = 'org.example.shop/.Reader'
