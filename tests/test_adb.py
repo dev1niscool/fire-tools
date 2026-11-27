@@ -14,7 +14,7 @@ class AdbBoundaryTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.directory = Path(temporary.name)
+        self.directory = Path(temporary.name).resolve(strict=True)
         self.adb = self.directory / "Google platform-tools" / "adb"
         self.adb.parent.mkdir()
         self.adb.touch()

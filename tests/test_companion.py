@@ -79,10 +79,11 @@ class CompanionBuildTests(unittest.TestCase):
                 output.symlink_to(target)
             except (OSError, NotImplementedError):
                 self.skipTest("This host cannot create symlinks")
+            original_link = output.readlink()
             result = self.run_builder("--sdk", directory, "--output", output)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("already exists", result.stderr)
-            self.assertEqual(output.readlink(), target)
+            self.assertEqual(output.readlink(), original_link)
             self.assertFalse(target.exists())
 
 

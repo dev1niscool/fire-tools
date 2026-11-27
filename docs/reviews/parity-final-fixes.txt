@@ -64,3 +64,25 @@ Release maintenance
 An edit to an already listed report or ledger needs only a fresh archive
 and checksum build. A newly named distribution file needs its exact
 repository-relative path added to release-files.txt before packaging.
+
+Hosted Windows findings and fixture corrections, 2026-11-27
+
+Actions run 46046294026 at c54d966 failed on Windows with Python 3.11
+and 3.13. Each job reported the same 14 APK mock-dispatch errors and three
+assertion failures. The runner supplied an 8.3 temporary directory alias.
+The toolkit resolved the executable and APK paths to their long names,
+whereas the mocks and two ADB assertions expected the short spelling.
+The companion test compared the raw link target returned by Windows, which
+includes an extended path prefix, with a path built without that prefix.
+
+The ADB and APK fixtures now resolve their temporary roots. They still
+match exact commands, argument vectors and metadata. The companion test
+captures the link target before starting the builder, then checks that
+the builder refused the output, preserved its link target and left the
+destination absent. Production code and platform skip conditions are
+unchanged.
+
+A Linux fixture with an aliased temporary directory reproduced the two ADB
+failures and the APK command lookup error. All three passed with the fixture
+corrections. The full local Linux suite passed 212 tests with no skips.
+Native Windows verification of these corrections requires a new Actions run.

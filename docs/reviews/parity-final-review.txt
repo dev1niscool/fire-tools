@@ -152,3 +152,31 @@ no skips. The working-tree diff passed git diff --check against 21d52be.
 This approval covers the source and simulated workflows. Physical Fire
 tablet results, Windows/macOS runtime behavior and hosted CI outcomes
 remain unverified by this re-review.
+
+Windows CI fixture correction review, 2026-11-27
+
+Verdict — approved for the CI rerun. I inspected both Windows job logs in
+GitHub Actions run 46046294026. Python 3.11 and 3.13 each reported three
+assertion failures and fourteen errors. Two ADB expectations used the
+runner's short-form temporary path. The fourteen APK fixture errors came
+from command-tuple lookups using the same short form. The product resolved
+existing files to their canonical paths before constructing commands. The
+remaining assertion compared a dangling link's native Windows readlink
+result, which included an extended path prefix, with a manually constructed
+path lacking that prefix.
+
+The edits in test_adb.py and test_apk.py resolve the fixture's temporary
+directory. The tests still require exact executable paths, full argument
+lists, APK metadata and signer outcomes. The companion test records the
+link target as the operating system reports it before the build attempt,
+then requires the same link target afterward. It still requires builder
+refusal and absence of the target file. The correction changes no product
+code, workflow, test selection or skip condition.
+
+I independently reproduced the two ADB assertion failures and an APK mock
+lookup error using the old tests and an aliased Linux temporary directory.
+With the corrections and the same alias condition, all 51 ADB, APK and
+companion tests passed. The complete 212-test Linux suite passed with
+JDK 21 and no skips. The captured failures provide no evidence of a
+production defect. Actual Windows results for the correction require the
+new hosted run.

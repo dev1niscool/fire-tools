@@ -30,7 +30,7 @@ class ApkInspectionTests(unittest.TestCase):
     def setUp(self):
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
-        root = Path(folder.name)
+        root = Path(folder.name).resolve(strict=True)
         self.aapt, self.jar, self.java, self.apk = (
             root / name for name in ("aapt.exe", "apksigner.jar", "java.exe", "some app.apk")
         )
