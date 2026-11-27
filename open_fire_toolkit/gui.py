@@ -123,7 +123,7 @@ class App:
         self.activity_font = base_font.copy()
         self.activity_font.configure(weight="bold")
         style.configure("Heading.TLabel", background="#f7f9fc", font=self.heading_font)
-        style.configure("TButton", padding=(10, 5))
+        style.configure("TButton", padding=(7, 3))
         style.configure("Compact.TButton", padding=(8, 1))
         style.configure("Primary.TButton", background="#205883", foreground="#ffffff")
         style.map(
@@ -139,7 +139,7 @@ class App:
         from .feature_catalog import FEATURES
 
         tk, ttk = self.tk, self.ttk
-        header = tk.Frame(self.root, background="#17304a", padx=22, pady=13)
+        header = tk.Frame(self.root, background="#17304a", padx=22, pady=8)
         header.pack(fill="x")
         tk.Label(
             header, text="Fire Tools", font=self.title_font,
@@ -151,7 +151,7 @@ class App:
             foreground="#e1edf6", anchor="e", wraplength=300,
         ).pack(side="right")
         self.tabs = ttk.Notebook(self.root)
-        self.tabs.pack(fill="both", expand=True, padx=16, pady=(12, 8))
+        self.tabs.pack(fill="both", expand=True, padx=16, pady=(8, 4))
         self._connection_tab()
         self._play_tab()
         self._ads_tab()
@@ -159,7 +159,7 @@ class App:
         self._updates_tab()
         self.advanced = AdvancedTools(self, FEATURES)
 
-        footer = ttk.Frame(self.root, padding=(16, 0, 16, 12))
+        footer = ttk.Frame(self.root, padding=(16, 0, 16, 8))
         footer.pack(side="bottom", fill="x", before=self.tabs)
         ttk.Label(footer, text="Activity", font=self.activity_font).pack(anchor="w")
         self.log_box = self._text_box(footer, height=3)
@@ -211,19 +211,24 @@ class App:
         ttk = self.ttk
         config = ttk.Frame(tab, style="Panel.TFrame")
         config.pack(fill="x")
-        config.columnconfigure(1, weight=1)
+        for column in (1, 4):
+            config.columnconfigure(column, weight=1, uniform="tool_entries")
         self.paths = []
-        for row, (label, examples) in enumerate((
+        for index, (label, examples) in enumerate((
             ("ADB", "adb / adb.exe"),
             ("AAPT", "aapt / aapt.exe"),
             ("APK signer", "apksigner.jar"),
             ("Java", "java / java.exe"),
         )):
+            row, group = divmod(index, 2)
+            column = 3 * group
             value = self.tk.StringVar()
             self.paths.append(value)
-            ttk.Label(config, text=label, style="Panel.TLabel").grid(row=row, column=0, sticky="w")
-            entry = ttk.Entry(config, textvariable=value)
-            entry.grid(row=row, column=1, sticky="ew", padx=(10, 8), pady=2)
+            ttk.Label(config, text=label, style="Panel.TLabel").grid(
+                row=row, column=column, sticky="w", padx=(12 if group else 0, 0),
+            )
+            entry = ttk.Entry(config, textvariable=value, width=15)
+            entry.grid(row=row, column=column + 1, sticky="ew", padx=6, pady=2)
             value.trace_add("write", self._paths_changed)
             self.controls.append((entry, lambda: not self.fixed_toolkit))
             browse = self._button(
@@ -231,7 +236,7 @@ class App:
                 condition=lambda: not self.fixed_toolkit,
             )
             browse.configure(style="Compact.TButton")
-            browse.grid(row=row, column=2, pady=2)
+            browse.grid(row=row, column=column + 2, pady=2)
         guides = ttk.Frame(tab, style="Panel.TFrame")
         guides.pack(fill="x", pady=(5, 8))
         self._button(guides, "Google Platform-Tools", lambda: self._open(PLATFORM_TOOLS)).pack(side="left")
@@ -272,7 +277,7 @@ class App:
             "Contacts Sync are optional. To add sync to an existing setup, choose just the adapters.",
         )
         self.apk_table = self._table(
-            tab, (("file", "Local APK files", 440),), 4, self._sync_controls,
+            tab, (("file", "Local APK files", 440),), 3, self._sync_controls,
         )
         files = self.ttk.Frame(tab, style="Panel.TFrame")
         files.pack(fill="x", pady=(8, 6))
@@ -285,9 +290,9 @@ class App:
         self._button(
             files, "Google APK sources", lambda: self.advanced.show_feature("source-catalog"),
         ).pack(side="left")
-        checks = self.ttk.Frame(tab, style="Panel.TFrame")
-        checks.pack(fill="x", pady=(0, 6))
         if not self.demo:
+            checks = self.ttk.Frame(tab, style="Panel.TFrame")
+            checks.pack(fill="x", pady=(0, 6))
             self._button(
                 checks, "Verify Google signatures...", self._verify_google_files,
                 condition=lambda: bool(self.apk_paths),
@@ -296,10 +301,6 @@ class App:
                 checks, "Check scan records", self._check_apk_files,
                 condition=lambda: bool(self.apk_paths),
             ).pack(side="left", padx=6)
-        self._button(
-            checks, "Verify and review...", self._plan_play,
-            condition=lambda: self._connected() and bool(self.apk_paths), primary=True,
-        ).pack(side="right")
         components = self.ttk.Frame(tab, style="Panel.TFrame")
         components.pack(fill="x", pady=(0, 8))
         self._button(
@@ -309,6 +310,10 @@ class App:
             components, "Component status", lambda: self._run_tool(BY_KEY["google-status"], dict),
             condition=self._connected,
         ).pack(side="left", padx=(6, 0))
+        self._button(
+            components, "Verify and review...", self._plan_play,
+            condition=lambda: self._connected() and bool(self.apk_paths), primary=True,
+        ).pack(side="right")
         self._description(
             tab, "Use APKs from a source you trust. If one install fails, earlier packages "
                  "may remain installed. Reboot is a separate action on the Connection tab.",
@@ -317,14 +322,14 @@ class App:
     def _ads_tab(self):
         tab = self._panel(
             "Lock-screen ads", "Manage lock-screen ads",
-            "Select your tablet in Amazon device settings to check for paid Special Offers removal.",
+            "Amazon offers paid ad removal for eligible tablets in device settings.",
         )
         self._button(
             tab, "Open Amazon device settings", lambda: self._open(AMAZON_DEVICES),
         ).pack(anchor="w", pady=(0, 8))
         self.ttk.Label(tab, text="Experimental setting", style="Heading.TLabel").pack(anchor="w")
         self._description(
-            tab, "Fire Tools saves the old value for restore. Fire OS may ignore or reset the change.",
+            tab, "Fire Tools saves the old value. Fire OS may ignore or reset the change.",
         ).pack(fill="x", pady=(3, 6))
         actions = self.ttk.Frame(tab, style="Panel.TFrame")
         actions.pack(fill="x")
@@ -386,7 +391,7 @@ class App:
         )
         self.app_table = self._table(
             tab, (("label", "Application", 155), ("package", "Package", 310), ("state", "State", 95)),
-            6, self._sync_controls,
+            5, self._sync_controls,
         )
         actions = self.ttk.Frame(tab, style="Panel.TFrame")
         actions.pack(fill="x", pady=8)
@@ -394,17 +399,23 @@ class App:
             actions, "Read app states", self._read_apps, condition=self._connected,
         ).pack(side="left")
         self._button(
-            actions, "Review disable...", lambda: self._plan_app(enable=False),
-            condition=lambda: self._selected_app_state() == "Enabled",
-        ).pack(side="left", padx=6)
-        self._button(
-            actions, "Review enable...", lambda: self._plan_app(enable=True),
-            condition=lambda: self._selected_app_state() == "Disabled",
-        ).pack(side="left")
-        self._button(
             actions, "App details", self._read_selected_app_info,
             condition=lambda: self._selected_app_state() is not None,
-        ).pack(side="left", padx=(6, 0))
+        ).pack(side="left", padx=6)
+        self._button(
+            actions, "Package inventory...",
+            lambda: self.advanced.show_feature("packages-inventory"),
+        ).pack(side="left")
+        edits = self.ttk.Frame(tab, style="Panel.TFrame")
+        edits.pack(fill="x", pady=(0, 6))
+        self._button(
+            edits, "Review disable...", lambda: self._plan_app(enable=False),
+            condition=lambda: self._selected_app_state() == "Enabled",
+        ).pack(side="left", padx=(0, 6))
+        self._button(
+            edits, "Review enable...", lambda: self._plan_app(enable=True),
+            condition=lambda: self._selected_app_state() == "Disabled",
+        ).pack(side="left")
         packages = self.ttk.Frame(tab, style="Panel.TFrame")
         packages.pack(fill="x")
         self._button(
@@ -414,10 +425,6 @@ class App:
             packages, "Compare debloat presets...",
             lambda: self._run_tool(BY_KEY["debloat-presets"], dict),
         ).pack(side="left", padx=6)
-        self._button(
-            packages, "Package inventory...",
-            lambda: self.advanced.show_feature("packages-inventory"),
-        ).pack(side="left")
         recovery = self.ttk.Frame(tab, style="Panel.TFrame")
         recovery.pack(fill="x", pady=(6, 0))
         self._button(
@@ -458,7 +465,7 @@ class App:
                 condition=lambda s=state: self._can_change_updaters(s),
             ).pack(side="left", padx=(0, 6))
         self._description(
-            tab, "3. Undo restores the saved package states. Enable turns on the selected updaters.",
+            tab, "3. Undo restores saved states. Enable turns on the selected updaters.",
         ).pack(fill="x", pady=(6, 3))
         self._button(
             tab, "Review last package undo...", lambda: self._run_tool(BY_KEY["ota-undo"], dict),

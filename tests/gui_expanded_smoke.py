@@ -7,6 +7,7 @@ import threading
 import time
 import tkinter as tk
 from tkinter import ttk
+from tkinter.font import nametofont
 from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -396,13 +397,14 @@ def connection_layout(root):
     assert app.device_table.winfo_viewable()
     assert app.device_table.winfo_height() >= 50
     button(root, "Scan devices")
-    for index in (2, 3, 4):
+    for index in (0, 1, 2, 3, 4):
         app.tabs.select(index)
         root.update()
         for widget in descendants(root.nametowidget(app.tabs.select())):
             if isinstance(widget, ttk.Button):
                 assert widget.winfo_viewable(), widget.cget("text")
                 assert widget.winfo_height() >= widget.winfo_reqheight(), widget.cget("text")
+                assert widget.winfo_width() >= widget.winfo_reqwidth(), widget.cget("text")
 
 
 def tools_without_tablet(root):
@@ -616,6 +618,8 @@ if __name__ == "__main__":
         smoke(desktop)
         connection_layout(tk.Toplevel(desktop))
         tools_without_tablet(tk.Toplevel(desktop))
+        nametofont("TkDefaultFont", root=desktop).configure(family="DejaVu Sans", size=12)
+        connection_layout(tk.Toplevel(desktop))
     finally:
         desktop.destroy()
     print("PASS: rendered preset comparison, Complete Debloat, Restore Everything, saved undo, package picker, "
