@@ -49,6 +49,7 @@ class FeatureCliTests(unittest.TestCase):
             output.flush()
         transcript = buffer.getvalue().decode('cp1252')
         self.assertEqual(result, 0, transcript)
+        self.assertIn('SIMULATED — Standard Debloat (Recommended)', transcript)
         self.assertIn('enabled -> disabled', transcript)
         self.assertIn('Preview only', transcript)
 

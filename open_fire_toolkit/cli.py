@@ -70,7 +70,8 @@ def _show_plan(plan):
     except UnicodeEncodeError as error:
         # Windows pipes can use a legacy code page even with a Unicode-capable console.
         readable = preview.replace('→', '->')
-        print(readable.encode(error.encoding, 'backslashreplace').decode(error.encoding))
+        encoding = sys.stdout.encoding or error.encoding
+        print(readable.encode(encoding, 'backslashreplace').decode(encoding))
 
 
 def _confirm_plan(toolkit, plan, args, demo):
