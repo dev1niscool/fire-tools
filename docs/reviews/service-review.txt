@@ -1,0 +1,11 @@
+Integrated service, CLI, GUI and demo source review
+
+Verdict: changes required for plan fidelity and partial-operation diagnostics. No Critical finding. Scope was source inspection against the design and binding interfaces, including their tests. Earlier reported test runs were not repeated; hardware behavior was not verified.
+
+Important — service.py:179,188,318. The ad restore preview displays the saved target, but Plan carries only the current device setting. A second process can restore the old snapshot, a later suppression can capture a different original, and the tablet can again read 0. Confirming the first preview then writes the new target. Capture the restore target in the immutable plan and compare it with the saved target while holding the operation lock. Test that differing targets cause refusal before a settings write, including a target of None.
+
+Important — service.py:255,298. After one successful Play install, a profile switch can cause _writable_device to raise ToolkitError. The outer handler propagates this error without identifying earlier installs. Consolidate partial-failure reporting for both exception routes. Test a switch to a secondary profile between the first and second installs.
+
+Important — service.py:71,328–333. An unparseable settings readback after a successful write reports “no changes were made.” If removal of the undo record cannot be persisted after a verified restore, only the local filesystem error is reported. Distinguish preflight parsing from readback, report whether the write was attempted/verified, and identify retained undo state when cleanup fails. Test the readback and cleanup failure paths.
+
+Reviewed preview modal callbacks, worker queue delivery, demo backend selection, CLI --help parsing, per-action confirmation, APK copy bounds, re-verification order, private staging directory and per-install hash checks. No additional blocker identified in these paths.

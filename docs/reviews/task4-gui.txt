@@ -1,0 +1,39 @@
+Task 4 desktop GUI
+
+Implemented
+- Connection, Google Play, Lock-screen ads and Apps views use the shared service public API.
+- Setup includes the four external tool paths, USB-debugging instructions and explicit selection
+  from the scanned device list. The Connection view displays model, firmware, Android SDK,
+  ABIs and active profile.
+- Every device change runs after a modal plan review. The plan shows the tablet serial, service
+  warnings, step details, and APK hashes and signers in install order when present.
+- A single worker runs service calls using plain captured data. Tk schedules queue polling.
+  Conflicting actions are disabled while busy or while a plan is open, and a rejected busy
+  submission cannot run later.
+- Demo mode selects DemoToolkit and offers fictional APK filenames for plan review. Mode
+  banners, review controls and completion logs distinguish simulated activity.
+- Browser navigation uses fixed vendor URLs on explicit clicks.
+
+Verification
+- python -m unittest discover -s tests -p test_gui.py initially failed because the GUI module
+  was absent. After implementation all three tests passed. They exercise headless import,
+  operation serialization, main-thread callback delivery and retries after error.
+- The first full-suite run encountered test_service import failure while service.py was
+  being implemented concurrently. A rerun after service.py landed passed all 50 tests.
+- python -m py_compile open_fire_toolkit/gui.py passed.
+- git diff --check returned no errors. GUI files are still untracked at this stage.
+- No graphical display or Xvfb was available in the task shell. The integration owner is
+  handling GUI smoke verification. No real tablet was exercised.
+
+Graphical smoke follow-up
+- Extracted Debian trixie Xvfb into an isolated directory outside the product and used :99
+  with TCP disabled. The existing desktop session was not used.
+- Drove actual Tk button widgets and modal dialogs through demo setup, device scan and explicit
+  selection, Play preview/cancel/confirm, an ad restore-before-suppress error, suppression and
+  restore, package disable/enable, and reboot. Checked app state, modal blocking and recovery.
+- Fixed the title and section fonts after the screenshot revealed Tk interpreting a named-font
+  tuple as an uninstalled family and falling back to a small bitmap font. Also used standard
+  keyboard punctuation for buttons and setup wording to work with minimal font installations.
+- Repeated graphical smoke and visually checked the screenshot at docs/images/demo.png
+  (920 x 760). Verified the actual title font resolves to 20-point bold.
+- The full test suite passed all 64 tests after these changes. No hardware was accessed.

@@ -17,3 +17,10 @@ Preflight interface table:
 | 5 | docs/package/review | coherent; source-only distribution, no hardware claims |
 
 Status: design and contracts established; implementation pending.
+
+Implementation: ADB, APK verifier, GUI, service/CLI/demo written independently; all scoped tests pass as of latest checkpoint.
+REA: actual rea-agents@6.10.1 managed artifact/member CLI ran, evidence retained outside release; details in docs/REA-NOTES.md.
+Review round 1: five Important boundary findings fixed; rereview closed them. Remaining Minor ADB output cap being fixed.
+Review round 1: three Important service findings fixed (bind restore preview target, retain partial install progress for all expected errors, factual postwrite error reporting); all23 service tests green; rereview approved.
+Graphical validation: Xvfb demo end-to-end UI smoke passed; screenshot retained. Hardware untested.
+External tool validation: actual Google BuildTools36/JDK21 accepted signed specimen and rejected modified copy. No specimen executed or shipped.

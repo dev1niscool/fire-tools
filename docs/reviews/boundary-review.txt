@@ -1,0 +1,59 @@
+Independent review of ADB and APK boundaries, 2026-11-27
+
+Scope: adb.py, apk.py, their tests, task evidence, design, plan interfaces and
+service calls that consume the results. Review by inspection. No real-device
+writes or exploit reproduction. The POSIX fixture and 50-test integration
+result come from the task evidence. Windows, Google's actual SDK tools and
+physical Fire OS output were unverified in those runs.
+
+Spec compliance: explicit serial selection, local ADB server configuration,
+bounded subprocess timeouts, host argv separation and Android shell argument
+quoting are present. Java invokes apksigner.jar directly and its exit status,
+explicit verification result, signer count and every signer digest are checked.
+A matching package name alone cannot pass the signer check. The package set,
+order, known numeric minimum SDK, split markers and native ABI intersection
+are checked before installation. An empty APK ABI list means no packaged
+native libraries and aapt output must agree with archive entries. The checks
+intentionally reject unknown SDKs and rotated certificates. The code uses
+native executable argument arrays on Windows and rejects batch wrappers.
+These are source-level findings, not platform integration test results.
+
+Quality verdict at reviewed snapshot: changes requested. No Critical finding.
+
+Important — adb.py:159,166. Default installation scope and package listing
+scope do not explicitly match the owner-only workflow. A device with a child
+profile can receive package availability beyond the intended owner profile.
+Request owner-scoped listing and install, with explicit replacement behavior
+for updating an existing installation. Root independently identified this.
+
+Important — adb.py:122,170. shell returns stdout and discards stderr on a zero
+exit. A pm list packages -d diagnostic delivered only on stderr becomes an
+empty disabled set. Enable readback can consequently report success without
+establishing the actual state. Fail closed on diagnostics for these queries
+and check the package is still installed at enable readback.
+
+Important — apk.py:88,123. The preflight reads classic ZIP end-record
+bounds, while ZipFile can independently select ZIP64 bounds from a locator
+immediately before that record. The two readers can disagree on which
+directory is authoritative, invalidating the claimed allocation bound.
+Reject ZIP64 locators or enforce a single consistent directory interpretation.
+
+Important — apk.py:120,140,230. Only directory and manifest sizes are
+bounded. A very large file can be hashed at preview, and compressed resources
+can have huge declared expanded sizes when passed to external tools. Bound
+physical and aggregate expanded sizes before hashing/tool invocation. Bound
+the staging copy too, since the source may change after preview.
+
+Important — apk.py:152,164. The output limit applies after process exit.
+Before then, verbose metadata or diagnostics can fill temporary storage.
+Enforce stdout/stderr bounds while reading the running process, including
+termination and collection on overflow.
+
+Minor — adb.py:66. capture_output accumulates an entire ADB response in
+host memory. A noisy transport can exhaust memory before the timeout.
+Bound captured bytes independently of elapsed time.
+
+Regression evidence requested for changes: owner flags, stderr-only query
+failures, conflicting ZIP reader views, physical and expanded size limits,
+and child-output limits during execution. Keep real tool and hardware
+validation limitations visible.

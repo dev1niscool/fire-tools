@@ -1,0 +1,30 @@
+Boundary re-review, 2026-11-27
+
+Verdict: all five Important findings from boundary-review.txt are closed.
+No outstanding Critical or Important finding in the reviewed fixes.
+
+1. adb.py:162,169 targets owner user 0 explicitly on install and both package
+   inventories. Replacement is explicit. Android shares package code between
+   users; owner-scoped install does not isolate an update to that shared code.
+2. adb.py:123 rejects shell stderr even on zero exit. service.py:241 verifies
+   continued installation before interpreting the disabled inventory.
+3. apk.py:123 rejects the ZIP64 locator before invoking ZipFile, including
+   when its signature occupies the final central-directory entry's comment.
+4. apk.py:83,105,149 limits hashing, directory parsing, and declared uncompressed
+   sizes. service.py:279,284 checks the opened staging input and limits actual
+   bytes copied even if the input grows.
+5. apk.py:197,228,235 captures combined output while the child runs, bounds it
+   at 1 MiB, applies a monotonic deadline and kills on overflow or timeout.
+   The subprocess context manager waits for the direct child on exit.
+
+One Minor finding remains acceptable for this release: adb.py:66 still
+buffers the selected ADB executable's output in memory. Excessive output from
+a malfunctioning or hostile local ADB endpoint can exhaust host memory within
+the timeout. This is an availability limitation, separate from processing
+downloaded APKs. Normal calls use the configured local ADB server and fixed
+service queries. A byte limit remains a worthwhile follow-up.
+
+Evidence: inspected revised source. The implementation team reports 71 passing
+tests and an Android build-tools 36/OpenJDK 21 smoke test accepting a signed
+non-Google APK and rejecting altered archive bytes. The APK was inspected only.
+No test used a real Google package, Windows runtime or physical Fire tablet.

@@ -1,0 +1,51 @@
+APK verification implementation evidence
+
+Red
+Before creating apk.py, python -m unittest discover -s tests -p test_apk.py -v
+exited 1 because the requested open_fire_toolkit.apk module did not exist.
+
+Green
+python -m unittest discover -s tests -p test_apk.py -v
+21 tests passed. The POSIX subprocess fixture exercised paths containing spaces
+and shell metacharacters with real child processes. The fixtures checked
+signer count and digests, verification status, malformed and oversized metadata,
+native ABI agreement, split rejection, ZIP directory limits, signer pinning,
+required packages, optional account manager ordering, and compatibility.
+
+python -m unittest discover -s tests -v
+61 tests passed in the latest integrated run. The earlier simultaneous build
+reported import errors for test_service and three test_gui.WorkerTests methods
+while the GUI and service modules were still being implemented.
+
+Implementation
+Inspection calls the supplied Java executable with -jar and the supplied
+apksigner JAR to verify the APK. It requires a successful exit and explicit
+verification output, validates the signer list, then reads aapt badging and
+the Android manifest. The SHA-256 is checked again after inspection.
+APK files are limited to 512 MiB before hashing or invoking tools. ZIP parsing
+is limited to a central directory of 8 MiB and 50,000 entries. ZIP64 locators
+are rejected before ZipFile opens the archive. Member sizes declared in the
+directory are limited to 512 MiB each and 2 GiB in aggregate. Archive entries
+are never extracted by the toolkit. Combined stdout and stderr are streamed
+from one pipe and capped at 1 MiB. The subprocess is stopped on overflow or
+after 60 seconds.
+Play order validation requires all present signer digests to match the Google
+certificate pin, corroborated in AndroidX support source.
+https://android.googlesource.com/platform/frameworks/support/+/7be3a623dfcf461ff6e2004799ac2e652c8d23a8
+
+Coverage limits
+The host has Java. Real aapt and apksigner binaries and a physical Fire tablet
+were unavailable to this task. Fixtures exercised process invocation and parsing.
+A real signed APK and Android tool output remain to be checked on a host that
+has Google's Android build-tools installed. Windows pipe handling is
+implemented using PeekNamedPipe and needs validation on Windows. A historical
+certificate pin means an APK signed with a rotated Google signing certificate
+is rejected.
+
+Boundary review regression tests
+Before the fixes, the oversized APK and both declared expansion cases were
+accepted past their respective guards. The ZIP64 fixture reached ZipFile
+parsing, and excessive output sent to stderr was accepted. The quiet child
+timeout test passed before and after the revision. The live output-cap fixture
+now observes the cap violation and confirms the child cannot create its
+post-output completion marker.

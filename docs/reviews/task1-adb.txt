@@ -1,0 +1,54 @@
+Task 1: ADB boundary
+
+Red: python -m unittest discover -s tests -p test_adb.py -v
+Exit 1. The initial 14 behavior tests could not import open_fire_toolkit.adb
+because the new module had not been implemented.
+
+Green: python -m unittest discover -s tests -p test_adb.py -v
+Exit 0. All 15 tests passed after implementation. Fourteen tests isolate
+subprocess.run to cover its argument/environment contract, inventory and
+state checks, device properties, install outcomes and failures. A POSIX
+executable fixture additionally verifies token round-trip through the
+actual subprocess and a shell used to model ADB's remote shell.
+
+Compilation: python -m compileall -q open_fire_toolkit/adb.py tests/test_adb.py
+Exit 0.
+
+Integration checkpoint: python -m unittest discover -s tests -v
+Exit 1 during parallel implementation. All 15 ADB tests passed. test_apk
+and test_service could not import the pending APK module. The following
+three GUI tests could not import the pending GUI module:
+- test_concurrent_submission_is_rejected_without_running_later
+- test_failure_clears_busy_and_allows_retry
+- test_logs_and_success_callbacks_only_run_on_caller_thread
+
+Constraints: No real tablet, Google ADB executable, or Windows host was
+used. The remote shell fixture exercises a POSIX shell. Device
+authorization/state is rechecked before each device command. An ADB
+disconnect or transport replacement can still occur between the state
+check and command. Every device command carries the validated serial.
+
+Review follow-up:
+- Red: python -m unittest discover -s tests -p test_adb.py -v, exit 1.
+  Three regressions reproduced: installation omitted replacement and
+  owner-user flags, disabled-package listing omitted owner-user flags,
+  and successful process status hid a permission error on shell stderr.
+- Green: the same command exited 0 with all 16 tests passing. The full
+  suite (python -m unittest discover -s tests) exited 0 with 71 tests.
+- Installation now sends -r --user 0. Package listing supplies --user 0.
+  Shell operations surface nonempty diagnostics on stderr.
+- ADB process duration is bounded. Its stdout and stderr are still
+  captured in memory without a separate byte limit.
+
+Output-bound follow-up:
+- Red: python -m unittest discover -s tests -p test_adb.py -v, exit 1.
+  A real child wrote 600,000 bytes to each stream and the combined
+  overflow regression reproduced the missing byte bound.
+- Green: the same command passed all 19 tests, including real-child
+  combined overflow, quiet timeout, and stderr separation. The full
+  suite (python -m unittest discover -s tests) passed all 74 tests.
+  Compilation of adb.py and test_adb.py passed.
+- The capture retains separate stdout and stderr under a shared 1 MiB
+  limit. POSIX uses selectors. The Windows branch polls both pipe handles
+  with PeekNamedPipe and remains unverified on Windows. Capture failure
+  kills the running ADB child and Popen reaps it during context cleanup.

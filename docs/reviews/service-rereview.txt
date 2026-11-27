@@ -1,0 +1,5 @@
+Scoped service re-review verdict: PASS. All three original Important findings are resolved in the inspected source.
+
+The frozen plan captures the displayed restore target. The operation compares the saved value under lock before issuing a settings write, including when the captured value represents absence. Play execution now appends completed installs to errors raised by the later device eligibility check. Settings readback failures identify the attempted write and retained undo information, and cleanup failures identify an already verified restore.
+
+Independent verification: python -m unittest discover -s tests -p test_service.py passed 23 tests. Four focused regressions exercise the snapshot, profile switch, readback, and cleanup cases. This review covers the reported defects only and used simulated hardware.

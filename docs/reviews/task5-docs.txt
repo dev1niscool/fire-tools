@@ -1,0 +1,24 @@
+Task 5 user documentation and launch metadata
+
+Written
+- README documents source launch and GUI demo, precise tool paths, USB debugging,
+  local Google APK selection, verification, owner-scoped updates, partial installs,
+  ad-setting behavior and official removal, and CLI previews.
+- SECURITY documents tool trust, ADB authorization, local undo and stale lock recovery.
+- REA-NOTES records the 46.0 artifact identity and three REA evidence IDs, static
+  observations and scope of the independent MIT implementation.
+- TESTING covers automated tests, interactive demo smoke steps and release checksum.
+- Added MIT license, optional setuptools metadata and platform launchers.
+
+Verification
+- python3 -m open_fire_toolkit --help and play --help matched documented syntax.
+- Demo devices and demo info with DEMO_FIRE_HD10 returned simulated details.
+- The Linux launcher returned 0.1.0 from the project root and /workspace.
+- bash -n launch-linux.sh and python3 -m compileall -q open_fire_toolkit tests passed.
+- python3 -m unittest discover -s tests passed all 64 tests at this checkpoint.
+- pip wheel --no-deps --no-build-isolation --no-index built a local wheel in a
+  temporary directory. Wheel metadata declared Python 3.11+, MIT, and no runtime
+  dependencies. It contained the module entry point.
+- The local official Build Tools 36.0.0 apksigner JAR returned its version with
+  OpenJDK 21. No real APK install or tablet operation was executed by this task.
+- Windows launcher was statically inspected. Windows execution was unavailable.
