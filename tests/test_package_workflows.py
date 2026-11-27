@@ -944,6 +944,22 @@ Disabled system packages:
                 self.plan('ota-disable', (OTA,))
         self.assertFalse(self.adb.writes)
 
+    def test_uncertain_first_updater_preserves_prior_batch_until_mode_is_readable(self):
+        self.execute(self.plan('disable', (A,)))
+        shell = self.adb.shell
+        def stop_before_write(serial, args):
+            if tuple(args) == ('pm', 'disable-user', '--user', '0', OTA):
+                self.adb.system.remove(OTA)
+                raise OSError('disconnected')
+            return shell(serial, args)
+        with patch.object(self.adb, 'shell', stop_before_write), self.assertRaisesRegex(ToolkitError, 'unverified'):
+            self.execute(self.plan('ota-disable', (OTA,)))
+        journal = json.loads((self.root / 'packages-state.json').read_text())['devices'][self.adb.device.state_key]
+        self.assertEqual(journal['states'], {A: 'enabled'})
+        self.assertEqual(journal['pending'], {OTA: 'enabled:0'})
+        self.adb.system.add(OTA)
+        self.assertEqual(self.plan('undo').packages, (A,))
+
     def test_legacy_updater_undo_restores_only_saved_effective_state(self):
         self.tool._pkg_save_undo(self.adb.device, {'schema': 1, 'devices': {}}, {OTA: 'enabled'})
         self.adb.modes[OTA] = '3'

@@ -337,8 +337,10 @@ class PackageWorkflows:
             if self._writable_device(device.serial) != device:
                 raise _error('Device changed while recovering package undo.')
             current = self._pkg_states(device.serial).get(package, 'missing')
-            if ':' in before and current in {'enabled', 'disabled'} and package in self._pkg_list(device.serial, '-s'):
-                current += ':' + self._pkg_owner_mode(device.serial, package)
+            if ':' in before:
+                # Choosing between an unrelated previous batch and this first
+                # write requires evidence from the original system updater.
+                current = self._pkg_updater_state(device.serial, package, current)
             if self._writable_device(device.serial) != device:
                 raise _error('Device changed while recovering package undo.')
             extend = record.pop('extend_pending', False)

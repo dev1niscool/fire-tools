@@ -272,40 +272,41 @@ class App:
             "Contacts Sync are optional. To add sync to an existing setup, choose just the adapters.",
         )
         self.apk_table = self._table(
-            tab, (("file", "Local APK files", 440),), 7, self._sync_controls,
+            tab, (("file", "Local APK files", 440),), 4, self._sync_controls,
         )
-        actions = self.ttk.Frame(tab, style="Panel.TFrame")
-        actions.pack(fill="x", pady=8)
-        self._button(actions, "Choose APKs...", self._choose_apks).pack(side="left")
+        files = self.ttk.Frame(tab, style="Panel.TFrame")
+        files.pack(fill="x", pady=(8, 6))
+        self._button(files, "Choose APKs...", self._choose_apks).pack(side="left")
         if self.demo:
-            self._button(actions, "Use demo sample", self._demo_apks).pack(side="left", padx=(6, 0))
+            self._button(files, "Use demo sample", self._demo_apks).pack(side="left", padx=(6, 0))
         self._button(
-            actions, "Clear list", self._clear_apks, condition=lambda: bool(self.apk_paths),
+            files, "Clear list", self._clear_apks, condition=lambda: bool(self.apk_paths),
         ).pack(side="left", padx=6)
+        self._button(
+            files, "Google APK sources", lambda: self.advanced.show_feature("source-catalog"),
+        ).pack(side="left")
+        checks = self.ttk.Frame(tab, style="Panel.TFrame")
+        checks.pack(fill="x", pady=(0, 6))
         if not self.demo:
             self._button(
-                actions, "Verify Google signatures...", self._verify_google_files,
+                checks, "Verify Google signatures...", self._verify_google_files,
                 condition=lambda: bool(self.apk_paths),
             ).pack(side="left")
-        self._button(
-            actions, "Verify and review...", self._plan_play,
-            condition=lambda: self._connected() and bool(self.apk_paths), primary=True,
-        ).pack(side="right")
-        guides = self.ttk.Frame(tab, style="Panel.TFrame")
-        guides.pack(fill="x", pady=(0, 8))
-        self._button(
-            guides, "Google APK sources", lambda: self.advanced.show_feature("source-catalog"),
-        ).pack(side="left")
-        if not self.demo:
             self._button(
-                guides, "Check scan records", self._check_apk_files,
+                checks, "Check scan records", self._check_apk_files,
                 condition=lambda: bool(self.apk_paths),
             ).pack(side="left", padx=6)
         self._button(
-            guides, "Battery exemption...", lambda: self.advanced.show_feature("battery-exemption"),
-        ).pack(side="left", padx=(6, 0))
+            checks, "Verify and review...", self._plan_play,
+            condition=lambda: self._connected() and bool(self.apk_paths), primary=True,
+        ).pack(side="right")
+        components = self.ttk.Frame(tab, style="Panel.TFrame")
+        components.pack(fill="x", pady=(0, 8))
         self._button(
-            guides, "Component status", lambda: self._run_tool(BY_KEY["google-status"], dict),
+            components, "Battery exemption...", lambda: self.advanced.show_feature("battery-exemption"),
+        ).pack(side="left")
+        self._button(
+            components, "Component status", lambda: self._run_tool(BY_KEY["google-status"], dict),
             condition=self._connected,
         ).pack(side="left", padx=(6, 0))
         self._description(

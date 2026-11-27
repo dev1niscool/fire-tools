@@ -31,7 +31,7 @@ The checksum verifies that the ZIP matches the checksum you obtained. Obtain bot
 
 ## APK and driver audit release 0.4.0
 
-All 302 application tests and six handbook tests passed on Linux with JDK 21 available. Both rendered desktop smoke tests passed. The System updates tab was also exercised on Tk 8.6 and 9.0 at 680 × 660. A simulated tablet accepted a reviewed disable request and returned to its saved state on undo. Tests covered all five Android owner modes, including a disabled system default, firmware refusal partway through a batch, a package replaced with a non-system app, and refusal to undo an unrelated app batch from this tab. No physical tablet or firmware update was used.
+All 303 application tests and six handbook tests passed on Linux with JDK 21 available. Both rendered desktop smoke tests passed. The System updates tab was also exercised on Tk 8.6 and 9.0 at 680 × 660. A simulated tablet accepted a reviewed disable request and returned to its saved state on undo. Tests covered all five Android owner modes, including a disabled system default, firmware refusal partway through a batch, a package replaced with a non-system app, and refusal to undo an unrelated app batch from this tab. No physical tablet or firmware update was used.
 
 Bandit reported zero medium or high findings in the Python application and build scripts. The offline Google signature checker accepted all six reference APKs at API 30 and rejected a modified APK and a Framework build on an API below its minimum. It authenticated the Play services signing-key rotation without connecting to ADB. The Windows driver checks used extracted files on Linux. Current Windows driver acceptance remains untested.
 

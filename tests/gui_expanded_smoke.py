@@ -405,7 +405,13 @@ def tools_without_tablet(root):
     root.update()
     status = button(root, "Component status")
     assert status.instate(["disabled"])
-    assert status.winfo_width() >= status.winfo_reqwidth()
+    play_tab = root.nametowidget(app.tabs.select())
+    for widget in descendants(play_tab):
+        if isinstance(widget, ttk.Button):
+            assert widget.winfo_viewable(), widget.cget("text")
+            assert widget.winfo_width() >= widget.winfo_reqwidth(), widget.cget("text")
+        if isinstance(widget, (ttk.Button, ttk.Label)):
+            assert widget.winfo_height() >= widget.winfo_reqheight(), widget.cget("text")
     app.tabs.select(3)
     root.update()
     click(root, "Compare debloat presets...")
