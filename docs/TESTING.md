@@ -33,7 +33,7 @@ The checksum verifies that the ZIP matches the checksum you obtained. Obtain bot
 
 The macOS 15 runner passed the isolated launcher check. Its filesystem did not supply the stable directory handles Fire Tools requires for device changes and recovery journals. Windows and Linux are the supported tablet-management hosts. [Native macOS diagnostic](https://github.com/dev1niscool/fire-tools/actions/runs/46084012866)
 
-The [Hayden Fire-Tools review](HAYDEN-REVIEW.md) identifies the exact source and release artifacts examined. Tests cover offline model lookup, folder installation, protected debloat entries and the Private DNS presets. The [release notes](https://github.com/dev1niscool/fire-tools/releases/tag/v0.5.0) record the published source ZIP checksum, scan and verification results.
+The [Hayden Fire-Tools review](HAYDEN-REVIEW.md) identifies the exact source and release artifacts examined. All 343 application tests and six handbook tests passed locally. Two Linux Tk runtimes exercised the rendered desktop. The folder installer was also checked with real Android Build Tools and a simulated tablet. A reference split APK and its multi-file APKM were refused. All six signed Google component APKs passed the dedicated installer’s staged verification and simulated installed-byte checks. The [release notes](https://github.com/dev1niscool/fire-tools/releases/tag/v0.5.0) record the published source ZIP checksum, scan and verification results.
 
 ## Code review release 0.4.1
 

@@ -33,4 +33,14 @@ The bundled **Play services 24.35.30 APKM** has SHA-256 `f66cde17119f1915584700b
 
 ## Malware scan and limits
 
-The manual source review found no code that uploads tablet files or credentials. We used ClamAV 1.5.5 with 3,628,228 official signatures (main 63, daily 28194 dated November 25, 2026, and bytecode 339). The pinned GitHub source ZIP returned zero detections and no scanner warnings. The published release ZIP and all 22 extracted files returned zero detections. In each pass one legacy Android bytecode signature timed out three times. The extracted-file scan identified the affected packages as Play services, Play Store and Nova. There were no archive-limit alerts. All 371 files unique to the Linux archive also returned zero detections without warnings. All inspection was static. We did not launch the upstream application or its installers, install the APKs, or test on a physical tablet. Future updates and the runtime behavior of the compiled software fall outside this review.
+The manual source review found no code that uploads tablet files or credentials. ClamAV 1.5.5 loaded 3,628,228 official signatures (main 63, daily 28194 dated November 25, 2026, and bytecode 339).
+
+| Scanned input | Result | Elapsed |
+| --- | --- | ---: |
+| Pinned GitHub source ZIP | Zero detections, no warnings | 15 s |
+| Published Python ZIP | Zero detections, three legacy Android check timeouts | 7 min 45 s |
+| All 22 files extracted from the Python ZIP | Zero detections, the same check timed out on Play services, Play Store and Nova | 7 min 44 s |
+| Published Linux archive | Zero detections, two legacy Android check timeouts | 10 min 30 s |
+| All 371 Linux files absent from the Python ZIP | Zero detections, no warnings | 17 s |
+
+The release scans raised no archive-limit alerts. One legacy Android check failed to finish on the affected inputs, so its coverage is incomplete. We did not launch the upstream application or its installers, install the APKs, or test on a physical tablet. The results apply to the listed downloads. They do not establish how the compiled software behaves or what a later update might install.
