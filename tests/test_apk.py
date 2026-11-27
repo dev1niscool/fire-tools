@@ -143,6 +143,36 @@ class ApkInspectionTests(unittest.TestCase):
                 self.badging = badging
                 self.inspect()
 
+    def test_aapt_version_name_preserves_apostrophes(self):
+        self.badging = BADGING.replace("versionName='1.2.3'",
+                                       "versionName='Reader's Edition' platformBuildVersionCode='36'")
+        self.assertEqual(self.inspect().version_name, "Reader's Edition")
+
+    def test_false_is_split_required_with_windows_line_endings(self):
+        self.xmltree = (
+            "E: manifest (line=1)\r\n"
+            "  A: android:isSplitRequired(0x01010591)=(type 0x12)0x0\r\n"
+            "  E: application (line=2)\r\n"
+        )
+        self.assertFalse(self.inspect().split)
+
+    def test_splits_required_metadata_uses_its_own_boolean_value(self):
+        base = self.xmltree + (
+            "    E: meta-data (line=3)\n"
+            '      A: android:name(0x01010003)="com.android.vending.splits.required"\n'
+        )
+        other = (
+            "    E: meta-data (line=4)\n"
+            '      A: android:name(0x01010003)="org.example.other"\n'
+            "      A: android:value(0x01010024)=(type 0x12)0x0\n"
+        )
+        self.xmltree = base + "      A: android:value(0x01010024)=(type 0x12)0x0\n" + other
+        self.assertFalse(self.inspect().split)
+        for value in ("(type 0x12)0xffffffff", "@0x7f030000"):
+            with self.subTest(value=value), self.assertRaisesRegex(ApkError, "requiring splits"):
+                self.xmltree = base + f"      A: android:value(0x01010024)={value}\n" + other
+                self.inspect()
+
     def test_split_and_split_dependent_manifest_are_rejected(self):
         for badging in (BADGING.replace("versionName='1.2.3'", "versionName='1.2.3' split='en'"),
                         BADGING + "uses-split:'config.en'\n"):

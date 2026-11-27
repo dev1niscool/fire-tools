@@ -26,6 +26,18 @@ class DebloatDemoTests(unittest.TestCase):
     def states(self, mode='all'):
         return {row['package']: row['state'] for row in self.demo.package_inventory(self.serial, mode)}
 
+    def test_inventory_filters_follow_system_and_installed_user_apps(self):
+        system, third_party = self.states('system'), self.states('third-party')
+        self.assertIn(SILK, system)
+        self.assertIn('com.android.vending', third_party)
+        self.assertFalse(system.keys() & third_party.keys())
+        self.assertEqual(system.keys() | third_party.keys(), self.states().keys())
+        self.apply(self.demo.plan_package_action(self.serial, 'uninstall', (SILK,)))
+        self.assertNotIn(SILK, self.states('system'))
+        self.assertEqual(self.states('uninstalled')[SILK], 'uninstalled')
+        self.apply(self.demo.plan_google_play(self.serial, ()))
+        self.assertIn('com.google.android.gsf', self.states('third-party'))
+
     def test_review_and_apply_recommended_then_undo_only_its_changes(self):
         original = self.states()
         recommended = self.plan(profile='recommended')

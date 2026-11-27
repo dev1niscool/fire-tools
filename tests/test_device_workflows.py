@@ -213,6 +213,31 @@ class DeviceWorkflowTests(unittest.TestCase):
             self.run_plan(plan)
         self.assertEqual([], self.tool.adb.writes)
 
+    def test_setting_undo_survives_owner_change_during_readback(self):
+        tablet = self.tool.adb
+        self.run_plan(self.plan('timeout', value='15000'))
+        params = dict(namespace='system', key='screen_off_timeout')
+        undo = self.plan('setting-undo', **params)
+        shell = tablet.shell
+
+        def switch_on_readback(serial, args, timeout=30):
+            output = shell(serial, args, timeout)
+            if len(tablet.writes) == 2 and args == ['settings', '--user', '0', 'list', 'system']:
+                tablet.info = replace(tablet.info, user_id=10)
+            return output
+
+        tablet.shell = switch_on_readback
+        with self.assertRaisesRegex(ToolkitError, 'owner'):
+            self.run_plan(undo)
+        self.assertIn('pending', self.done[-1].lower())
+
+        tablet.info = replace(tablet.info, user_id=0)
+        tablet.shell = shell
+        self.run_plan(self.plan('setting-undo', **params))
+        self.assertEqual('30000', tablet.settings['system']['screen_off_timeout'])
+        with self.assertRaisesRegex(ToolkitError, 'No saved value'):
+            self.plan('setting-undo', **params)
+
     def test_reject_unsafe_or_unbounded_arguments(self):
         cases = [
             ('setting', dict(namespace='shell', key='foo', value='bar')),
@@ -311,6 +336,30 @@ class DeviceWorkflowTests(unittest.TestCase):
         self.tool.adb.fail_pull = False
         self.run_plan(plan)
         self.assertEqual(b'file bytes', dest.read_bytes())
+
+    def test_push_discards_same_length_content_mismatch_before_publication(self):
+        tablet = self.tool.adb
+        source = self.host / 'upload.txt'
+        source.write_bytes(b'good')
+        original_files = dict(tablet.files)
+        transfer = tablet._run_device
+
+        def changed_upload(serial, args, timeout=30):
+            result = transfer(serial, args, timeout)
+            if args[0] == 'push':
+                tablet.files[args[2]] = b'oops'
+            return result
+
+        tablet._run_device = changed_upload
+        plan = self.plan('push', local=str(source), remote='/sdcard/Download/upload.txt')
+        with self.assertRaisesRegex(ToolkitError, 'digest|SHA-256'):
+            self.run_plan(plan)
+        self.assertEqual(original_files, tablet.files)
+        self.assertEqual([], self.done)
+
+        tablet._run_device = transfer
+        self.run_plan(plan)
+        self.assertEqual(b'good', tablet.files['/storage/emulated/0/Download/upload.txt'])
 
     def test_shared_storage_backup_and_extracted_splits(self):
         folder = self.host / 'backup'

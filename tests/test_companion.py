@@ -88,6 +88,36 @@ class CompanionBuildTests(unittest.TestCase):
             builder["run"](["javac", "-version"], env=env)
         self.assertEqual({"SIGNING_PASSWORD_FOR_TEST": "placeholder"}, invoke.call_args.kwargs["env"])
 
+    @unittest.skipIf(os.name == "nt", "Windows protects signing keys with filesystem ACLs")
+    def test_reused_fixed_password_key_requires_private_permissions(self):
+        get_key = runpy.run_path(str(BUILD_SCRIPT))["development_keystore"]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            key = root / "ads-helper-development.p12"
+            key.write_bytes(b"existing local key")
+            with patch.dict(get_key.__globals__, BUILD_DIR=root):
+                for mode in (0o640, 0o602):
+                    with self.subTest(mode=oct(mode)):
+                        key.chmod(mode)
+                        with self.assertRaisesRegex(ValueError, "private"):
+                            get_key(None, {})
+                        self.assertEqual(key.read_bytes(), b"existing local key")
+                key.chmod(0o600)
+                self.assertEqual(get_key(None, {}), key)
+
+    @unittest.skipIf(os.name == "nt", "Windows protects signing keys with filesystem ACLs")
+    def test_private_key_cannot_be_reused_from_a_shared_writable_directory(self):
+        get_key = runpy.run_path(str(BUILD_SCRIPT))["development_keystore"]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            key = root / "ads-helper-development.p12"
+            key.write_bytes(b"existing local key")
+            key.chmod(0o600)
+            root.chmod(0o770)
+            with patch.dict(get_key.__globals__, BUILD_DIR=root):
+                with self.assertRaisesRegex(ValueError, "directory"):
+                    get_key(None, {})
+
     def test_reports_a_missing_sdk_platform_jar(self):
         with tempfile.TemporaryDirectory() as directory:
             result = self.run_builder("--sdk", directory, "--android-api", "36")

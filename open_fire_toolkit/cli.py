@@ -19,7 +19,7 @@ def _confirmation_options(command):
 
 
 def parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description='Open Fire Toolkit — inspectable tablet utilities. No bundled APKs or tools.')
+    p = argparse.ArgumentParser(description='Open Fire Toolkit for inspecting and managing tablets. No bundled APKs or tools.')
     p.add_argument('--version', action='version', version=__version__)
     p.add_argument('--adb', default='', help='Full path to official adb/adb.exe')
     p.add_argument('--aapt', default='', help='Full path to official aapt/aapt.exe')
@@ -88,11 +88,11 @@ def _confirm_plan(toolkit, plan, args, demo):
     token = hashlib.sha256(payload).hexdigest()
     if not args.yes:
         flags = '--yes' if demo else f'--yes --confirm-token {token}'
-        print('Preview only — no changes made. After review, repeat with ' + flags)
+        _print_report('Preview only — no changes made. After review, repeat with ' + flags)
         return 0
     if not demo and args.confirm_token != token:
         raise ValueError('Confirmation token is missing or the reviewed plan changed. Run a fresh preview and review it.')
-    toolkit.execute(plan, confirmed=True)
+    toolkit.execute(plan, confirmed=True, log=_print_report)
     return 0
 
 
@@ -121,13 +121,13 @@ def main(argv=None) -> int:
     if args.command == 'tools':
         selected = [BY_KEY[args.feature]] if args.feature else FEATURES
         for feature in selected:
-            print(f'{feature.key}: {feature.label} [{feature.category}]')
+            _print_report(f'{feature.key}: {feature.label} [{feature.category}]')
             if args.feature:
-                print(feature.description)
+                _print_report(feature.description)
                 print('Read only' if feature.read_only else 'Preview first. Apply with --yes and the displayed --confirm-token.')
                 for field in feature.fields:
                     choices = ' Choices: ' + ', '.join(field.choices) if field.choices else ''
-                    print(f'  --param {field.key}=VALUE: {field.label}. Default: {field.default!r}.{choices}')
+                    _print_report(f'  --param {field.key}=VALUE: {field.label}. Default: {field.default!r}.{choices}')
         return 0
     if args.command in (None, 'gui'):
         try:
@@ -149,12 +149,12 @@ def main(argv=None) -> int:
         if feature is not None and feature.requires_device and not args.serial:
             raise ValueError('Specify --serial for this tablet operation.')
         if feature is not None and feature.backend == 'local':
-            print(run_feature(None, '', feature, values))
+            _print_report(run_feature(None, '', feature, values))
             return 0
         if demo:
             from .demo import DemoToolkit
             toolkit = DemoToolkit()
-            print('SIMULATED DEMO — no hardware commands or APK verification.')
+            _print_report('SIMULATED DEMO — no hardware commands or APK verification.')
         else:
             toolkit = Toolkit(ToolConfig(args.adb, args.aapt, args.apksigner_jar, args.java))
         if feature is not None:
@@ -172,7 +172,7 @@ def main(argv=None) -> int:
             if not devices:
                 print('No devices. Connect a USB data cable, enable USB debugging and approve the tablet prompt.')
             for device in devices:
-                print(f'{device.serial}\t{device.state}\t{device.model}')
+                _print_report(f'{device.serial}\t{device.state}\t{device.model}')
             return 0
         if args.command == 'info':
             info = toolkit.device_info(args.serial)

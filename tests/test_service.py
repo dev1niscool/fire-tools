@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import sys
@@ -46,6 +47,8 @@ class FakeAdb:
         if args[:3] == ('stat', '-c', '%s'):
             return str(len(self.installed_bytes[args[3].split('/')[-2]]))
         if args[:4] == ('settings','--user','0','get'): return self.value
+        if args == ('settings', '--user', '0', 'list', 'global'):
+            return '' if self.value == 'null' else 'LOCKSCREEN_AD_ENABLED=' + self.value
         if args[:4] == ('settings','--user','0','put'):
             if not self.ignore_setting: self.value=args[-1]
             return ''
@@ -355,6 +358,74 @@ class ServiceTests(unittest.TestCase):
     def test_unknown_setting_refused(self):
         self.adb.value='Permission denied'
         with self.assertRaises(ToolkitError):self.app.plan_ads('SERIAL123')
+
+    def test_ads_preview_refuses_values_it_cannot_restore_exactly(self):
+        read = self.adb.shell
+        for value in ('null', ' 1 '):
+            def shell(serial, args, timeout=30):
+                if tuple(args) == ('settings', '--user', '0', 'list', 'global'):
+                    return 'LOCKSCREEN_AD_ENABLED=' + value
+                return read(serial, args, timeout)
+
+            with self.subTest(value=value), patch.object(self.adb, 'shell', side_effect=shell):
+                self.adb.value = value
+                with self.assertRaises(ToolkitError):
+                    self.app.plan_ads('SERIAL123')
+                self.assertFalse(self.app.state_dir.exists())
+
+    def test_single_ads_restore_preserves_journal_changes_during_readback(self):
+        self.apply(self.app.plan_ads('SERIAL123'))
+        restore = self.app.plan_ads('SERIAL123', restore=True)
+        read = self.adb.shell
+        other = {'model': 'Another tablet', 'value': '2'}
+
+        def shell(serial, args, timeout=30):
+            result = read(serial, args, timeout)
+            if 'put' in args:
+                journal = self.app._load_state()
+                journal['ads']['f' * 64] = other
+                self.app._save_state(journal)
+            return result
+
+        with patch.object(self.adb, 'shell', side_effect=shell):
+            self.apply(restore)
+        self.assertEqual(self.app._load_state()['ads'], {'f' * 64: other})
+
+    def test_single_ads_command_denial_retains_undo_even_when_firmware_restores_value(self):
+        self.apply(self.app.plan_ads('SERIAL123'))
+        restore = self.app.plan_ads('SERIAL123', restore=True)
+        read = self.adb.shell
+
+        def shell(serial, args, timeout=30):
+            if 'put' in args:
+                self.adb.value = '1'
+                return 'Error: Permission Denial'
+            return read(serial, args, timeout)
+
+        with patch.object(self.adb, 'shell', side_effect=shell), self.assertRaisesRegex(ToolkitError, 'Permission Denial'):
+            self.apply(restore)
+        self.assertEqual(self.app.plan_ads('SERIAL123', restore=True).restore_value, '1')
+
+    def test_ad_undo_must_fit_read_limit_before_suppression(self):
+        self.app.state_dir.mkdir()
+        path = self.app.state_dir / 'state.json'
+        original = json.dumps({'schema': 1, 'ads': {}, 'notes': 'x' * (1024 * 1024 - 64)})
+        path.write_text(original)
+        with self.assertRaises(ToolkitError):
+            self.apply(self.app.plan_ads('SERIAL123'))
+        self.assertEqual(path.read_text(), original)
+        self.assertEqual(self.adb.value, '1')
+
+    def test_duplicate_ads_undo_keys_are_refused_without_overwriting_the_journal(self):
+        self.app.state_dir.mkdir()
+        path = self.app.state_dir / 'state.json'
+        original = '{"schema":1,"ads":{},"ads":{}}'
+        path.write_text(original)
+        with self.assertRaises(ToolkitError):
+            self.apply(self.app.plan_ads('SERIAL123'))
+        self.assertEqual(path.read_text(), original)
+        self.assertEqual(self.adb.value, '1')
+
     def test_legacy_package_rejection_is_excluded_from_accepted_progress(self):
         plan = self.app.plan_package('SERIAL123', 'com.amazon.kindle')
         with patch.object(self.adb, 'shell', return_value='Failure [Permission Denial]'):

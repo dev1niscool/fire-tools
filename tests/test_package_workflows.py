@@ -720,6 +720,25 @@ Disabled system packages:
                     self.plan(op, (p,))
         self.assertFalse(self.adb.writes)
 
+    def test_enabled_stock_package_must_resolve_home_before_disabling_current_home(self):
+        self.adb.home = HOME + '/.Home'
+        plan = self.plan('disable', (HOME,))
+        shell = self.adb.shell
+
+        def stock_component_disabled(serial, args):
+            if tuple(args[:3]) == ('cmd', 'package', 'resolve-activity') and args[-2:] == ('-p', STOCK):
+                return 'No activity found'
+            return shell(serial, args)
+
+        with patch.object(self.adb, 'shell', stock_component_disabled):
+            with self.assertRaisesRegex(ToolkitError, 'HOME'):
+                self.execute(plan)
+            with self.assertRaisesRegex(ToolkitError, 'HOME'):
+                self.plan('uninstall', (HOME,))
+        self.assertFalse(self.adb.writes)
+        self.execute(plan)
+        self.assertIn(HOME, self.adb.disabled)
+
     def test_generic_apk_policy_rechecks_google_pin_sdk_abi_and_core_names(self):
         path = self.root / 'test.apk'
         path.write_bytes(b'apk')
@@ -943,6 +962,37 @@ Disabled system packages:
             with self.subTest(dump=dump), self.assertRaises(ToolkitError):
                 self.plan('ota-disable', (OTA,))
         self.assertFalse(self.adb.writes)
+
+    def test_updated_system_app_undo_uses_active_package_owner_mode(self):
+        self.adb.modes[OTA] = '1'
+        shell = self.adb.shell
+
+        def with_factory_copy(serial, args):
+            if tuple(args) == ('dumpsys', 'package', OTA):
+                return (f'Packages:\n  Package [{OTA}] (aa):\n'
+                        f'    User 0: installed=true enabled={self.adb.modes[OTA]}\n'
+                        f'Hidden system packages:\n  Package [{OTA}] (bb):\n'
+                        '    User 0: installed=true enabled=0\n')
+            return shell(serial, args)
+
+        with patch.object(self.adb, 'shell', with_factory_copy):
+            self.execute(self.plan('ota-disable', (OTA,)))
+            self.assertIn(OTA, self.adb.disabled)
+            self.execute(self.plan('undo', scope='updaters'))
+        self.assertEqual(self.adb.modes[OTA], '1')
+        self.assertNotIn(OTA, self.adb.disabled)
+
+    def test_factory_owner_state_cannot_confirm_force_stop_or_updater_mode(self):
+        self.adb.package_dumps[A] = (f'Packages:\n  Package [{A}] (aa):\n'
+                                     '    User 0: installed=true enabled=1 stopped=false\n'
+                                     f'Hidden system packages:\n  Package [{A}] (bb):\n'
+                                     '    User 0: installed=true enabled=0 stopped=true\n')
+        with self.assertRaisesRegex(ToolkitError, 'stopped state.*Completed:.*force-stop'):
+            self.execute(self.plan('force-stop', (A,)))
+        self.adb.package_dumps[OTA] = (f'Hidden system packages:\n  Package [{OTA}] (bb):\n'
+                                       '    User 0: installed=true enabled=1\n')
+        with self.assertRaisesRegex(ToolkitError, 'owner'):
+            self.plan('ota-disable', (OTA,))
 
     def test_uncertain_first_updater_preserves_prior_batch_until_mode_is_readable(self):
         self.execute(self.plan('disable', (A,)))

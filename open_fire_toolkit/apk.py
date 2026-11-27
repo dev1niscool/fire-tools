@@ -37,12 +37,11 @@ _MAX_TOOL_OUTPUT = 1024 * 1024
 _TOOL_TIMEOUT = 60
 _PACKAGE = re.compile(
     r"package: name='([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+)' "
-    r"versionCode='([0-9]{1,19})' versionName='([^']*)'(?: .*)?"
+    r"versionCode='([0-9]{1,19})' versionName='(.*?)'(?: [A-Za-z][A-Za-z0-9_]*=.*)?"
 )
 _SPLIT_XML = re.compile(
     r"^[ \t]*(?:E: uses-split\b|A: (?:android:)?(?:requiredSplitTypes|splitTypes)\b"
-    r"|A: (?:android:)?isSplitRequired\b(?!.*=(?:\(type 0x12\))?0x0+$)"
-    r'|A: android:name\b.*="com\.android\.vending\.splits\.required")',
+    r"|A: (?:android:)?isSplitRequired\b(?!.*=(?:\(type 0x12\))?0x0+$))",
     re.MULTILINE,
 )
 
@@ -336,6 +335,24 @@ def _parse_signers(output: str) -> tuple[str, ...]:
     return tuple(digests)
 
 
+def _manifest_requires_splits(manifest: str) -> bool:
+    manifest = manifest.replace("\r\n", "\n")
+    if _SPLIT_XML.search(manifest):
+        return True
+    marker = '="com.android.vending.splits.required"'
+    if marker in manifest:
+        for element in re.split(r"^[ \t]*E: ", manifest, flags=re.MULTILINE):
+            if not element.startswith("meta-data ") or not re.search(
+                r"^[ \t]*A: android:name\b[^\n]*" + re.escape(marker), element, re.MULTILINE
+            ):
+                continue
+            # Only an explicit boolean false on this same meta-data element is safe.
+            values = re.findall(r"^[ \t]*A: android:value\b[^=\n]*=(.*)$", element, re.MULTILINE)
+            if len(values) != 1 or not re.fullmatch(r"\(type 0x12\)0x0+", values[0]):
+                return True
+    return False
+
+
 def google_signer_is_trusted(apk: ApkInfo) -> bool:
     if apk.signer_sha256 == (GOOGLE_SIGNER_SHA256,):
         return True
@@ -395,7 +412,7 @@ class ApkVerifier:
         )
         if not re.search(r"^[ \t]*E: manifest\b", manifest, re.MULTILINE):
             raise ApkError("aapt did not report a readable Android manifest.")
-        requires_splits = bool(_SPLIT_XML.search(manifest)) or any(
+        requires_splits = _manifest_requires_splits(manifest) or any(
             line.startswith("uses-split:") for line in badging.splitlines()
         )
         if requires_splits and not installed_base:

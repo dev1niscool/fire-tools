@@ -259,7 +259,7 @@ class App:
         ).pack(side="right")
         self.device_table = self._table(
             tab, (("serial", "Serial", 180), ("state", "ADB state", 110), ("model", "Model", 180)), 3,
-            self._sync_controls,
+            self._device_row_changed,
         )
 
     def _play_tab(self):
@@ -317,17 +317,15 @@ class App:
     def _ads_tab(self):
         tab = self._panel(
             "Lock-screen ads", "Manage lock-screen ads",
-            "Amazon offers paid removal of Special Offers when available for your device. "
-            "Open your Amazon device settings, select your Fire tablet and look for Special Offers.",
+            "Select your tablet in Amazon device settings to check for paid Special Offers removal.",
         )
         self._button(
             tab, "Open Amazon device settings", lambda: self._open(AMAZON_DEVICES),
-        ).pack(anchor="w", pady=(0, 20))
+        ).pack(anchor="w", pady=(0, 8))
         self.ttk.Label(tab, text="Experimental setting", style="Heading.TLabel").pack(anchor="w")
         self._description(
-            tab, "This changes one Android setting and saves its earlier value for restore. "
-                 "Fire OS may ignore or reset the setting, and ads may continue to appear.",
-        ).pack(fill="x", pady=(4, 10))
+            tab, "Fire Tools saves the old value for restore. Fire OS may ignore or reset the change.",
+        ).pack(fill="x", pady=(3, 6))
         actions = self.ttk.Frame(tab, style="Panel.TFrame")
         actions.pack(fill="x")
         self._button(
@@ -341,7 +339,7 @@ class App:
 
         self.ttk.Label(
             tab, text="Package and helper controls", style="Heading.TLabel",
-        ).pack(anchor="w", pady=(16, 0))
+        ).pack(anchor="w", pady=(8, 0))
         self._description(
             tab, "Fire OS may block Special Offers package changes. The optional helper "
                  "requires installation, a settings permission, and a visible service on the tablet.",
@@ -388,7 +386,7 @@ class App:
         )
         self.app_table = self._table(
             tab, (("label", "Application", 155), ("package", "Package", 310), ("state", "State", 95)),
-            7, self._sync_controls,
+            6, self._sync_controls,
         )
         actions = self.ttk.Frame(tab, style="Panel.TFrame")
         actions.pack(fill="x", pady=8)
@@ -460,8 +458,7 @@ class App:
                 condition=lambda s=state: self._can_change_updaters(s),
             ).pack(side="left", padx=(0, 6))
         self._description(
-            tab, "3. To reverse the last updater batch, review its saved package undo. "
-                 "Enable changes each selected updater to enabled regardless of its previous state.",
+            tab, "3. Undo restores the saved package states. Enable turns on the selected updaters.",
         ).pack(fill="x", pady=(6, 3))
         self._button(
             tab, "Review last package undo...", lambda: self._run_tool(BY_KEY["ota-undo"], dict),
@@ -512,6 +509,10 @@ class App:
             widget.state(["!disabled"] if enabled else ["disabled"])
         for table in (self.device_table, self.apk_table, self.app_table, self.updater_table):
             table.state(["disabled"] if blocked else ["!disabled"])
+        # Treeview class bindings can still select a row in the disabled state.
+        selectmode = "none" if blocked else "browse"
+        if str(self.device_table.cget("selectmode")) != selectmode:
+            self.device_table.configure(selectmode=selectmode)
         self.advanced.sync_controls()
         prefix = "Demo · " if self.demo else ""
         if self.device is not None:
@@ -646,11 +647,23 @@ class App:
 
         self._start("Scan devices", scan, complete)
 
-    def _select_device(self):
+    def _highlighted_device(self):
         selected = self.device_table.selection()
-        if not selected or self.worker.busy:
+        if not selected:
+            return None
+        index = self.device_table.index(selected[0])
+        return self.devices[index] if index < len(self.devices) else None
+
+    def _device_row_changed(self):
+        candidate = self._highlighted_device()
+        if self.device is not None and (candidate is None or candidate.serial != self.device.serial):
+            self._forget_device()
+        self._sync_controls()
+
+    def _select_device(self):
+        candidate = self._highlighted_device()
+        if candidate is None or self.worker.busy:
             return
-        candidate = self.devices[int(selected[0])]
         self._forget_device()
         if candidate.state != "device":
             self._show_error("Use selected tablet", ValueError(
@@ -662,6 +675,9 @@ class App:
         toolkit = self.toolkit
 
         def complete(device):
+            if self._highlighted_device() != candidate or device.serial != candidate.serial:
+                self._append_log("Tablet details no longer match the selection. Choose Use selected tablet again.")
+                return
             self.device = device
             abis = ", ".join(device.abis) or "not reported"
             self.firmware.set(

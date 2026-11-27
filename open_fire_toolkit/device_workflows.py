@@ -1053,6 +1053,7 @@ class DeviceWorkflows:
             self._device_guard(plan)
             if self._device_table(serial, ns).get(key) != target:
                 _fail(f'{ns}/{key} readback differs. The undo snapshot was retained.')
+            self._device_guard(plan)
             completed[-1] = f'Confirmed {ns}/{key} by settings readback.'
             if restoring:
                 self._device_save_undo(plan.device, [(ns+'/'+key, None, True)])
@@ -1228,8 +1229,14 @@ class DeviceWorkflows:
                 with self._device_temp(plan, parent) as remote:
                     self._device_guard(plan)
                     self.adb._run_device(serial, ['push', str(source), remote], timeout=600)
-                    if self._remote_file_size(serial, remote) != source.stat().st_size:
-                        _fail('Staged tablet file size did not match the source.')
+                    size = source.stat().st_size
+                    source.unlink()
+                    self._storage_path(serial, remote, 'regular file')
+                    readback = Path(temp) / 'readback'
+                    self._pull_device_file(plan.device, remote, readback, expected_size=size)
+                    readback_digest, _ = _read_file(readback, size)
+                    if readback_digest != digest:
+                        _fail('The staged upload SHA-256 differs from the reviewed file.')
                     self._device_guard(plan)
                     self._require_new_remote(serial, target)
                     self._device_guard(plan)

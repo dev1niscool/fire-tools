@@ -101,4 +101,30 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result.returncode,0,result.stderr)
             self.assertTrue(result.stdout)
 
+    def test_ascii_pipe_preserves_demo_output_and_review_instructions(self):
+        for args, expected in ((['--help'], 'usage:'),
+                               (['--demo', 'devices'], 'DEMO_FIRE_HD10'),
+                               (['tool', 'debloat-presets'], 'Complete Debloat'),
+                               (['--demo', 'reboot', '--serial', 'DEMO_FIRE_HD10'], '--yes')):
+            with self.subTest(args=args):
+                result = subprocess.run([sys.executable, '-m', 'open_fire_toolkit', *args],
+                                        env=dict(os.environ, PYTHONIOENCODING='ascii'),
+                                        capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(expected, result.stdout)
+
+    def test_confirmed_operation_can_log_unicode_to_a_legacy_pipe(self):
+        def emit_result(toolkit, plan, confirmed, log=print):
+            self.assertTrue(confirmed)
+            log('Saved to 写真.png')
+            return ['Saved to 写真.png']
+
+        buffer = io.BytesIO()
+        output = io.TextIOWrapper(buffer, encoding='cp1252')
+        with patch.object(DemoToolkit, 'execute', emit_result), contextlib.redirect_stdout(output):
+            code = main(['--demo', 'reboot', '--serial', 'DEMO_FIRE_HD10', '--yes'])
+            output.flush()
+        self.assertEqual(code, 0)
+        self.assertIn(b'Saved to ', buffer.getvalue())
+
 if __name__=='__main__':unittest.main()

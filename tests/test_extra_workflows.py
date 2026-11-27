@@ -588,6 +588,73 @@ class ExtraWorkflowTests(unittest.TestCase):
         self.run_plan(self.plan('wifi-metered', network_id='Home; Wi-Fi', metered='undefined'))
         self.assertEqual('none', self.tablet.metered['Home; Wi-Fi'])
 
+    def test_readback_does_not_confirm_after_switching_profiles(self):
+        cases = (
+            ('data-saver', {'enabled': True}, '_read_data_saver'),
+            ('wifi-metered', {'network_id': 'Home; Wi-Fi', 'metered': 'true'}, '_read_metered_networks'),
+            ('battery-exemption', {'enabled': True}, '_read_battery_exemption'),
+            ('widget-bind', {'package': 'com.example.home', 'enabled': True}, '_read_widget_grant'),
+        )
+        for action, options, reader in cases:
+            with self.subTest(action=action):
+                self.tablet.device = replace(self.tablet.device, user_id=0)
+                self.tablet.writes.clear()
+                plan = self.plan(action, **options)
+                read = getattr(self.tool, reader)
+
+                def switch_during_readback(*args):
+                    value = read(*args)
+                    if self.tablet.writes:
+                        self.tablet.device = replace(self.tablet.device, user_id=12)
+                    return value
+
+                progress = []
+                with patch.object(self.tool, reader, side_effect=switch_during_readback):
+                    with self.assertRaises(ToolkitError):
+                        self.tool._execute_extra_workflow(plan, progress, lambda _: None)
+                self.assertTrue(progress)
+                self.assertFalse(any('verified.' in line and 'unverified.' not in line for line in progress))
+
+    def test_network_names_and_duplicate_configs_do_not_hide_other_networks(self):
+        self.tablet.metered = {'Error lab': 'none', 'Home': 'true'}
+        shell = self.tablet.shell
+
+        def saved_networks(serial, args, timeout=30):
+            result = shell(serial, args, timeout)
+            if list(args) == ['cmd', 'netpolicy', 'list', 'wifi-networks']:
+                result += '\nHome;false'
+            return result
+
+        with patch.object(self.tablet, 'shell', side_effect=saved_networks):
+            report = self.tool.read_extra_tool(self.serial, 'network-info')
+            self.assertIn('Error lab;undefined', report)
+            self.assertIn('Home;multiple saved configurations', report)
+            with self.assertRaisesRegex(ToolkitError, 'multiple'):
+                self.plan('wifi-metered', network_id='Home', metered='true')
+            self.assertEqual([], self.tablet.writes)
+            self.run_plan(self.plan('wifi-metered', network_id='Error lab', metered='true'))
+        self.assertEqual('true', self.tablet.metered['Error lab'])
+
+    def test_private_dns_undo_keeps_journal_if_profile_changes_during_final_read(self):
+        self.run_plan(self.plan('private-dns', mode='off'))
+        self.tablet.setting_values.clear()
+        plan = self.plan('private-dns-undo')
+        read = self.tool._read_private_dns
+        reads = 0
+
+        def switch_on_readback(device):
+            nonlocal reads
+            values = read(device)
+            reads += 1
+            if reads == 2:  # Execution re-previews, then verifies the restored values.
+                self.tablet.device = replace(self.tablet.device, user_id=12)
+            return values
+
+        with patch.object(self.tool, '_read_private_dns', side_effect=switch_on_readback):
+            with self.assertRaises(ToolkitError):
+                self.run_plan(plan)
+        self.assertEqual(1, len(list(self.tool.state_dir.glob('private-dns-*.json'))))
+
     def test_wifi_metered_exit_code_alone_is_not_success(self):
         plan = self.plan('wifi-metered', network_id='Home; Wi-Fi', metered='true')
         self.tablet.ignore_wifi_write = True

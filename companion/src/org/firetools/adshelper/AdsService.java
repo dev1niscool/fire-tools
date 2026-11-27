@@ -153,6 +153,7 @@ public final class AdsService extends Service {
                 .setContentTitle("Fire Tools Ads Helper")
                 .setContentText("Checking the lock-screen ads setting")
                 .setContentIntent(openApp)
+                .setDeleteIntent(stopService)
                 .setOngoing(true)
                 .addAction(new Notification.Action.Builder(null, "Stop", stopService).build())
                 .build();

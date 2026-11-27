@@ -19,7 +19,7 @@ from .apk import (
 from .apk_checks import scan_record
 from .package_catalog import OFFERS
 from .package_workflows import OWNER_MODE_COMMANDS, PackageWorkflows
-from .device_workflows import DeviceWorkflows, _read_file
+from .device_workflows import DeviceWorkflows, _load, _read_file
 from .extra_workflows import ExtraWorkflows
 from .workflows import TransportPlan
 
@@ -32,6 +32,7 @@ OPTIONAL_APPS = {
     'com.amazon.windowshop': 'Amazon Shopping',
 }
 ADS_KEY = 'LOCKSCREEN_AD_ENABLED'
+_ADS_STATE_LIMIT = 1024 * 1024
 AMAZON_DEVICES_URL = 'https://www.amazon.com/hz/mycd/digital-console/alldevices'
 PLATFORM_TOOLS_URL = 'https://developer.android.com/tools/releases/platform-tools'
 BUILD_TOOLS_URL = 'https://developer.android.com/tools/releases/build-tools'
@@ -78,15 +79,6 @@ def _default_state_dir() -> Path:
     else:
         base = Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local' / 'state')))
     return base / 'open-fire-toolkit'
-
-
-def _setting_value(raw: str) -> str | None:
-    value = raw.strip()
-    if value == 'null':
-        return None
-    if re.fullmatch(r'-?\d{1,9}', value, flags=re.ASCII):
-        return value
-    raise ToolkitError('Cannot read the ad setting reliably. ' + value[:180])
 
 
 def google_status_text(states: dict[str, str]) -> str:
@@ -233,8 +225,8 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
         path = self.state_dir / 'state.json'
         try:
             with self._journal_directory() as parent:
-                _, content = _read_file(parent / 'state.json', 1024 * 1024, content=True)
-            data = json.loads(content)
+                _, content = _read_file(parent / 'state.json', _ADS_STATE_LIMIT, content=True)
+            data = _load(content)
             if not isinstance(data, dict) or data.get('schema') != 1 or not isinstance(data.get('ads'), dict):
                 raise ValueError('unknown schema')
             for group in ('ads', 'paired_ads'):
@@ -258,12 +250,14 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
             raise ToolkitError(f'Undo state is unreadable: {path}. Preserve it and resolve the error before making changes.') from exc
 
     def _save_state(self, state: dict) -> None:
+        encoded = (json.dumps(state, indent=2, sort_keys=True) + '\n').encode('utf-8')
+        if len(encoded) > _ADS_STATE_LIMIT:
+            raise ToolkitError('Ad undo state exceeds the storage limit. The existing file was preserved.')
         with self._journal_directory(create=True) as parent:
             fd, name = tempfile.mkstemp(prefix='.state-', suffix='.json', dir=parent)
             try:
-                with os.fdopen(fd, 'w', encoding='utf-8') as stream:
-                    json.dump(state, stream, indent=2, sort_keys=True)
-                    stream.write('\n')
+                with os.fdopen(fd, 'wb') as stream:
+                    stream.write(encoded)
                     stream.flush()
                     os.fsync(stream.fileno())
                 os.replace(name, parent / 'state.json')
@@ -272,7 +266,13 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
                     os.unlink(name)
 
     def _read_ads(self, serial: str) -> str | None:
-        return _setting_value(self.adb.shell(serial, ('settings', '--user', '0', 'get', 'global', ADS_KEY)))
+        value = self.adb.shell(serial, ('settings', '--user', '0', 'get', 'global', ADS_KEY))
+        if re.fullmatch(r'-?\d{1,9}', value, flags=re.ASCII):
+            return value
+        # Android prints "null" for both a missing key and a stored string.
+        if value == 'null' and ADS_KEY not in self._device_table(serial, 'global'):
+            return None
+        raise ToolkitError('Cannot read the ad setting reliably. ' + value[:180])
 
     def plan_ads(self, serial: str, restore: bool = False, *, paired: bool = False) -> Plan:
         device = self._writable_device(serial)
@@ -548,7 +548,7 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
         else:
             args = ('settings', '--user', '0', 'put', 'global', ADS_KEY, target)
         self._device_guard(plan)
-        self.adb.shell(plan.serial, args)
+        self._pkg_shell(plan.serial, *args)
         try:
             self._device_guard(plan)
             actual = self._read_ads(plan.serial)
@@ -558,8 +558,11 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
         if actual != target:
             raise ToolkitError('The setting could not be confirmed. Undo information was retained; actual ad visibility is unknown.')
         if plan.action == 'ads_restore':
-            del state['ads'][key]
             try:
+                state = self._load_state()
+                if state['ads'].get(key) != record:
+                    raise ToolkitError('The ad undo record changed during restore.')
+                del state['ads'][key]
                 self._save_state(state)
-            except OSError as exc:
+            except (OSError, ToolkitError) as exc:
                 raise ToolkitError('The ad setting was restored and read back, but local undo-state cleanup failed. Preserve the state file and resolve the storage error before another change. ' + str(exc)) from exc

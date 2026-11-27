@@ -1,4 +1,4 @@
-# Feature coverage for Fire Tools 0.4.0
+# Feature coverage for Fire Tools 0.4.1
 
 This release implements the workflows below in original source. Automated tests exercise their commands, validation and failure handling through simulated tablets; desktop smoke tests exercise their forms and confirmation. No physical Fire tablet has been attached, so **implemented does not mean verified on your firmware**.
 

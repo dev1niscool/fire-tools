@@ -35,6 +35,7 @@ DNS_KEYS = ('private_dns_specifier', 'private_dns_mode')
 DNS_STATE_SCHEMA = 'fire-tools.private-dns-undo.v1'
 DNS_STATE_LIMIT = 8192
 NETWORK_OVERRIDES = ('undefined', 'true', 'false')
+AMBIGUOUS_NETWORK = 'multiple saved configurations'
 HOST_TRANSPORT_OPERATIONS = {'wireless-connect': 'connect', 'wireless-disconnect': 'disconnect'}
 ADB_TRANSPORT_LABELS = {'emu', 'tcp', 'vsock', 'acceptfd', 'local', 'localabstract',
                         'localfilesystem', 'localreserved'}
@@ -292,6 +293,8 @@ class ExtraWorkflows:
             networks = self._read_metered_networks(serial)
             if network_id not in networks:
                 _fail('Copy the Wi-Fi identifier from Network information.')
+            if networks[network_id] == AMBIGUOUS_NETWORK:
+                _fail('This identifier matches multiple saved Wi-Fi configurations. Select a unique identifier.')
             snapshot['metered'] = networks[network_id]
             return 'Set Wi-Fi metering override', [f'Change {network_id} from {networks[network_id]} to {target}.'], [
                 'Metered networks can delay downloads and restrict background data.',
@@ -522,14 +525,19 @@ class ExtraWorkflows:
         return 'true' if match.group(1) == 'enabled' else 'false'
 
     def _read_metered_networks(self, serial):
-        raw = self._device_shell(serial, ['cmd', 'netpolicy', 'list', 'wifi-networks'])
+        # SSIDs are data and may start with words such as "Error". Parse the
+        # identifier and override instead of matching diagnostic text in names.
+        raw = self.adb.shell(serial, ['cmd', 'netpolicy', 'list', 'wifi-networks'])
         networks = {}
         for line in raw.splitlines():
             identifier, sep, mode = line.rpartition(';')
-            if not sep or mode not in ('none', *NETWORK_OVERRIDES) or identifier in networks:
+            if not sep or mode not in ('none', *NETWORK_OVERRIDES):
                 _fail('Unable to read Wi-Fi metering overrides reliably.')
             _text(identifier, 'Wi-Fi network identifier', 1024)
-            networks[identifier] = 'undefined' if mode == 'none' else mode
+            if identifier in networks:
+                networks[identifier] = AMBIGUOUS_NETWORK
+            else:
+                networks[identifier] = 'undefined' if mode == 'none' else mode
         return networks
 
     def _execute_extra_workflow(
@@ -562,6 +570,7 @@ class ExtraWorkflows:
             _, observed = self._read_battery_exemption(serial, package, backend)
             if observed != enabled:
                 _fail('The requested user battery exemption was not confirmed.')
+            self._device_guard(plan)
             completed[-1] = f'User battery exemption {"present" if enabled else "absent"} for {package}, verified.'
         elif operation == 'widget-bind':
             enabled = params['enabled'] == 'true'
@@ -573,6 +582,7 @@ class ExtraWorkflows:
                              'Verification pending.')
             self._device_guard(plan)
             observed = self._read_widget_grant(serial, package)
+            self._device_guard(plan)
             if observed is None:
                 completed[-1] = f'Widget binding command accepted for {package}. The tablet did not expose grant readback.'
             elif observed != enabled:
@@ -593,6 +603,7 @@ class ExtraWorkflows:
             self._device_guard(plan)
             if self._read_data_saver(serial) != target:
                 _fail('The requested Data Saver state was not confirmed.')
+            self._device_guard(plan)
             completed[-1] = f'Data Saver {status}, verified.'
         elif operation == 'wifi-metered':
             network, target = params['network_id'], params['metered']
@@ -612,6 +623,7 @@ class ExtraWorkflows:
             self._device_guard(plan)
             if self._read_metered_networks(serial).get(network) != target:
                 _fail('The requested Wi-Fi metering override was not confirmed.')
+            self._device_guard(plan)
             message = f'Wi-Fi metering override {target} for {network}, verified.'
             if write_needed:
                 completed[-1] = message
@@ -714,6 +726,8 @@ class ExtraWorkflows:
                 self._device_guard(plan)
                 if self._read_private_dns(plan.device) != target:
                     _fail('Private DNS settings changed before the undo journal could be consumed.')
+                self._device_guard(plan)
+                self._require_private_dns_directory(parent)
                 self._consume_private_dns_journal(state, identity, journal)
         completed.append('Saved Private DNS configuration restored.' if restoring
                          else 'Reviewed Private DNS values are stored.')

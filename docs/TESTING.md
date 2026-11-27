@@ -23,11 +23,21 @@ Run `python3 -m open_fire_toolkit gui --demo` in a desktop session with Tk. On L
 
 ## Release archive
 
-The GitHub release page provides the checksum for GitHub’s tagged source ZIP. If you build the separate source-only distribution using `scripts/package_release.py`, compare that ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c fire-tools-0.4.0.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\fire-tools-0.4.0.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `fire-tools-0.4.0.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
+The GitHub release page provides the checksum for GitHub’s tagged source ZIP. If you build the separate source-only distribution using `scripts/package_release.py`, compare that ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c fire-tools-0.4.1.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\fire-tools-0.4.1.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `fire-tools-0.4.1.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
 
 On Linux, use an archive utility that preserves executable permissions, such as `unzip`, when running launcher tests. To start Fire Tools from a folder extracted without Unix permissions, use `sh launch-linux.sh`.
 
 The checksum verifies that the ZIP matches the checksum you obtained. Obtain both files from a source you trust.
+
+## Code review release 0.4.1
+
+The review covered APK inspection, device selection, shared-storage uploads, package and settings undo, and the optional Android helper. Tests simulated switching tablets during a selection or readback, an equal-length upload with different bytes, and a system app with both an active update and an older factory record. The desktop now clears the active tablet when the selection changes. Uploads read the staged file back over ADB to verify its SHA-256 before moving it into place. This adds one return transfer for each upload.
+
+Tests also covered an active custom launcher whose stock fallback could no longer open, ambiguous Wi-Fi names, and misidentified split APK metadata. Android Build Tools 36 and JDK 21 verified all six reference Google APKs at API 30. The published handbook, updated package filters, and compact desktop workflows were exercised separately.
+
+On Linux with JDK 21, all 324 application tests and six handbook tests passed. Both desktop smoke tests passed on Tk 8.6 and Tk 9.0. Bandit 1.9.4 reported zero medium or high findings in the Python application and build scripts. An Android 14 Robolectric test verified that dismissing the helper notification stops monitoring and keeps the saved value available for Restore. No physical Fire tablet was used.
+
+The release notes give the SHA-256 of the exact published source ZIP and its antivirus scan result. [0.4.1 release and checksum](https://github.com/dev1niscool/fire-tools/releases/tag/v0.4.1)
 
 ## APK and driver audit release 0.4.0
 

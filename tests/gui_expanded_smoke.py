@@ -396,6 +396,13 @@ def connection_layout(root):
     assert app.device_table.winfo_viewable()
     assert app.device_table.winfo_height() >= 50
     button(root, "Scan devices")
+    for index in (2, 3, 4):
+        app.tabs.select(index)
+        root.update()
+        for widget in descendants(root.nametowidget(app.tabs.select())):
+            if isinstance(widget, ttk.Button):
+                assert widget.winfo_viewable(), widget.cget("text")
+                assert widget.winfo_height() >= widget.winfo_reqheight(), widget.cget("text")
 
 
 def tools_without_tablet(root):
@@ -459,7 +466,8 @@ def tools_without_tablet(root):
             return ["Simulated ADB transport change completed."]
 
         def devices(self):
-            return [Device(endpoint, "device", f"Fire_fixture_{self.connections}")] if self.connected else []
+            return [Device(endpoint, "device", f"Fire_fixture_{self.connections}"),
+                    Device("USB_TABLET", "device", "USB_Fire")] if self.connected else []
 
         def device_info(self, serial):
             assert self.connected and serial == endpoint
@@ -496,7 +504,7 @@ def tools_without_tablet(root):
         click(root, "Scan devices")
         wait(root, lambda: not app.worker.busy, "device scan")
         assert app.device is None
-        assert app.device_table.get_children() == ("0",)
+        assert app.device_table.get_children() == ("0", "1")
         assert button(root, "Use selected tablet").instate(["disabled"])
 
     def select_tablet(expected_model):
@@ -521,11 +529,57 @@ def tools_without_tablet(root):
     assert plan.params == {"endpoint": endpoint}
     scan()
     select_tablet("Fire tablet 1")
+    def click_other_row(event_time):
+        table = app.device_table
+        table.see("1")
+        root.update()
+        x, y, w, h = table.bbox("1")
+        point = {"x": x + w // 2, "y": y + h // 2, "time": event_time}
+        table.event_generate("<ButtonPress-1>", **point)
+        table.event_generate("<ButtonRelease-1>", **point)
+        root.update()
+
+    root.geometry("920x760")
+    root.update()
+    read_device = toolkit.device_info
+    release_read = threading.Event()
+
+    def delayed_details(serial):
+        assert release_read.wait(5)
+        return read_device(serial)
+
+    toolkit.device_info = delayed_details
+    try:
+        click(root, "Use selected tablet")
+        click_other_row(1000)
+    finally:
+        release_read.set()
+        toolkit.device_info = read_device
+    wait(root, lambda: not app.worker.busy, "tablet identification")
+    assert app.device_table.selection() == ("0",) and app.device.serial == endpoint
+    click_other_row(2000)
+    assert app.device is None and endpoint not in app.status.get()
+    assert button(root, "Review reboot...").instate(["disabled"])
+    app.device_table.selection_set("0")
+    root.update()
+    release_read.clear()
+    toolkit.device_info = delayed_details
+    try:
+        click(root, "Use selected tablet")
+        app.device_table.selection_set("1")
+        root.update()
+    finally:
+        release_read.set()
+        toolkit.device_info = read_device
+    wait(root, lambda: not app.worker.busy, "discarding stale tablet details")
+    assert app.device is None and app.device_table.selection() == ("1",)
+    assert button(root, "Review reboot...").instate(["disabled"])
+    select_tablet("Fire tablet 1")
     assert tablet_actions_enabled()
 
     click(preview_transport("wireless-disconnect"), "Cancel")
     assert app.device.model == "Fire tablet 1"
-    assert app.device_table.get_children() == ("0",)
+    assert app.device_table.get_children() == ("0", "1")
     confirm_transport("wireless-disconnect")
     assert app.device is None and not app.device_table.get_children()
     assert not tablet_actions_enabled()

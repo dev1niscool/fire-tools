@@ -7,6 +7,7 @@ import hashlib
 import os
 from pathlib import Path
 import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -133,7 +134,13 @@ def run(command, *, env=None, capture_output=False):
 
 
 def development_keystore(keytool, environment):
-    BUILD_DIR.mkdir(parents=True, exist_ok=True)
+    BUILD_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    directory_info = BUILD_DIR.lstat()
+    if not stat.S_ISDIR(directory_info.st_mode):
+        raise ValueError(f"Use a regular directory for the local development key: {BUILD_DIR}")
+    if os.name == "posix" and (directory_info.st_uid != os.geteuid() or directory_info.st_mode & 0o022):
+        raise ValueError(f"The signing directory must be owned by you and writable only by you: {BUILD_DIR}")
+
     keystore = BUILD_DIR / "ads-helper-development.p12"
     if not os.path.lexists(keystore):
         with tempfile.TemporaryDirectory(prefix=".signing-", dir=BUILD_DIR) as directory:
@@ -150,8 +157,11 @@ def development_keystore(keytool, environment):
             except FileExistsError:
                 # A concurrent build may have installed the local key first.
                 pass
-    if keystore.is_symlink():
+    key_info = keystore.lstat()
+    if not stat.S_ISREG(key_info.st_mode):
         raise ValueError(f"The local development keystore must be a regular file: {keystore}")
+    if os.name == "posix" and (key_info.st_uid != os.geteuid() or key_info.st_mode & 0o066):
+        raise ValueError(f"The local development keystore must be private to your account: {keystore}")
     return require_file(keystore, "local development keystore")
 
 
@@ -179,7 +189,7 @@ def build(args):
         raise ValueError(f"Output already exists: {output}")
 
     tools = resolve_tools(args)
-    output.parent.mkdir(parents=True, exist_ok=True)
+    output.parent.mkdir(mode=0o700 if output.parent == BUILD_DIR else 0o777, parents=True, exist_ok=True)
     sources = [build_input(name) for name in JAVA_INPUTS]
     manifest = build_input("AndroidManifest.xml")
 

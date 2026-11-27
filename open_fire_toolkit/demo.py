@@ -28,9 +28,12 @@ class _DemoPackagePreview(PackageWorkflows):
         return self.demo.updater_modes[package]
 
     def _pkg_list(self, serial, flag):
-        if flag != '-s':
-            raise AssertionError(f'Unexpected demo package query: {flag}')
-        return set(UPDATERS) & (self.demo.demo_packages - self.demo.removed)
+        installed = self.demo.demo_packages - self.demo.removed
+        if flag == '-s':
+            return installed & self.demo.system_packages
+        if flag == '-3':
+            return installed - self.demo.system_packages
+        raise AssertionError(f'Unexpected demo package query: {flag}')
 
     def _pkg_undo_record(self, device):
         return {}, {'states': self.demo.package_undo}
@@ -38,7 +41,9 @@ class _DemoPackagePreview(PackageWorkflows):
     def _pkg_keyboard(self, serial):
         return 'com.amazon.inputmethod/.ImeService'
 
-    def _pkg_activity(self, serial, category):
+    def _pkg_activity(self, serial, category, package=None, *, allow_unresolved=False):
+        if package not in (None, STOCK_HOME):
+            raise AssertionError(f'Unexpected demo HOME package: {package}')
         return STOCK_HOME + '/.Launcher'
 
 
@@ -50,9 +55,12 @@ class DemoToolkit:
         self.value = '1'
         self.paired_original: tuple[str, bool] | None = None
         self.original: str | None = None
-        self.demo_packages = set(OPTIONAL_APPS) | set(UPDATERS) | {
-            'com.amazon.kindle.kso', STOCK_HOME, 'com.android.vending', 'com.google.android.gms',
-            'org.firetools.adshelper', 'com.amazon.cloud9', 'com.android.calendar', 'com.amazon.kindle.otter.oobe',
+        self.system_packages = set(OPTIONAL_APPS) | set(UPDATERS) | {
+            'com.amazon.kindle.kso', STOCK_HOME, 'com.amazon.cloud9',
+            'com.android.calendar', 'com.amazon.kindle.otter.oobe',
+        }
+        self.demo_packages = self.system_packages | {
+            'com.android.vending', 'com.google.android.gms', 'org.firetools.adshelper',
         }
         self.removed: set[str] = set()
         self.updater_modes = dict.fromkeys(UPDATERS, '0')
@@ -120,11 +128,7 @@ class DemoToolkit:
 
     def package_inventory(self, serial, mode='all'):
         self._check(serial)
-        if mode not in {'all', 'system', 'third-party', 'disabled', 'uninstalled'}:
-            raise ToolkitError('Unknown inventory mode.')
-        items = self.disabled if mode == 'disabled' else self.removed if mode == 'uninstalled' else self.demo_packages - self.removed
-        return [{'package': package, 'state': 'removed' if package in self.removed else self._package_state(package),
-                 'label': APP_LABELS.get(package, package)} for package in sorted(items)]
+        return _DemoPackagePreview(self).package_inventory(serial, mode)
 
     def updater_status(self, serial):
         self._check(serial)

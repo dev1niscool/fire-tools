@@ -51,38 +51,46 @@ def _package(name):
     return name
 
 
-def _installed_version_fields(dump, package):
-    """Read direct fields of the active package. A system update can also have a factory stanza."""
+def _active_package_fields(dump, package):
+    """Read direct fields of the active package, excluding factory and other package records."""
     if len(dump) > 1024 * 1024:
         raise _error('Package details exceed the 1 MiB limit.')
     header = re.compile(r'  Package \[' + re.escape(package) + r'\](?: \([0-9a-fA-F]+\))?: *')
-    fields = {}
+    fields = []
     in_packages = in_target = seen_target = False
     # splitlines() would turn control characters inside a version name into apparent fields.
-    for line in dump.replace('\r\n', '\n').split('\n'):
-        if not line or line.isspace():
-            continue
+    lines = [line for line in dump.replace('\r\n', '\n').split('\n') if line.strip()]
+    # Some responses contain just the queried package's per-user summaries.
+    if all(re.fullmatch(r' *User [0-9]+: [^\r\n]*', line) for line in lines):
+        return [line.strip(' ') for line in lines if line.isprintable()]
+    for line in lines:
         if not line.startswith(' '):
             in_packages = line.rstrip(' ') == 'Packages:'
             in_target = False
         elif in_packages and not line.startswith('    '):
             in_target = bool(header.fullmatch(line))
             if in_target and seen_target:
-                return {}  # Ambiguous active package record.
+                return []  # Ambiguous active package record.
             seen_target |= in_target
         elif in_target:
             field = line[4:].rstrip(' ')
-            if not field.isprintable():
-                continue
-            if field.startswith('versionName='):
-                value = field.removeprefix('versionName=').strip(' ')
-                if value and value != 'null' and len(value) <= 256:
-                    fields.setdefault('versionName', set()).add(value)
-            elif field.startswith(('versionCode=', 'minSdk=', 'targetSdk=')):
-                for token in field.split():
-                    match = re.fullmatch(r'(versionCode|minSdk|targetSdk)=([0-9]{1,20})', token)
-                    if match:
-                        fields.setdefault(match[1], set()).add(match[2])
+            if not field.startswith(' ') and field.isprintable():
+                fields.append(field)
+    return fields
+
+
+def _installed_version_fields(dump, package):
+    fields = {}
+    for field in _active_package_fields(dump, package):
+        if field.startswith('versionName='):
+            value = field.removeprefix('versionName=').strip(' ')
+            if value and value != 'null' and len(value) <= 256:
+                fields.setdefault('versionName', set()).add(value)
+        elif field.startswith(('versionCode=', 'minSdk=', 'targetSdk=')):
+            for token in field.split():
+                match = re.fullmatch(r'(versionCode|minSdk|targetSdk)=([0-9]{1,20})', token)
+                if match:
+                    fields.setdefault(match[1], set()).add(match[2])
     return {key: next(iter(values)) for key, values in fields.items() if len(values) == 1}
 
 
@@ -192,15 +200,19 @@ def _guard_selection(name, operation):
 
 
 class PackageWorkflows:
-    def _pkg_owner_mode(self, serial, package):
+    def _pkg_owner_field(self, serial, package, name):
         dump = self._pkg_shell(serial, 'dumpsys', 'package', package)
-        owner = re.findall(r'^\s*User 0:[^\r\n]*', dump, re.M)
-        if len(owner) != 1 or not re.search(r'\binstalled=true\b', owner[0]):
+        rows = [field.split() for field in _active_package_fields(dump, package) if field.startswith('User 0: ')]
+        if len(rows) != 1 or [item for item in rows[0] if item.startswith('installed=')] != ['installed=true']:
             raise _error(f'Cannot confirm {package} is installed for owner user 0.')
-        modes = re.findall(r'\benabled=(\d+)\b', owner[0])
-        if len(modes) != 1 or modes[0] not in OWNER_MODE_COMMANDS:
+        values = [item.partition('=')[2] for item in rows[0] if item.startswith(name + '=')]
+        return values[0] if len(values) == 1 else None
+
+    def _pkg_owner_mode(self, serial, package):
+        mode = self._pkg_owner_field(serial, package, 'enabled')
+        if mode not in OWNER_MODE_COMMANDS:
             raise _error(f'Cannot read the owner enabled mode for {package}.')
-        return modes[0]
+        return mode
 
     def _pkg_updater_state(self, serial, package, effective):
         if effective not in {'enabled', 'disabled'} or package not in self._pkg_list(serial, '-s'):
@@ -405,10 +417,13 @@ class PackageWorkflows:
         ime = self._pkg_keyboard(serial)
         if ime not in {'', 'null'} and _component(ime).split('/')[0] in packages:
             raise _error('Choose another active keyboard before changing this package.')
-        if states.get(STOCK_HOME) != 'enabled':
-            home = self._pkg_activity(serial, 'HOME')
-            if home.split('/')[0] in packages:
-                raise _error('Switch to another working HOME activity first.')
+        if states.get(STOCK_HOME) == 'enabled':
+            stock = self._pkg_activity(serial, 'HOME', STOCK_HOME, allow_unresolved=True)
+            if stock != 'No activity found':
+                return
+        home = self._pkg_activity(serial, 'HOME')
+        if home.split('/')[0] in packages:
+            raise _error('Switch to another working HOME activity first.')
 
     def plan_package_action(self, serial, operation, packages=(), **parameters):
         if operation not in _SIMPLE | _STATE_OPS | _APK_OPS | {'launcher-set', 'launcher-restore', 'keyboard-set'}:
@@ -869,8 +884,7 @@ class PackageWorkflows:
                 self._pkg_confirm(plan, completed, f'Android confirmed clearing owner data for {p}.')
             elif op == 'force-stop':
                 self._pkg_write(plan, completed, 'am', 'force-stop', *_OWNER, p)
-                status = self._pkg_shell(plan.serial, 'dumpsys', 'package', p)
-                if not re.search(r'^\s*User 0:.*\bstopped=true\b', status, re.M):
+                if self._pkg_owner_field(plan.serial, p, 'stopped') != 'true':
                     raise _error(f'Stop command issued but the stopped state could not be verified for {p}.')
                 self._pkg_confirm(plan, completed, f'Confirmed {p} stopped for owner user 0.')
             elif op == 'launch':
