@@ -35,6 +35,38 @@ class CliTests(unittest.TestCase):
         self.assertNotIn(info.hardware_serial_sha256, output)
         self.assertNotIn('hardware_serial_sha256', output)
 
+    def test_info_identifies_documented_amazon_build_models(self):
+        base = DemoToolkit().device_info('DEMO_FIRE_HD10')
+        for model, product in (
+            ('KFTUWI', 'Fire HD 10 (2023, 13th gen)'),
+            ('KFSNWI', 'Fire Max 11 (2023, 13th gen)'),
+            ('KFQUWI', 'Fire 7 (2022, 12th gen)'),
+            ('KFRAWI', 'Fire HD 8 (2022, 12th gen)'),
+            ('KFRASWI', 'Fire HD 8 (2024, 12th gen)'),
+            ('KFRAPWI', 'Fire HD 8 (2022 or 2024, 12th gen)'),
+            ('KFTRPWI', 'Fire HD 10 (2021, 11th gen)'),
+            ('KFTHWA', 'Kindle Fire HDX 7 (2013, 3rd gen)'),
+            ('Kindle Fire', 'Kindle Fire (2011, 1st gen)'),
+        ):
+            with self.subTest(model=model):
+                info = replace(base, model=model)
+                with patch.object(DemoToolkit, 'device_info', return_value=info):
+                    code, output, _ = self.call(['--demo', 'info', '--serial', info.serial])
+                self.assertEqual(code, 0)
+                self.assertIn(f'model: {model}', output.splitlines())
+                self.assertIn(f'product: {product}', output.splitlines())
+
+    def test_info_preserves_unrecognized_and_non_amazon_models(self):
+        base = DemoToolkit().device_info('DEMO_FIRE_HD10')
+        for model, manufacturer in (('KFTUWI-extra', 'Amazon'), ('KFTUWI', 'Another vendor')):
+            with self.subTest(model=model, manufacturer=manufacturer):
+                info = replace(base, model=model, manufacturer=manufacturer)
+                with patch.object(DemoToolkit, 'device_info', return_value=info):
+                    code, output, _ = self.call(['--demo', 'info', '--serial', info.serial])
+                self.assertEqual(code, 0)
+                self.assertIn(f'model: {model}', output.splitlines())
+                self.assertNotIn('product: ', output)
+
     def test_mutation_defaults_to_preview(self):
         with patch.object(DemoToolkit,'execute',side_effect=AssertionError('must preview')):
             code,out,err=self.call(['--demo','ads','--serial','DEMO_FIRE_HD10'])
@@ -49,8 +81,8 @@ class CliTests(unittest.TestCase):
         code,out,err=self.call(['--demo','info','--serial','another'])
         self.assertEqual(code,1);self.assertIn('serial',err.lower())
     def test_source_launcher_isolates_python_and_forwards_arguments(self):
-        if os.name != 'nt' and not sys.platform.startswith('linux'):
-            self.skipTest('Source launchers target Linux and Windows')
+        if os.name not in {'nt', 'posix'}:
+            self.skipTest('No source launcher for this operating system')
         project = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve() / 'source with spaces'
@@ -79,7 +111,7 @@ class CliTests(unittest.TestCase):
                 shutil.copy(project / 'launch-windows.cmd', root)
                 command = [os.environ['COMSPEC'], '/d', '/c', 'call', str(root / 'launch-windows.cmd')]
             else:
-                launcher = root / 'launch-linux.sh'
+                launcher = root / 'launch.sh'
                 shutil.copy(project / launcher.name, launcher)
                 link = root.parent / 'link to launcher'
                 link.symlink_to(launcher)
@@ -94,6 +126,28 @@ class CliTests(unittest.TestCase):
             self.assertEqual(received, options)
             self.assertNotIn(str(root), imports)
             self.assertNotIn(directory, imports)
+            if os.name == 'posix':
+                shadow = downloads / 'python3'
+                shadow.write_text('#!/bin/sh\nexit 22\n', encoding='utf-8')
+                shadow.chmod(0o755)
+                path_entries = ['.', str(downloads)]
+                case_alias = downloads.with_name(downloads.name.swapcase())
+                if case_alias.is_dir() and case_alias.samefile(downloads):
+                    path_entries.append(str(case_alias))
+                for path_entry in path_entries:
+                    with self.subTest(path_entry=path_entry):
+                        result = subprocess.run(
+                            [*command, *options], cwd=downloads,
+                            env=dict(env, PATH=path_entry + os.pathsep + env['PATH']),
+                            capture_output=True, text=True, timeout=20)
+                        self.assertEqual(result.returncode, 1)
+                        self.assertIn('installed Python', result.stderr)
+            if sys.platform.startswith('linux'):
+                legacy = root / 'launch-linux.sh'
+                shutil.copy(project / legacy.name, legacy)
+                result = subprocess.run([str(legacy), *options], cwd=downloads, env=env,
+                                        capture_output=True, text=True, timeout=20)
+                self.assertEqual(result.returncode, 19, result.stderr or result.stdout)
 
     def test_real_cli_help_and_demo_subprocess(self):
         for args in (['--help'],['--demo','devices']):

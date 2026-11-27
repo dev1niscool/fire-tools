@@ -11,7 +11,8 @@ import zipfile
 
 INVENTORY = 'release-files.txt'
 TEXT_SUFFIXES = {'.py', '.java', '.xml', '.md', '.txt', '.toml', '.json'}
-OTHER_SOURCE_FILES = {'LICENSE', '.gitignore', 'launch-linux.sh', 'launch-windows.cmd'}
+UNIX_LAUNCHERS = {'launch.sh', 'launch-linux.sh'}
+OTHER_SOURCE_FILES = {'LICENSE', '.gitignore', 'launch-windows.cmd'} | UNIX_LAUNCHERS
 DEMO_IMAGE = 'docs/images/demo.png'
 
 
@@ -83,7 +84,7 @@ def build_release(root: Path, destination: Path) -> Path:
             for name, data in sorted(entries):
                 item = zipfile.ZipInfo('open-fire-toolkit/' + name, date_time=(1980, 1, 1, 0, 0, 0))
                 item.create_system = 3
-                mode = 0o755 if name == 'launch-linux.sh' else 0o644
+                mode = 0o755 if name in UNIX_LAUNCHERS else 0o644
                 item.external_attr = (0o100000 | mode) << 16
                 item.compress_type = zipfile.ZIP_DEFLATED
                 archive.writestr(item, data)

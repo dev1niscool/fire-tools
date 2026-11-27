@@ -8,6 +8,8 @@ from threading import Thread
 from typing import TYPE_CHECKING
 import webbrowser
 
+from .tablet_models import tablet_product_name
+
 if TYPE_CHECKING:
     from .service import Plan, Toolkit
     from .workflows import TransportPlan, WorkflowPlan
@@ -686,11 +688,14 @@ class App:
                 self._append_log("Tablet details no longer match the selection. Choose Use selected tablet again.")
                 return
             self.device = device
+            model = f"{device.manufacturer} {device.model}".strip()
+            if product := tablet_product_name(device):
+                model += f" · {product}"
             abis = ", ".join(device.abis) or "not reported"
             self.firmware.set(
-                f"{device.manufacturer} {device.model} · Fire OS {device.fire_os or 'unknown'} · "
-                f"Android {device.android_release or 'unknown'} · SDK {device.sdk} · User {device.user_id}\n"
-                f"ABIs: {abis}"
+                f"{model} · Fire OS {device.fire_os or 'unknown'}\n"
+                f"Android {device.android_release or 'unknown'} · SDK {device.sdk} · "
+                f"User {device.user_id} · ABIs: {abis}"
             )
             self._append_log(f"Selected tablet {device.serial}.")
 

@@ -473,7 +473,7 @@ def tools_without_tablet(root):
 
         def device_info(self, serial):
             assert self.connected and serial == endpoint
-            model = f"Fire tablet {self.connections}"
+            model = "KFTUWI" if self.connections == 1 else f"Fire tablet {self.connections}"
             return DeviceInfo(serial, model, "Amazon", "8", "11", 30, ("arm64-v8a",), 0, self.hardware_digest)
 
         def plan_reboot(self, serial):
@@ -530,7 +530,10 @@ def tools_without_tablet(root):
     assert confirmed and plan.serial == ""
     assert plan.params == {"endpoint": endpoint}
     scan()
-    select_tablet("Fire tablet 1")
+    select_tablet("KFTUWI")
+    assert "Fire HD 10 (2023, 13th gen)" in app.firmware.get()
+    assert "KFTUWI" in app.firmware.get()
+    assert app.device_table.winfo_height() >= 50
     def click_other_row(event_time):
         table = app.device_table
         table.see("1")
@@ -576,11 +579,11 @@ def tools_without_tablet(root):
     wait(root, lambda: not app.worker.busy, "discarding stale tablet details")
     assert app.device is None and app.device_table.selection() == ("1",)
     assert button(root, "Review reboot...").instate(["disabled"])
-    select_tablet("Fire tablet 1")
+    select_tablet("KFTUWI")
     assert tablet_actions_enabled()
 
     click(preview_transport("wireless-disconnect"), "Cancel")
-    assert app.device.model == "Fire tablet 1"
+    assert app.device.model == "KFTUWI"
     assert app.device_table.get_children() == ("0", "1")
     confirm_transport("wireless-disconnect")
     assert app.device is None and not app.device_table.get_children()
@@ -593,6 +596,7 @@ def tools_without_tablet(root):
     scan()
     assert not tablet_actions_enabled()
     select_tablet("Fire tablet 2")
+    assert "Fire tablet 2" in app.firmware.get() and "Fire HD 10" not in app.firmware.get()
     assert tablet_actions_enabled()
     app.tabs.select(0)
     root.update()

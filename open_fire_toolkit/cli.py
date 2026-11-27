@@ -11,6 +11,7 @@ from .adb import AdbError
 from .apk import ApkError
 from .service import ToolConfig, Toolkit, ToolkitError
 from .feature_catalog import BY_KEY, FEATURES, feature_values, run_feature
+from .tablet_models import tablet_product_name
 
 
 def _confirmation_options(command):
@@ -178,6 +179,8 @@ def main(argv=None) -> int:
             info = toolkit.device_info(args.serial)
             for key in ('serial', 'model', 'manufacturer', 'fire_os', 'android_release', 'sdk', 'abis', 'user_id'):
                 _print_report(f'{key}: {getattr(info, key)}')
+            if product := tablet_product_name(info):
+                _print_report(f'product: {product}')
             return 0
         if args.command == 'apps' and not args.disable and not args.enable:
             for package in toolkit.packages(args.serial, args.disabled_only):
