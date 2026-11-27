@@ -49,3 +49,11 @@ parsing, and excessive output sent to stderr was accepted. The quiet child
 timeout test passed before and after the revision. The live output-cap fixture
 now observes the cap violation and confirms the child cannot create its
 post-output completion marker.
+
+Final review FIFO regression
+Both new POSIX fixtures timed out before the change. One passed a FIFO directly
+to file_sha256 and the other replaced the APK with a FIFO immediately after
+preview path validation. Both pass with a shared nonblocking open, descriptor
+regular-file validation and descriptor-derived size checks.
+The focused APK suite passed 23 tests, the full suite passed 76 tests, and
+git diff --check completed successfully.

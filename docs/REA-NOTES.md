@@ -1,5 +1,7 @@
 # REA behavior research
 
+The analysis used [REA by morluto](https://github.com/morluto/rea), as requested, through its published `rea-agents` CLI.
+
 The reference was Fire Toolbox 46.0, a managed Windows assembly targeting .NET Framework 4.8. The inspected file's SHA-256 is `34be37dff0c3bf40cb34155896e92b70d9dfdff5cb969c780cade88f13f74079`. The static inspection used `rea-agents@6.10.1` with provider `rea-dotnet-static` version 1. The original executable remained unexecuted.
 
 | Static inspection | Evidence ID |

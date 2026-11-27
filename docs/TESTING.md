@@ -29,10 +29,12 @@ The checksum verifies that the ZIP matches the checksum you obtained. Obtain bot
 
 ## Recorded validation (2026-11-27)
 
+- All 76 automated tests passed in the final source tree. Python compilation and whitespace checks passed. Independent reviews closed all reported findings; these are code-review results, not malware certification.
 - The Tk UI was exercised in an isolated Xvfb display, including error recovery, cancelled and confirmed previews, ad restore, app enable/disable and reboot in clearly labeled demo mode. Repeat with `python3 tests/gui_smoke.py` in a display, or `xvfb-run -a python3 tests/gui_smoke.py`.
 - Google's Build Tools 36.0.0 and OpenJDK 21 verified and parsed a real signed Automate 1.51.1 APK as a test specimen. A modified copy was rejected by apksigner. Neither the APK nor its bundled executables were executed or included in this release. This validates the tool integration, not Google Play compatibility.
 - Build Tools archive SHA-1 matched the value in Google's HTTPS SDK repository manifest: `b0b6376977657e8ad9b969bacf4093601da2c6fb` for `build-tools_r36_linux.zip`.
 - The signed test specimen SHA-256 was `5782cf0fa6db321a3f0de1bc6d1ce6eaea2ecf9c25e7d4b3f20a4d1eb39941fb`. Tests operate on local inputs; they do not download or distribute that specimen.
+- Google Platform-Tools 37.0.3 (`adb` 1.0.41) was also exercised through the real CLI device-listing path. It correctly reported no connected devices. Its archive SHA-1 matched Google's HTTPS manifest (`e1579b288a7ae4e9bc28dedec6a154d78b3c04ed`). No tablet command was issued.
 - No physical Fire tablet, actual Google account sign-in, ad visibility/persistence, Windows runtime, or Windows GUI was tested. These are release limitations, not passing checks.
 
 Run `python3 scripts/package_release.py` to recreate the deterministic source archive. The archive uses explicit file allowlists, fixed timestamps, an internal file manifest, and an external ZIP checksum. A checksum is integrity evidence, not malware certification.

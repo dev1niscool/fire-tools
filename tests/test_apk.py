@@ -230,6 +230,57 @@ class ApkInspectionTests(unittest.TestCase):
         self.assertEqual(info.path, self.apk)
         self.assertEqual(info.signer_sha256, (PIN,))
 
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "POSIX FIFO fixture")
+    def test_hash_rejects_fifo_without_waiting_for_writer(self):
+        self.apk.unlink()
+        os.mkfifo(self.apk)
+        script = """
+import sys
+from open_fire_toolkit.apk import ApkError, file_sha256
+try:
+    file_sha256(sys.argv[1])
+except ApkError as error:
+    print(error)
+else:
+    raise AssertionError("FIFO accepted")
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", script, str(self.apk)], capture_output=True, text=True,
+            check=True, timeout=2,
+        )
+        self.assertIn("regular file", result.stdout)
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "POSIX FIFO fixture")
+    def test_preview_rejects_fifo_replaced_after_path_validation(self):
+        script = """
+import os
+import sys
+from unittest.mock import patch
+from open_fire_toolkit import apk
+
+verifier = apk.ApkVerifier(*sys.argv[1:4])
+validate = apk._local_file
+
+def replace_after_validation(path, label):
+    validated = validate(path, label)
+    validated.unlink()
+    os.mkfifo(validated)
+    return validated
+
+with patch.object(apk, "_local_file", side_effect=replace_after_validation):
+    try:
+        verifier.inspect(sys.argv[4])
+    except apk.ApkError as error:
+        print(error)
+    else:
+        raise AssertionError("FIFO accepted")
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", script, str(self.aapt), str(self.jar), str(self.java), str(self.apk)],
+            capture_output=True, text=True, check=True, timeout=2,
+        )
+        self.assertIn("regular file", result.stdout)
+
     def test_hash_reads_full_file(self):
         self.apk.write_bytes(b"abc")
         self.assertEqual(file_sha256(self.apk),

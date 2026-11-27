@@ -1,12 +1,14 @@
 """Inspect local APKs with Android build tools before planning installation."""
 
 from collections.abc import Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from hashlib import sha256
 import os
 from pathlib import Path
 import re
 from selectors import DefaultSelector, EVENT_READ
+import stat
 import struct
 import subprocess
 from time import monotonic, sleep
@@ -78,11 +80,25 @@ def _tool(path: str | Path, label: str, *, jar: bool = False) -> Path:
     return tool
 
 
+@contextmanager
+def _open_regular_file(path: str | Path):
+    flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0)
+    descriptor = os.open(path, flags)
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode):
+            raise OSError("expected a regular file")
+        with os.fdopen(descriptor, "rb", closefd=False) as source:
+            yield source, info.st_size
+    finally:
+        os.close(descriptor)
+
+
 def file_sha256(path: str | Path) -> str:
     """Return a streaming SHA-256 digest of a local file."""
     try:
-        with Path(path).open("rb") as source:
-            _check_file_size(os.fstat(source.fileno()).st_size)
+        with _open_regular_file(path) as (source, file_size):
+            _check_file_size(file_size)
             digest = sha256()
             size = 0
             for chunk in iter(lambda: source.read(1024 * 1024), b""):
@@ -99,9 +115,8 @@ def _check_file_size(size: int) -> None:
         raise ApkError("APK file exceeds the 512 MiB inspection limit.")
 
 
-def _check_central_directory(source) -> int:
+def _check_central_directory(source, file_size: int) -> int:
     """Validate the ZIP directory bounds before ZipFile allocates entry objects."""
-    file_size = source.seek(0, os.SEEK_END)
     _check_file_size(file_size)
     tail_start = max(0, file_size - 65_557)
     source.seek(tail_start)
@@ -139,8 +154,8 @@ def _check_central_directory(source) -> int:
 
 def _check_archive(path: Path) -> set[str]:
     try:
-        with path.open("rb") as source:
-            central_offset = _check_central_directory(source)
+        with _open_regular_file(path) as (source, file_size):
+            central_offset = _check_central_directory(source, file_size)
             with ZipFile(source) as archive:
                 names = set()
                 native_abis = set()

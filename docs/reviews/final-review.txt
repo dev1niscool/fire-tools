@@ -1,0 +1,39 @@
+Independent release review, 2026-11-27
+Scope: source through b7b4942, base 923db85.
+
+Critical: none identified.
+Important: none identified.
+Minor: During APK preview the regular-file check and later opens for ZIP
+inspection and hashing use the pathname separately. Concurrent replacement
+with a FIFO on POSIX can stall the preview worker on open. Staging already
+uses nonblocking open and verifies the descriptor. Apply the same discipline
+to both in-process preview reads. This is an availability issue.
+
+The ADB output change closes the earlier unbounded-buffer finding. The
+combined limit applies across stdout and stderr, including at their exact
+boundary. Both are drained before waiting. The deadline covers reading and
+waiting, with the direct child killed on exceptions. Windows uses pipe
+availability counts and handles disconnection as EOF. Windows behavior was
+reviewed in source only.
+
+Spec compliance: the desktop and CLI expose the requested focused workflows.
+Mutation plans check the selected tablet and owner profile. Play installation
+revalidates all staged inputs, signer pins, SDK and ABI before the first
+install, and reports confirmed successes on partial failure. Temporary ad
+settings have persisted undo and readback. Optional app changes are
+allowlisted. Release inputs are source, tests, documentation and launchers.
+No original executable or APK appears among tracked files.
+
+Quality verdict: suitable for source distribution with the minor availability
+finding and the documented validation limits. The implementation team reports
+74 passing tests, Tk demo smoke and a signed sample/tamper check using real
+Android Build Tools 36 and JDK 21. These results were not rerun by this
+reviewer. They do not establish Google Play compatibility, lock-screen ad
+visibility or operation on a physical Fire tablet or Windows host.
+
+Scoped follow-up: the Minor FIFO availability finding is closed. Both hashing
+and ZIP inspection now open with O_NONBLOCK on POSIX, check regular-file
+status on that same descriptor before reading, and close it on all exits.
+The reviewer ran both FIFO regressions on POSIX. Both passed, including the
+replacement between path validation and preview. No open findings remain
+from this review. The Windows and physical tablet validation limits remain.
