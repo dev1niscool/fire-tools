@@ -29,10 +29,17 @@ The checksum verifies that the ZIP matches the checksum you obtained. Obtain bot
 
 ## Fire Toolbox v46 workflow checks (0.3, 2026-11-27)
 
+* **Desktop checks.** All 233 tests passed on the local Linux host with JDK 21, including after extracting the source archive. Both GUI smoke tests passed. [GitHub Actions on the implementation commit](https://github.com/dev1niscool/fire-tools/actions/runs/46055332880) passed on Windows and Ubuntu with Python 3.11 and 3.13.
 * **Play installation.** Fire Tools inspected six actual standalone APKs with Android Build Tools 36 and JDK 21 for API 30 on ARM64. The four core files matched the v46 catalog selections by SHA-256. The Calendar and Contacts samples were distinct Google-signed Open GApps files. A simulated ADB device received the six staged and reverified inputs in the reviewed order. Both sync providers were enabled and read back in the simulation. The v46 Play services file passed its v3 signing-key rotation check and was rejected for a 32-bit-only target. The [source guide](GOOGLE-APKS.md) identifies the exact files and marks the newer listing examples separately.
 * **Ad controls.** Simulated device tests covered a missing setting, default and explicit Special Offers package modes, firmware refusal after the first write, restart and retry, and undo in the presence of an older saved change. A rendered GUI test performed the paired change and undo. Ad visibility still requires observation on the tablet.
 * **Debloat.** Static comparison matched the 22 Standard and 35 Complete preset identifiers. All three custom lists shipped in v46 could be read as data. Tests exercise package protections, restore-list direction and undo after retrying an interrupted batch.
 * **Firmware.** Tablet operations in these checks used simulated device responses. Installation, account sign-in, actual ad suppression and persistence through a Fire OS update have not been tested on a physical tablet.
+
+### Antivirus check for the exact downloads
+
+On November 27, 2026, ClamAV 1.5.5 reported zero detections for the four original Google APKs selected by Toolbox v46 for Android 11 and the two Google-signed Open GApps sync adapters used in the six-file test. It also reported zero detections for the Fire Tools 0.3 source archive built at commit `2cfedd0` (ZIP SHA-256 `42cf1f59efe4624cbe2a46772de3d4cfad9e290efa2952c69af8657a672630b5`). The scanner loaded official main 63, daily 28194 and bytecode 339 databases.
+
+One legacy Android bytecode check timed out on Play services and Play Store. The scanner completed its other checks and reported those two files as OK. The [Google APK guide](GOOGLE-APKS.md#files-selected-by-fire-toolbox-46-for-android-11) gives the exact file hashes and distinguishes newer alternatives checked only against their download listings. These results apply to the scanned bytes. The package-signature, signer-lineage and compatibility checks run again on the APKs you actually choose.
 
 ## Expanded release validation (0.2, 2026-11-27)
 
