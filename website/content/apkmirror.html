@@ -1,0 +1,34 @@
+<section id="trust">
+  <h2>Can I trust my download?</h2>
+  <p>APKMirror is an independent distributor. It says it compares updates with known signing keys and checks the publisher of new uploads. You can check your own file against both the recorded file hash and Google’s signing key. <a href="https://www.apkmirror.com/faq/">APKMirror’s verification policy</a> · <a href="https://developer.android.com/tools/apksigner">Google’s signature verifier</a>.</p>
+</section>
+
+<section id="check-files">
+  <h2>Check your APKs before connecting</h2>
+  <ol class="steps">
+    <li><strong>Choose a standalone APK.</strong> Use the exact variant for your tablet’s Android API and CPU architecture. Download the <code>.apk</code> file. Fire Tools accepts local files and needs no APKMirror installer. <a href="google-play.html#choose-files">Google APK sources</a>.</li>
+    <li><strong>Compare file hashes.</strong> In <strong>Google Play → Choose APKs → Check scan records</strong>, a match identifies the exact bytes examined on November 27, 2026. A different hash has no recorded scan result.</li>
+    <li><strong>Check Google’s signer.</strong> Set up AAPT, the APK signer and Java on <strong>Connection</strong>. Choose <strong>Google Play → Verify Google signatures</strong> and enter your Android API (30 on the 2023 HD 10). The connected install preview checks the tablet’s ABI as well. <a href="setup.html#android-tools">Set up Android tools</a>.</li>
+  </ol>
+  <details><summary>Which signing certificates does Fire Tools accept?</summary>
+    <p>For these Google packages the pinned certificate SHA-256 is <code>f0fd6c5b410f25cb<wbr>25c3b53346c8972f<wbr>ae30f8ee7411df91<wbr>0480ad6b2d60db83</code>. Google’s AndroidX project documents this fingerprint as a first-party signing key. <a href="https://android.googlesource.com/platform/frameworks/support/+/7be3a623dfcf461ff6e2004799ac2e652c8d23a8">AndroidX certificate reference</a>.</p>
+    <p>For Play services, Fire Tools also accepts <code>7ce83c1b71f3d572<wbr>fed04c8d40c5cb10<wbr>ff75e6d87d9df6fb<wbr>d53f0468c2905053</code> when the APK proves a signed rotation from that pinned key. The signer fingerprint can identify many releases. The four file hashes below identify individual APKs.</p>
+  </details>
+  <p class="note">A verified signature from a pinned Google key ties the file to that signing identity. ClamAV reported zero detections on the six reference APKs. One legacy Android check timed out on Play services and Play Store. Newer files need their own checks. <a href="https://github.com/dev1niscool/fire-tools/blob/main/docs/TESTING.md#antivirus-check-for-the-exact-downloads">Scan details</a>.</p>
+</section>
+
+<section id="v46">
+  <h2>Which APKs did Fire Toolbox v46 use?</h2>
+  <p>For the 2023 HD 10 on Android 11, v46’s catalog points to Codeberg archives for the four core files. We matched their archive checksums and found the same four APK file hashes on APKMirror. Fire Tools can verify and install those local files in the following order. <a href="https://codeberg.org/JSens1998/GAppsInstaller">Original archive source</a> · <a href="https://github.com/dev1niscool/fire-tools/blob/main/docs/REA-NOTES.md#installing-google-components">REA method and archive checksums</a>.</p>
+  <div class="table-scroll" role="region" aria-label="Original Android 11 APK versions and APKMirror file hashes" tabindex="0"><table>
+    <thead><tr><th scope="col">Component and release</th><th scope="col">APK file SHA-256 on APKMirror</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">Google Account Manager<br>7.1.2</th><td><a href="https://www.apkmirror.com/apk/google-inc/google-account-manager/google-account-manager-7-1-2-release/google-account-manager--7-1-2-android-apk-download/" aria-label="Google Account Manager exact APKMirror file listing"><code>3324ee2f67d23848<wbr>ae3d9086f20ada10<wbr>f2cb0dbb6d202067<wbr>b918cc4fb4d167be</code></a></td></tr>
+      <tr><th scope="row">Google Services Framework<br>10-6494331</th><td><a href="https://www.apkmirror.com/apk/google-inc/google-services-framework/google-services-framework-10-6494331-release/google-services-framework-10-6494331-android-apk-download/" aria-label="Google Services Framework exact APKMirror file listing"><code>32156365bcff60f2<wbr>a0576abe1f15ef7e<wbr>2b705aea9536bfcb<wbr>d6fef784d131ccb5</code></a></td></tr>
+      <tr><th scope="row">Google Play services<br>25.20.37 (150400)</th><td><a href="https://www.apkmirror.com/apk/google-inc/google-play-services/google-play-services-25-20-37-release/google-play-services-25-20-37-150400-766884605-android-apk-download/" aria-label="Google Play services exact APKMirror file listing"><code>1db5544caff5d45b<wbr>0e8bdf9d4beeaf26<wbr>621457418b7d6680<wbr>7ae5583c47491f07</code></a></td></tr>
+      <tr><th scope="row">Google Play Store<br>36.3.12-21</th><td><a href="https://www.apkmirror.com/apk/google-inc/google-play-store/google-play-store-36-3-12-release/google-play-store-36-3-12-21-0-pr-542033711-2-android-apk-download/" aria-label="Google Play Store exact APKMirror file listing"><code>03acdf87da98c092<wbr>39737f56c568e0e8<wbr>e82262b071081c14<wbr>633593600664b8fa</code></a></td></tr>
+    </tbody>
+  </table></div>
+  <p><strong>Optional sync.</strong> The original’s Android 11 <code>ConSync10.apk</code> declares the Calendar package. The contents of its separate XDA Calendar link could not be verified. Fire Tools identifies each adapter by its signed manifest. Its two tested optional adapters came from Open GApps. <a href="https://github.com/dev1niscool/fire-tools/blob/main/docs/GOOGLE-APKS.md#files-selected-by-fire-toolbox-46-for-android-11">Adapter sources and full hashes</a>.</p>
+  <p><strong>What we tested.</strong> REA inspected the original executable as data. With a simulated owner-profile HD 10, Fire Tools verified six real signatures, including the Play services key rotation, staged the six APKs, and checked the installed bytes reported by simulated ADB. Sign-in, sync and physical installation remain untested. <a href="https://github.com/dev1niscool/fire-tools/blob/main/docs/APK-AUDIT.md">Builds for other Android versions and audit method</a> · <a href="https://github.com/dev1niscool/fire-tools/blob/main/docs/V46-INVENTORY.md">Original archive inventory</a>.</p>
+</section>

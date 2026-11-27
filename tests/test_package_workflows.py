@@ -33,6 +33,8 @@ class Tablet:
         self.known = self.system | {HOME, IME, 'org.example.removed'}
         self.present = self.known - {'org.example.removed'}
         self.disabled = set()
+        self.modes = {}
+        self.default_disabled = set()
         self.denied = self.ignore = self.change_after = ''
         self.home = STOCK + '/.Home'
         self.keyboard = 'com.android.inputmethod.latin/.Ime'
@@ -89,17 +91,21 @@ class Tablet:
         if args[:2] == ('dumpsys', 'package'):
             if package in self.package_dumps:
                 return self.package_dumps[package]
-            return '    User 0: installed=true stopped=' + ('true' if package in self.stopped else 'false')
+            mode = self.modes.get(package, '3' if package in self.disabled else '0')
+            return f'    User 0: installed=true enabled={mode} stopped=' + ('true' if package in self.stopped else 'false')
         self.writes.append(args)
         if package == self.denied:
             return 'Failure [Permission Denial]'
         if package == self.change_after:
             self.device = replace(self.device, model='Other')
-        if args[:2] == ('pm', 'disable-user'):
+        modes = {'default-state': '0', 'enable': '1', 'disable': '2', 'disable-user': '3', 'disable-until-used': '4'}
+        if args[0] == 'pm' and args[1] in modes:
             if package != self.ignore:
-                self.disabled.add(package)
-        elif args[:2] == ('pm', 'enable'):
-            self.disabled.discard(package)
+                self.modes[package] = mode = modes[args[1]]
+                if mode in {'2', '3', '4'} or mode == '0' and package in self.default_disabled:
+                    self.disabled.add(package)
+                else:
+                    self.disabled.discard(package)
         elif args[:4] == ('pm', 'uninstall', '-k', '--user'):
             self.present.remove(package)
             self.disabled.discard(package)
@@ -818,6 +824,154 @@ Disabled system packages:
             with self.assertRaisesRegex(ToolkitError, 'Completed:.*accepted.*' + A):
                 self.execute(plan)
         self.assertEqual(self.adb.apk_files[A], b'old-bytes')
+
+    def test_updater_status_returns_only_the_two_known_ids_and_reads_owner_state(self):
+        override = OTA + '.override'
+        def read():
+            return {row['package']: (row['state'], row['type']) for row in self.tool.updater_status(SERIAL)}
+        self.assertEqual(read(), {OTA: ('enabled', 'system'), override: ('absent', '-')})
+        self.adb.known.add(override)
+        self.assertEqual(read()[override], ('uninstalled', '-'))
+        self.adb.present.add(override)
+        self.adb.disabled.add(OTA)
+        self.assertEqual(read(), {OTA: ('disabled', 'system'), override: ('enabled', 'non-system')})
+        self.assertFalse(self.adb.writes)
+
+    def test_ota_declines_a_non_system_package_at_preview_apply_and_undo(self):
+        self.adb.system.remove(OTA)
+        with self.assertRaisesRegex(ToolkitError, 'system package'):
+            self.plan('ota-disable', (OTA,))
+        self.adb.system.add(OTA)
+        plan = self.plan('ota-disable', (OTA,))
+        self.adb.system.remove(OTA)
+        with self.assertRaisesRegex(ToolkitError, 'system package'):
+            self.execute(plan)
+        self.assertFalse(self.adb.writes)
+        self.adb.system.add(OTA)
+        self.execute(plan)
+        self.adb.system.remove(OTA)
+        with self.assertRaisesRegex(ToolkitError, 'system package'):
+            self.plan('undo')
+        self.assertEqual(len(self.adb.writes), 1)
+
+    def test_undo_after_owner_removed_updater_never_reinstalls_it(self):
+        self.execute(self.plan('ota-disable', (OTA,)))
+        self.adb.present.remove(OTA)
+        self.adb.disabled.remove(OTA)
+        with self.assertRaisesRegex(ToolkitError, 'undo record'):
+            self.plan('undo')
+        self.assertEqual(len(self.adb.writes), 1)
+
+    def test_ota_classification_change_during_batch_cannot_enable_a_replacement(self):
+        override = OTA + '.override'
+        self.adb.system.add(override)
+        self.adb.present.add(override)
+        self.adb.known.add(override)
+        self.adb.disabled.update((OTA, override))
+        plan = self.plan('ota-enable', (OTA, override))
+        move = self.tool._pkg_move
+
+        def swap_second_at_dispatch(plan, package, before, target, completed, prepare_write):
+            if package == override:
+                self.adb.system.remove(override)
+            return move(plan, package, before, target, completed, prepare_write)
+
+        with patch.object(self.tool, '_pkg_move', swap_second_at_dispatch):
+            with self.assertRaisesRegex(ToolkitError, 'no longer an installed system package'):
+                self.execute(plan)
+        self.assertEqual(self.adb.disabled, {override})
+        self.assertEqual([cmd[-1] for cmd in self.adb.writes], [OTA])
+        undo = self.plan('undo', scope='updaters')
+        self.assertEqual(undo.packages, (OTA,))
+        self.assertFalse(any(override in line for line in undo.details))
+        self.execute(undo)
+        self.assertEqual(self.adb.disabled, {OTA, override})
+        self.assertEqual([cmd[-1] for cmd in self.adb.writes], [OTA, OTA])
+        self.adb.system.add(override)
+        with self.assertRaisesRegex(ToolkitError, 'No package undo'):
+            self.plan('undo', scope='updaters')
+
+    def test_ota_partial_failure_and_retry_keep_both_original_states_for_undo(self):
+        override = OTA + '.override'
+        self.adb.system.add(override)
+        self.adb.present.add(override)
+        self.adb.known.add(override)
+        self.adb.denied = override
+        with self.assertRaises(ToolkitError):
+            self.execute(self.plan('ota-disable', (OTA, override)))
+        self.assertEqual(self.adb.disabled, {OTA})
+        self.assertEqual(self.plan('undo', scope='updaters').packages, (OTA,))
+        self.adb.denied = ''
+        self.execute(self.plan('ota-disable', (override,)))
+        self.assertEqual(self.adb.disabled, {OTA, override})
+        self.execute(self.plan('undo'))
+        self.assertEqual(self.adb.disabled, set())
+        self.assertEqual(self.adb.modes, {OTA: '0', override: '0'})
+
+    def test_updater_undo_restores_each_exact_mode_even_for_a_disabled_default(self):
+        for mode, disabled in [('0', False), ('0', True), ('1', False), ('2', True), ('3', True), ('4', True)]:
+            with self.subTest(mode=mode, disabled=disabled):
+                self.adb.modes[OTA] = mode
+                self.adb.disabled = {OTA} if disabled else set()
+                self.adb.default_disabled = {OTA} if mode == '0' and disabled else set()
+                self.execute(self.plan('ota-enable' if disabled else 'ota-disable', (OTA,)))
+                self.execute(self.plan('undo', scope='updaters'))
+                self.assertEqual(self.adb.modes[OTA], mode)
+                self.assertEqual(OTA in self.adb.disabled, disabled)
+
+    def test_updater_same_effective_mode_change_voids_preview_and_undo_checks_readback(self):
+        preview = self.plan('ota-disable', (OTA,))
+        self.adb.modes[OTA] = '1'
+        with self.assertRaisesRegex(ToolkitError, 'changed'):
+            self.execute(preview)
+        self.assertFalse(self.adb.writes)
+        self.adb.modes[OTA] = '0'
+        self.execute(self.plan('ota-disable', (OTA,)))
+        self.adb.modes[OTA] = '1'
+        self.adb.disabled.clear()
+        self.adb.ignore = OTA
+        with self.assertRaisesRegex(ToolkitError, 'confirm'):
+            self.execute(self.plan('undo'))
+        self.adb.ignore = ''
+        self.execute(self.plan('undo'))
+        self.assertEqual(self.adb.modes[OTA], '0')
+
+    def test_updater_missing_or_ambiguous_mode_denies_change(self):
+        for dump in ('User 0: installed=true', 'User 0: installed=false enabled=2',
+                     'User 0: installed=true enabled=5', 'User 0: installed=true enabled=0 enabled=1'):
+            self.adb.package_dumps[OTA] = dump
+            with self.subTest(dump=dump), self.assertRaises(ToolkitError):
+                self.plan('ota-disable', (OTA,))
+        self.assertFalse(self.adb.writes)
+
+    def test_legacy_updater_undo_restores_only_saved_effective_state(self):
+        self.tool._pkg_save_undo(self.adb.device, {'schema': 1, 'devices': {}}, {OTA: 'enabled'})
+        self.adb.modes[OTA] = '3'
+        self.adb.disabled.add(OTA)
+        plan = self.plan('undo')
+        self.assertIn('older', ' '.join(plan.details).lower())
+        self.execute(plan)
+        self.assertEqual(self.adb.modes[OTA], '1')
+
+    def test_interrupted_second_updater_is_recovered_only_if_its_mode_changed(self):
+        override = OTA + '.override'
+        self.adb.system.add(override)
+        self.adb.present.add(override)
+        self.adb.known.add(override)
+        shell = self.adb.shell
+        for written in (False, True):
+            def stop(serial, args):
+                if tuple(args) == ('pm', 'disable-user', '--user', '0', override):
+                    if written:
+                        shell(serial, args)
+                    raise KeyboardInterrupt
+                return shell(serial, args)
+            with self.subTest(written=written), patch.object(self.adb, 'shell', stop), self.assertRaises(KeyboardInterrupt):
+                self.execute(self.plan('ota-disable', (OTA, override)))
+            undo = self.plan('undo')
+            self.assertEqual(set(undo.packages), {OTA, override} if written else {OTA})
+            self.execute(undo)
+            self.assertFalse(self.adb.disabled)
 
     def test_ota_requires_nonempty_known_selection(self):
         for op in ('ota-disable', 'ota-enable'):

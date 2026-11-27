@@ -1,6 +1,9 @@
 """Local file fingerprints from the documented 2026-11-27 APK audit."""
 
-from .apk import ApkError, file_sha256
+from pathlib import Path
+import tempfile
+
+from .apk import ApkError, ApkVerifier, PLAY_PACKAGES, check_google_component, file_sha256, stage_apk
 
 
 # These identify whole files, independently of filenames and signing certificates.
@@ -44,3 +47,44 @@ def check_apk_files(paths) -> tuple[str, bool]:
         if digest not in SCANNED_FILES:
             all_matched = False
     return '\n'.join(records), all_matched
+
+
+def verify_google_apk_files(paths, *, sdk, aapt_path, apksigner_jar, java_path) -> tuple[str, bool]:
+    """Check independently selected Google components against one Android API offline."""
+    if type(sdk) is not int or not 1 <= sdk <= 2_147_483_647:
+        raise ApkError('Specify the target Android API as a positive integer with --sdk.')
+    if not 1 <= len(paths) <= len(PLAY_PACKAGES):
+        raise ApkError('Select one to six local Google APKs per check.')
+    if not all((aapt_path, apksigner_jar, java_path)):
+        raise ApkError('Choose the official aapt, apksigner.jar and Java paths to verify signatures.')
+    verifier = ApkVerifier(aapt_path, apksigner_jar, java_path, device_sdk=sdk)
+    lines = ['Compare native ABIs with your tablet. Scan records describe only the identified bytes.']
+    verified = 0
+    for path in paths:
+        lines.extend(('', repr(str(path))))
+        try:
+            source = Path(path)
+            if source.suffix.lower() != '.apk':
+                raise ApkError('Choose a standalone .apk file.')
+            with tempfile.TemporaryDirectory(prefix='fire-tools-google-check-') as folder:
+                staged = Path(folder) / 'selected.apk'
+                stage_apk(source, staged)
+                apk = verifier.inspect(staged)
+                if apk.sha256 != file_sha256(source):
+                    raise ApkError('The selected APK changed during verification. Select the file again.')
+            lines.extend((f'  Package: {apk.package}', f'  Version: {apk.version_name!r} ({apk.version_code})',
+                          f'  Minimum Android API: {apk.min_sdk}',
+                          '  Native ABIs: ' + (', '.join(apk.abis) or 'no native library requirement reported'),
+                          f'  APK SHA-256: {apk.sha256}', '  Signer SHA-256: ' + ', '.join(apk.signer_sha256)))
+            if apk.signer_lineage:
+                lines.append('  Verified signing lineage: ' + ' -> '.join(apk.signer_lineage))
+            lines.append('  ' + scan_record(apk.sha256))
+            check_google_component(apk, sdk)
+            lines.append('  VERIFIED: approved Google package and signing identity for the selected API.')
+            verified += 1
+        except (ApkError, OSError, ValueError) as error:
+            lines.append(f'  REJECTED: {str(error)!r}')
+    all_verified = verified == len(paths)
+    verdict = 'PASSED' if all_verified else 'FAILED'
+    lines.insert(0, f'Google signature check {verdict} ({verified} of {len(paths)} verified) for Android API {sdk}.')
+    return '\n'.join(lines), all_verified

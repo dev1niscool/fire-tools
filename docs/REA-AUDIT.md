@@ -4,6 +4,10 @@ On November 27, 2026 we compared the Windows Fire Toolbox 46.0 executable with F
 
 REA identified 56 embedded resource sets. One is the shared resource collection. Each of the other 55 names matched a managed type with a form initializer. We inspected all 55 initializers for control captions and choices, then checked selected actions in more detail. A visible caption establishes a design option. Whether it appears on a particular tablet, succeeds on its firmware or survives reboot requires a device test. The comparison used static analysis throughout. [Earlier audit and release provenance](PARITY-RESEARCH.md) · [Google Play, ads and debloat evidence](REA-NOTES.md)
 
+## Changes in Fire Tools 0.4.0
+
+The [APK audit](APK-AUDIT.md) identifies the Google packages selected by six original catalog archives and compares the Android 11 files with APKMirror. Fire Tools can now check individual Google APK signatures offline. The [v46 inventory](V46-INVENTORY.md) covers the embedded APKs and downloadable catalogs. The [USB driver guide](https://dev1niscool.github.io/fire-tools/drivers.html#audit) records which driver file was available for inspection. The new [System updates tab](https://dev1niscool.github.io/fire-tools/updates.html) brings updater states, reviewed changes and undo into one workflow.
+
 ## Changes in Fire Tools 0.3.3
 
 | What changed | How to use it |

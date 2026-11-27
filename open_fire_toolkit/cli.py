@@ -30,6 +30,8 @@ def parser() -> argparse.ArgumentParser:
     gui = subs.add_parser('gui', help='Open the desktop interface (default)')
     gui.add_argument('--demo', dest='gui_demo', action='store_true', help='Offline simulation')
     check = subs.add_parser('check-apks', help='Compare local files with documented scan hashes before connecting a tablet')
+    check.add_argument('--verify-google', action='store_true', help='Verify standalone Google components with local Android Build Tools and Java')
+    check.add_argument('--sdk', type=int, help='Target Android API level for --verify-google, e.g. 30 for a 2023 HD 10')
     check.add_argument('apks', nargs='+', help='Local APK file paths')
     subs.add_parser('devices', help='List ADB devices without selecting one')
     catalog = subs.add_parser('tools', help='List all tools and their parameters; no device required')
@@ -101,10 +103,21 @@ def main(argv=None) -> int:
         if demo:
             print('Run check-apks without --demo to hash your local files.', file=sys.stderr)
             return 1
-        from .apk_checks import check_apk_files
-        report, matched = check_apk_files(args.apks)
-        print(report)
-        return 0 if matched else 1
+        from .apk_checks import check_apk_files, verify_google_apk_files
+        try:
+            if args.verify_google:
+                report, success = verify_google_apk_files(
+                    args.apks, sdk=args.sdk, aapt_path=args.aapt, apksigner_jar=args.apksigner_jar,
+                    java_path=args.java)
+            elif args.sdk is not None:
+                raise ApkError('--sdk requires --verify-google.')
+            else:
+                report, success = check_apk_files(args.apks)
+        except (ApkError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        _print_report(report)
+        return 0 if success else 1
     if args.command == 'tools':
         selected = [BY_KEY[args.feature]] if args.feature else FEATURES
         for feature in selected:

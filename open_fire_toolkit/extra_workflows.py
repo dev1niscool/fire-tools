@@ -93,6 +93,7 @@ def source_catalog_text() -> str:
     return '\n'.join([
         'Google component links point to independent APKMirror or Open GApps records for the 2023 Fire HD 10 (API 30).',
         'Use Check scan records in Google Play to compare downloaded bytes. Listing-only builds have no project scan record.',
+        'APKMirror audit and file verification: https://dev1niscool.github.io/fire-tools/apkmirror.html',
         'Other links are project or store pages. Compatibility depends on the tablet and provider.',
         *(f'{group} | {name} | {package}\n{url}' for group, name, package, url in SOURCES),
     ])

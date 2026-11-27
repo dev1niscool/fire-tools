@@ -3,13 +3,13 @@ from dataclasses import replace
 
 from .adb import Device, DeviceInfo
 from .apk import PLAY_CORE
-from .package_catalog import APP_LABELS, STOCK_HOME
-from .package_workflows import PackageWorkflows, _guard_selection, _package, _state_after
+from .package_catalog import APP_LABELS, STOCK_HOME, UPDATERS
+from .package_workflows import PackageWorkflows, _guard_selection, _owner_target, _package
 from .service import OPTIONAL_APPS, Plan, ToolkitError, google_status_text
 from .workflows import TransportPlan, WorkflowPlan
 
 
-_EXPLICIT_PACKAGE_CHANGES = {'disable', 'enable', 'uninstall', 'restore'}
+_EXPLICIT_PACKAGE_CHANGES = {'disable', 'enable', 'uninstall', 'restore', 'ota-disable', 'ota-enable'}
 
 
 class _DemoPackagePreview(PackageWorkflows):
@@ -23,6 +23,14 @@ class _DemoPackagePreview(PackageWorkflows):
 
     def _pkg_states(self, serial):
         return {package: self.demo._package_state(package) for package in self.demo.demo_packages}
+
+    def _pkg_owner_mode(self, serial, package):
+        return self.demo.updater_modes[package]
+
+    def _pkg_list(self, serial, flag):
+        if flag != '-s':
+            raise AssertionError(f'Unexpected demo package query: {flag}')
+        return set(UPDATERS) & (self.demo.demo_packages - self.demo.removed)
 
     def _pkg_undo_record(self, device):
         return {}, {'states': self.demo.package_undo}
@@ -42,11 +50,12 @@ class DemoToolkit:
         self.value = '1'
         self.paired_original: tuple[str, bool] | None = None
         self.original: str | None = None
-        self.demo_packages = set(OPTIONAL_APPS) | {
+        self.demo_packages = set(OPTIONAL_APPS) | set(UPDATERS) | {
             'com.amazon.kindle.kso', STOCK_HOME, 'com.android.vending', 'com.google.android.gms',
             'org.firetools.adshelper', 'com.amazon.cloud9', 'com.android.calendar', 'com.amazon.kindle.otter.oobe',
         }
         self.removed: set[str] = set()
+        self.updater_modes = dict.fromkeys(UPDATERS, '0')
         self.package_undo: dict[str, str] = {}
 
     def _check(self, serial):
@@ -117,6 +126,10 @@ class DemoToolkit:
         return [{'package': package, 'state': 'removed' if package in self.removed else self._package_state(package),
                  'label': APP_LABELS.get(package, package)} for package in sorted(items)]
 
+    def updater_status(self, serial):
+        self._check(serial)
+        return _DemoPackagePreview(self).updater_status(serial)
+
     def package_info(self, serial, package):
         self._check(serial)
         package = _package(package)
@@ -150,8 +163,9 @@ class DemoToolkit:
         if operation in _EXPLICIT_PACKAGE_CHANGES or operation == 'undo':
             selected = self.package_undo if operation == 'undo' else packages
             for package in selected:
-                _guard_selection(package, operation)
-        if operation in {'debloat', 'undo'}:
+                guard = 'ota-enable' if operation == 'undo' and package in UPDATERS else operation
+                _guard_selection(package, guard)
+        if operation in {'debloat', 'undo', 'ota-disable', 'ota-enable'}:
             self._check(serial)
             if parameters.get('profile') == 'custom' or parameters.get('list_file'):
                 raise ToolkitError('Demo mode only simulates built-in presets. Custom lists require reading a local file.')
@@ -169,23 +183,27 @@ class DemoToolkit:
         previous = {}
         result = []
         for package in plan.packages:
-            before = self._package_state(package)
+            before = dict(plan.snapshot).get(package, self._package_state(package))
             if before == 'uninstalled' and not undo and mode != 'restore':
                 continue
-            target = self.package_undo[package] if undo else _state_after(mode, before)
+            target = _owner_target(mode, before, self.package_undo.get(package))
             if target == before:
                 continue
             if package in self.demo_packages:
                 previous[package] = before
             self.disabled.discard(package)
             self.removed.discard(package)
-            if target == 'disabled':
+            effective, _, raw = target.partition(':')
+            if raw:
+                self.updater_modes[package] = raw
+            if effective == 'disabled':
                 self.disabled.add(package)
-            elif target == 'uninstalled':
+            elif effective == 'uninstalled':
                 self.removed.add(package)
             result.append(f'SIMULATED: {package} is {self._package_state(package)} for owner user 0.')
         if undo:
-            self.package_undo.clear()
+            for package in plan.packages:
+                self.package_undo.pop(package)
         elif previous:
             self.package_undo = previous
         return result

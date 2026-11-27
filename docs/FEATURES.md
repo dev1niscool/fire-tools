@@ -1,4 +1,4 @@
-# Feature coverage for Fire Tools 0.3.3
+# Feature coverage for Fire Tools 0.4.0
 
 This release implements the workflows below in original source. Automated tests exercise their commands, validation and failure handling through simulated tablets; desktop smoke tests exercise their forms and confirmation. No physical Fire tablet has been attached, so **implemented does not mean verified on your firmware**.
 
@@ -8,7 +8,7 @@ The latest [REA comparison](REA-AUDIT.md) traces individual v46 options to their
 
 | Area | Implemented | Limits |
 | --- | --- | --- |
-| Google Play | Owner-profile component status and verified local installer for the three core Google components, Account Manager and optional Calendar/Contacts sync; generic account/settings and app-management tools; battery exemption | User obtains APKs. No automatic firmware-specific version selection or account credentials handled on the computer. |
+| Google Play | Offline file hash and Google signer checks for a selected API level, owner-profile component status and verified local installer for the three core Google components, Account Manager and optional Calendar/Contacts sync; generic account/settings and app-management tools; battery exemption | User obtains APKs. No automatic firmware-specific version selection or account credentials handled on the computer. |
 | Amazon debloat | Offline comparison of v46 Standard (Recommended) and Complete, owner ADB preview and apply, Restore Everything, saved batch undo, custom Toolbox lists and legacy v0.2 lists | Complete adds 13 apps to Standard’s 22. Fire Tools protects Device Setup, leaving at most 34 eligible targets. Fire OS can refuse changes. [Package comparison](REA-NOTES.md#debloating-amazon-apps) |
 | Ads | Setting and Special Offers together with exact undo, setting-only and package-only controls; independent source-built foreground helper | All experimental. Helper requires API 24+, a verified local signing identity, secure-settings grant and visible notification. No ad-visibility or update-persistence guarantee. |
 | Apps | Package ID lookup with owner state, version and SDK details, inventory filters, batch operations, clear data, force stop, launch, permission/app-op controls, standalone APK sideload/update, system update rollback | No split APKM/XAPK installation. Guided package management protects infrastructure; expert shell remains powerful. |
@@ -17,6 +17,7 @@ The latest [REA comparison](REA-AUDIT.md) traces individual v46 options to their
 | Lockscreen, wallpaper, parental controls | Explicit tablet Settings entry points; related settings editor | Some actions are shortcuts requiring on-tablet selection. They do not reproduce the original wallpaper/provisioning/parental-hiding companions or bypass authentication. |
 | Backups and files | Configuration/package snapshots, supported restore, APK extraction including all splits, shared storage backup, file copy, mkdir/rename/delete | No full firmware/private-app-data image. Restoring a snapshot records the previous states of supported optional apps for `packages-undo`. APK files are separate. |
 | Screen and diagnostics | PNG capture, timed silent MP4 recording, task list, battery/memory/storage diagnostics, recent logs, bounded device commands | No screenshot editor, interactive shell history/aliases or continuous log viewer. DRM content can be blank. |
+| System updates | Dedicated desktop tab to inspect the two known OTA IDs for owner user 0, review system-package disable/enable and undo the last updater-only batch | Fire OS can protect an updater or use other update routes. Readback verifies package state. [Update guide](https://dev1niscool.github.io/fire-tools/updates.html) |
 | Connectivity and network | Host-only connect/disconnect, hardware-checked Wi-Fi changes bound to a live ADB transport, selected-device TCP/USB control, private DNS undo, metering, data saver | No encrypted Android pairing workflow or automatic VPN/certificate setup. Legacy TCP is for trusted private networks. |
 | Profiles and power | List/create/switch/remove supported profiles, normal/recovery/bootloader restart, shutdown | Owner/current deletion refused. Device changes and installs use owner user 0; other-profile install management is not reproduced. |
 | Optional applications | Upstream source/store directory and verified local sideloading | No original curated automatic FOSS downloads, hybrid Netflix/Disney+ APK modifications or DRM/HD playback promise. |
@@ -53,6 +54,8 @@ The original Google Play, temporary-ad-setting and quick-app tabs remain availab
 | `helper-start` | Set up the on-tablet ad helper | Lock-screen ads | `signer` |
 | `helper-stop` | Open helper to stop monitoring | Lock-screen ads | `signer` |
 | `helper-restore` | Open helper to restore ad setting | Lock-screen ads | `signer` |
+| `ota-status` | Read updater states (read) | System updates | None |
+| `ota-undo` | Undo last updater package changes | System updates | None |
 | `ota-disable` | Disable update packages | System updates | `packages` |
 | `ota-enable` | Enable update packages | System updates | `packages` |
 | `launcher-set` | Set an installed home launcher | Launcher and input | `component`, `disable_stock` |

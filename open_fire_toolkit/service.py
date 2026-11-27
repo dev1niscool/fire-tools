@@ -6,7 +6,6 @@ import json
 import os
 from pathlib import Path
 import re
-import stat
 import tempfile
 import threading
 from dataclasses import dataclass, replace
@@ -14,12 +13,12 @@ from typing import Callable, Sequence
 
 from .adb import AdbClient, AdbError, DeviceInfo, is_network_selector
 from .apk import (
-    ApkInfo, ApkVerifier, ApkError, MAX_APK_BYTES, PLAY_CORE, PLAY_PACKAGES, SYNC_PROVIDERS,
-    file_sha256, google_play_order, google_signer_is_trusted,
+    ApkInfo, ApkVerifier, ApkError, PLAY_CORE, PLAY_PACKAGES, SYNC_PROVIDERS,
+    file_sha256, google_play_order, google_signer_is_trusted, stage_apk,
 )
 from .apk_checks import scan_record
 from .package_catalog import OFFERS
-from .package_workflows import PackageWorkflows
+from .package_workflows import OWNER_MODE_COMMANDS, PackageWorkflows
 from .device_workflows import DeviceWorkflows, _read_file
 from .extra_workflows import ExtraWorkflows
 from .workflows import TransportPlan
@@ -33,9 +32,6 @@ OPTIONAL_APPS = {
     'com.amazon.windowshop': 'Amazon Shopping',
 }
 ADS_KEY = 'LOCKSCREEN_AD_ENABLED'
-# Android's PackageManager.COMPONENT_ENABLED_STATE_* values and matching pm verbs.
-_OFFERS_MODES = {'0': 'default-state', '1': 'enable', '2': 'disable',
-                 '3': 'disable-user', '4': 'disable-until-used'}
 AMAZON_DEVICES_URL = 'https://www.amazon.com/hz/mycd/digital-console/alldevices'
 PLATFORM_TOOLS_URL = 'https://developer.android.com/tools/releases/platform-tools'
 BUILD_TOOLS_URL = 'https://developer.android.com/tools/releases/build-tools'
@@ -253,7 +249,7 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
                         raise ValueError('invalid previous setting')
                     if not isinstance(record.get('model'), str):
                         raise ValueError('missing device identity')
-                    if group == 'paired_ads' and record.get('mode') not in _OFFERS_MODES:
+                    if group == 'paired_ads' and record.get('mode') not in OWNER_MODE_COMMANDS:
                         raise ValueError('invalid Special Offers package state')
             return data
         except FileNotFoundError:
@@ -303,16 +299,7 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
         ), 'ads_restore' if restore else 'ads', device, old_value=current, restore_value=target if restore else None)
 
     def _offers_mode(self, serial):
-        # pm list -d collapses default, explicit, and until-used states. Read the
-        # owner override so restore can issue the exact corresponding command.
-        dump = self._pkg_shell(serial, 'dumpsys', 'package', OFFERS)
-        owner = re.findall(r'^\s*User 0:[^\r\n]*', dump, re.M)
-        if len(owner) != 1 or not re.search(r'\binstalled=true\b', owner[0]):
-            raise ToolkitError('Cannot confirm Special Offers is installed for the owner. Use the setting-only option if available.')
-        modes = re.findall(r'\benabled=(\d+)\b', owner[0])
-        if len(modes) != 1 or modes[0] not in _OFFERS_MODES:
-            raise ToolkitError('Cannot read the owner’s Special Offers package state reliably.')
-        return modes[0]
+        return self._pkg_owner_mode(serial, OFFERS)
 
     def _plan_paired_ads(self, device, state, current, restore):
         key = device.state_key
@@ -339,8 +326,8 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
             'Restore ad setting and Special Offers' if restore else 'Suppress ad setting and Special Offers',
             device.serial,
             (f'{ADS_KEY}: {current if current is not None else "absent"} → {target if target is not None else "absent"}.',
-             f'{OFFERS} (owner user 0): {_OFFERS_MODES[mode]} → {_OFFERS_MODES[target_mode]}.',
-             f'Saved for undo: setting {original if original is not None else "absent"}, package {_OFFERS_MODES[original_mode]}.'),
+             f'{OFFERS} (owner user 0): {OWNER_MODE_COMMANDS[mode]} → {OWNER_MODE_COMMANDS[target_mode]}.',
+             f'Saved for undo: setting {original if original is not None else "absent"}, package {OWNER_MODE_COMMANDS[original_mode]}.'),
             tuple(warnings), 'ads_paired_restore' if restore else 'ads_paired', device, old_value=current,
             restore_value=original, package_mode=mode, saved_package_mode=original_mode, saved_pair_exists=record is not None,
             target_package_mode=target_mode)
@@ -453,19 +440,7 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
             staged: list[ApkInfo] = []
             for index, apk in enumerate(ordered):
                 target = staging / f'{index:02d}.apk'
-                # O_NONBLOCK prevents a replaced FIFO from hanging the worker on POSIX.
-                fd = os.open(apk.path, os.O_RDONLY | getattr(os, 'O_NONBLOCK', 0) | getattr(os, 'O_BINARY', 0))
-                with os.fdopen(fd, 'rb') as source:
-                    source_stat = os.fstat(source.fileno())
-                    if not stat.S_ISREG(source_stat.st_mode) or source_stat.st_size > MAX_APK_BYTES:
-                        raise ToolkitError('APK must be a regular file of at most 512 MiB; no files were installed.')
-                    with target.open('xb') as output:
-                        remaining = MAX_APK_BYTES
-                        while chunk := source.read(min(1024 * 1024, remaining + 1)):
-                            remaining -= len(chunk)
-                            if remaining < 0:
-                                raise ToolkitError('APK grew beyond 512 MiB during staging; no files were installed.')
-                            output.write(chunk)
+                stage_apk(apk.path, target)
                 if file_sha256(target) != apk.sha256:
                     raise ToolkitError('An APK changed since preview; no APKs were installed. Review the files again.')
                 checked = verifier.inspect(target)
@@ -534,7 +509,7 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
         if self._offers_mode(plan.serial) != mode:
             raise ToolkitError('Special Offers changed during the operation. Paired undo retained.')
         if mode != target_mode:
-            self._pkg_write(plan, completed, 'pm', _OFFERS_MODES[target_mode], '--user', '0', OFFERS)
+            self._pkg_write(plan, completed, 'pm', OWNER_MODE_COMMANDS[target_mode], '--user', '0', OFFERS)
         self._device_guard(plan)
         if self._offers_mode(plan.serial) != target_mode or self._read_ads(plan.serial) != target:
             raise ToolkitError('Could not confirm both ad controls. Paired undo retained.')

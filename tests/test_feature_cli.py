@@ -37,6 +37,16 @@ class FeatureCliTests(unittest.TestCase):
                 self.assertIn(expected, text)
                 self.assertNotIn('Preview only', text)
 
+    def test_owner_updater_status_is_read_only_and_demo_shows_both_updaters(self):
+        feature = cli.BY_KEY['ota-status']
+        self.assertTrue(feature.read_only and feature.requires_device)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(cli.main(['--demo', 'tool', 'ota-status', '--serial', 'DEMO_FIRE_HD10']), 0)
+        self.assertIn('com.amazon.device.software.ota.override', out.getvalue())
+        self.assertIn('state=enabled', out.getvalue())
+        self.assertNotIn('--confirm-token', out.getvalue())
+
     def test_demo_package_details_rejects_empty_package_id(self):
         code, text = self.run_cli(['--demo', 'tool', 'package-info', '--serial', 'DEMO_FIRE_HD10'])
         self.assertEqual(code, 1)

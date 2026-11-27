@@ -78,6 +78,7 @@ class DeviceSelectionApp(DeferredApp):
         self.devices = [DEVICE]
         self.device_table = ["0"]
         self.app_table = ["0"]
+        self.updater_table = ["0"]
         self.firmware = SimpleNamespace(set=lambda _text: None)
 
     def _clear_table(self, table):

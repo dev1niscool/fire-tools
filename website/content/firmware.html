@@ -1,12 +1,13 @@
 <section class="firmware-example" id="hd10-8338" aria-labelledby="fire-hd-10-on-8-3-3-8">
   <h2>Fire HD 10 on 8.3.3.8</h2>
-  <p>The <strong>2023 HD 10 (13th gen)</strong> runs Android 11 (API 30) and meets the requirements for Fire Tools 0.3.3. Use the primary adult profile and authorize the computer under USB debugging.</p>
+  <p>The <strong>2023 HD 10 (13th gen)</strong> runs Android 11 (API 30) and meets the Android requirement for Fire Tools. Use the primary adult profile and authorize the computer under USB debugging.</p>
   <dl class="firmware-verdicts">
     <div><dt>Google Play</dt><dd><strong>Installer available.</strong> Use the Android 11 APKs if your tablet reports ARM64. Installation was simulated. Sign-in on this build is unverified.</dd></div>
     <div><dt>Debloat</dt><dd><strong>Preview available.</strong> Check which installed apps the preset selects. Fire OS can refuse to disable protected packages.</dd></div>
     <div><dt>Lock-screen ads</dt><dd><strong>Removal unreliable.</strong> Fire OS can protect Special Offers or reset the setting. Amazon offers account-based removal on eligible devices.</dd></div>
+    <div><dt>Firmware updates</dt><dd><strong>Blocking unverified.</strong> You can read the two updater package states. Fire OS may refuse to disable them or continue an update already in progress.</dd></div>
   </dl>
-  <p><a href="google-play.html">Google Play setup</a> · <a href="apps.html">Debloat presets</a> · <a href="ads.html#amazon">Amazon’s ad-removal option</a></p>
+  <p><a href="google-play.html">Google Play setup</a> · <a href="apps.html">Debloat presets</a> · <a href="ads.html#amazon">Amazon’s ad-removal option</a> · <a href="updates.html">Firmware update controls</a></p>
 </section>
 
 <section id="model-builds">
@@ -16,7 +17,7 @@
     <thead><tr><th scope="col">Tablet and generation</th><th scope="col">Listed Fire OS</th><th scope="col">Fire Tools device changes</th></tr></thead>
     <tbody>
       <tr><th scope="row">HD 10 or Max 11 (13th)<br>HD 8 (12th, 2022/2024) or Fire 7 (12th)</th><td><strong>8.3.3.8</strong><br>Android 11 · API 30</td><td>Eligible. Google APKs must match the tablet’s architecture. Protected app changes and ad removal can fail.</td></tr>
-      <tr><th scope="row">HD 10 / Plus (11th), HD 8 / Plus (10th), HD 10 or Fire 7 (9th), HD 8 (8th)</th><td><strong>7.3.3.1</strong><br>Android 9 · API 28</td><td>Eligible. Choose API 28-compatible APKs. Stock launcher and updater packages may be protected.</td></tr>
+      <tr><th scope="row">HD 10 / Plus (11th), HD 8 / Plus (10th), HD 10 or Fire 7 (9th), HD 8 (8th)</th><td><strong>7.3.3.1</strong><br>Android 9 · API 28</td><td>Eligible. The original Android 9 Play services APK requires ARM64. A 32-bit-only tablet needs a different compatible build. Stock launcher and updater packages may be protected.</td></tr>
       <tr><th scope="row">HD 10, HD 8 or Fire 7 (7th)</th><td><strong>5.3.7.3</strong><br>Android 5.1 · API 22</td><td>Below the API 23 minimum. Device info may still be readable over ADB.</td></tr>
       <tr><th scope="row">HD 8 (6th), HD 10, HD 8 or Fire (5th)</th><td><strong>5.3.6.4</strong><br>Android 5.1 · API 22</td><td>Below the minimum for changes, including Play installation and debloating.</td></tr>
       <tr><th scope="row">HDX 8.9, HD 7 or HD 6 (4th)</th><td><strong>5.3.6.2</strong><br>Android 5.1 · API 22</td><td>Below the minimum. Earlier Kindle Fire generations also fall below API 23.</td></tr>

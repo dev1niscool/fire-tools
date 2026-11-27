@@ -32,13 +32,16 @@ class Page:
 PAGES = (
     Page("index", "Overview", "A field guide to setting up and managing Amazon Fire tablets.", "book", "Get started", "start home documentation"),
     Page("setup", "Setup", "Install Fire Tools on your computer and connect your tablet over USB.", "plug", "Get started", "install launcher windows linux demo adb driver usb debugging developer options"),
+    Page("drivers", "USB drivers", "Find out whether Windows needs an ADB driver and what the driver audit verified.", "plug", "Get started", "windows 10 11 linux mac usb mtp rsa unauthorized driver installation amazon adb signature catalog dpinst xda"),
     Page("compatibility", "Tablet models", "Identify your Fire tablet generation, Android API level and processor architecture.", "tablet", "Get started", "compatibility model generation android sdk abi hd 10 hd 8 max 11 fire 7"),
     Page("firmware", "Firmware support", "Check which Fire Tools features your model and installed Fire OS build can use.", "layers", "Get started", "compatibility hd 10 8 max 11 fire 7 google play ads debloat restricted android 8.3.3.8 8.3.3.7 7.3.3.1 7.3.2.2 5.3.7.3 5.3.6.4 5.3.6.2 firmware updates"),
     Page("google-play", "Google Play", "Choose the right APKs, verify their signatures and install Google Play.", "play", "Tool guides", "store apps apks download account manager framework services calendar contacts signing hash"),
     Page("ads", "Lock-screen ads", "Review the options for Special Offers on your Fire OS version.", "lock", "Tool guides", "lockscreen lock screen ads ad removal advertisements offers restore helper firmware"),
     Page("apps", "Amazon apps", "Choose which preinstalled apps to disable and restore them when you need them.", "grid", "Tool guides", "debloat bloatware packages presets uninstall remove restore apps"),
+    Page("updates", "System updates", "Check, disable and restore the firmware updater packages on your tablet.", "layers", "Tool guides", "ota update updates firmware stop prevent block restore security patches 8.3.3.8"),
     Page("animations", "Animation speed", "Make menus and transitions feel quicker using your tablet’s Developer Options.", "speed", "Tool guides", "faster speed up performance snappy animations scales 0.5x 0.5× 1x drawing animator duration window transition developer options"),
     Page("tools", "More tools", "Use the tool catalog for files, backups, screenshots and device settings.", "sliders", "Tool guides", "backup restore keyboard launcher wifi files recording profiles permissions screenshot"),
+    Page("apkmirror", "APKMirror audit", "Compare the Google APKs used by Toolbox v46 and verify the files you download.", "shield", "Project", "apk mirror apkmirror audit malware virus safety signatures hash sha256 google lineage rea catalog xda offline verify"),
     Page("resources", "Source & safety", "Inspect the code, read the audit and find the original project references.", "code", "Project", "github security malware viruses privacy trust license resources xda forum issue source code"),
 )
 BY_SLUG = {page.slug: page for page in PAGES}

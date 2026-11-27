@@ -10,7 +10,7 @@ import re
 import tempfile
 
 from .adb import AdbError
-from .apk import ApkError, MAX_APK_BYTES, PLAY_PACKAGES, _open_regular_file, file_sha256, google_signer_is_trusted
+from .apk import ApkError, PLAY_PACKAGES, _open_regular_file, file_sha256, google_signer_is_trusted, stage_apk
 from .package_catalog import (
     APP_LABELS, DEBLOAT_COMPLETE_WARNING, DEBLOAT_PROFILES, DEBLOAT_RESTORE_DESCRIPTION,
     OFFERS, STOCK_HOME, UPDATERS, canonical_debloat_profile, debloat_plan_title, is_protected,
@@ -28,11 +28,16 @@ _STATE_OPS = {'disable', 'enable', 'uninstall', 'restore', 'debloat', 'undo',
 _SIMPLE = {'disable', 'enable', 'uninstall', 'restore', 'clear-data', 'force-stop', 'launch', 'rollback-system'}
 _APK_OPS = {'sideload', 'system-update'}
 _PARAMS = {
+    'undo': {'scope'},
     'debloat': {'profile', 'mode', 'list_file'}, 'launcher-set': {'component', 'disable_stock'},
     'keyboard-set': {'component'}, 'sideload': {'paths', 'signer'}, 'system-update': {'paths', 'signer'},
 }
 _STATE_LIMIT = 1024 * 1024
 _STATES = {'enabled', 'disabled', 'uninstalled'}
+# PackageManager.COMPONENT_ENABLED_STATE_* values and their matching pm commands.
+OWNER_MODE_COMMANDS = {'0': 'default-state', '1': 'enable', '2': 'disable',
+                       '3': 'disable-user', '4': 'disable-until-used'}
+_UPDATER_STATES = {f'{effective}:{mode}' for effective in ('enabled', 'disabled') for mode in OWNER_MODE_COMMANDS}
 
 
 def _error(message):
@@ -160,6 +165,22 @@ def _state_after(op, before):
     return 'enabled'
 
 
+def _owner_target(operation, before, saved=None):
+    if operation == 'undo':
+        # Older journals retained only the effective state. Preserve an existing
+        # matching mode and use the conventional override if a change is needed.
+        if ':' in before and ':' not in saved:
+            if before.partition(':')[0] == saved:
+                return before
+            return saved + (':1' if saved == 'enabled' else ':3')
+        return saved
+    if operation == 'ota-disable':
+        return 'disabled:3'
+    if operation == 'ota-enable':
+        return 'enabled:1'
+    return _state_after(operation, before)
+
+
 def _guard_selection(name, operation):
     _package(name)
     if operation.startswith('ota-') and name in UPDATERS:
@@ -171,6 +192,21 @@ def _guard_selection(name, operation):
 
 
 class PackageWorkflows:
+    def _pkg_owner_mode(self, serial, package):
+        dump = self._pkg_shell(serial, 'dumpsys', 'package', package)
+        owner = re.findall(r'^\s*User 0:[^\r\n]*', dump, re.M)
+        if len(owner) != 1 or not re.search(r'\binstalled=true\b', owner[0]):
+            raise _error(f'Cannot confirm {package} is installed for owner user 0.')
+        modes = re.findall(r'\benabled=(\d+)\b', owner[0])
+        if len(modes) != 1 or modes[0] not in OWNER_MODE_COMMANDS:
+            raise _error(f'Cannot read the owner enabled mode for {package}.')
+        return modes[0]
+
+    def _pkg_updater_state(self, serial, package, effective):
+        if effective not in {'enabled', 'disabled'} or package not in self._pkg_list(serial, '-s'):
+            raise _error(f'{package} is no longer an installed system package for owner user 0.')
+        return effective + ':' + self._pkg_owner_mode(serial, package)
+
     def _pkg_shell(self, serial, *args):
         output = self.adb.shell(serial, args)
         if _FAILURE.search(output):
@@ -220,6 +256,19 @@ class PackageWorkflows:
             names = {p for p, state in states.items() if state == mode}
         return [dict(package=p, label=APP_LABELS.get(p, p), state=states[p]) for p in sorted(names)]
 
+    def updater_status(self, serial):
+        """Read the two known updater IDs for Android user 0 without changing either one."""
+        states = self._pkg_states(serial)
+        system = self._pkg_list(serial, '-s')
+        rows = []
+        for package in UPDATERS:
+            state = states.get(package, 'absent')
+            origin = '-'
+            if state in {'enabled', 'disabled'}:
+                origin = 'system' if package in system else 'non-system'
+            rows.append(dict(package=package, state=state, type=origin))
+        return rows
+
     def package_info(self, serial, package):
         """Inspect one owner app through Android's package manager."""
         package = _package(package)
@@ -266,9 +315,13 @@ class PackageWorkflows:
                     raise ValueError('Invalid saved package states.')
                 if len(states) > 256 or len(pending) > 1 or not (states or pending):
                     raise ValueError('Invalid saved package count.')
+                if 'extend_pending' in record and (record['extend_pending'] is not True or not pending or not states
+                                                   or set(states) & set(pending) or len(states) >= 256):
+                    raise ValueError('Invalid pending package batch.')
                 for p, state in (*states.items(), *pending.items()):
                     _guard_selection(p, 'ota-enable' if p in UPDATERS else 'ads-restore' if p == OFFERS else 'undo')
-                    if state not in _STATES:
+                    valid = (_UPDATER_STATES | {'enabled', 'disabled'}) if p in UPDATERS else _STATES
+                    if state not in valid:
                         raise ValueError('Invalid saved package state.')
         except FileNotFoundError:
             data = {'schema': 1, 'devices': {}}
@@ -279,15 +332,18 @@ class PackageWorkflows:
             raise _error('The saved package state belongs to a different tablet model.')
         pending = record.get('pending')
         if pending:
-            # The process could have stopped on either side of the first write.
+            # A process exit can occur on either side of any package write.
             package, before = next(iter(pending.items()))
             if self._writable_device(device.serial) != device:
                 raise _error('Device changed while recovering package undo.')
-            changed = self._pkg_states(device.serial).get(package, 'missing') != before
+            current = self._pkg_states(device.serial).get(package, 'missing')
+            if ':' in before and current in {'enabled', 'disabled'} and package in self._pkg_list(device.serial, '-s'):
+                current += ':' + self._pkg_owner_mode(device.serial, package)
             if self._writable_device(device.serial) != device:
                 raise _error('Device changed while recovering package undo.')
-            if changed:
-                record['states'] = pending
+            extend = record.pop('extend_pending', False)
+            if current != before:
+                record['states'] = {**record['states'], **pending} if extend else pending
                 record.pop('restore_source', None)
                 if 'pending_source' in record:
                     record['restore_source'] = record['pending_source']
@@ -298,7 +354,7 @@ class PackageWorkflows:
     def _pkg_undo_digest(self, record):
         return hashlib.sha256(json.dumps(record, sort_keys=True).encode()).hexdigest()
 
-    def _pkg_save_undo(self, device, data, states, pending=None, *, source=None, pending_source=None):
+    def _pkg_save_undo(self, device, data, states, pending=None, *, source=None, pending_source=None, extend_pending=False):
         key = device.state_key
         if states or pending:
             record = {'model': device.model, 'states': states}
@@ -306,6 +362,8 @@ class PackageWorkflows:
                 record['restore_source'] = source
             if pending:
                 record['pending'] = pending
+                if extend_pending:
+                    record['extend_pending'] = True
                 if pending_source:
                     record['pending_source'] = pending_source
             data['devices'][key] = record
@@ -403,6 +461,12 @@ class PackageWorkflows:
                 else:
                     warnings.append(DEBLOAT_COMPLETE_WARNING)
         elif op == 'undo':
+            if 'scope' in params:
+                if params['scope'] != 'updaters':
+                    raise _error('Unknown package undo scope.')
+                if any(p not in UPDATERS for p in saved):
+                    raise _error('The last saved batch includes other apps. Review it under Apps > Undo saved package changes.')
+                plan = replace(plan, title='Undo last updater package changes')
             if not saved:
                 raise _error('No package undo state is available for this tablet.')
             requested = tuple(saved)
@@ -412,7 +476,17 @@ class PackageWorkflows:
         elif op.startswith('ota-'):
             if not requested or any(p not in UPDATERS for p in requested):
                 raise _error('Select one or more known Fire OS update packages.')
-            warnings.append('Disabling the updater can block security updates. Fire OS may protect these packages.')
+            # A retry may select just the remaining updater in the interrupted batch.
+            snapshot['list-source'] = hashlib.sha256(op.encode('ascii')).hexdigest()
+            if op == 'ota-disable':
+                plan = replace(plan, title='Disable Fire OS updater packages')
+                warnings.append('Disabling these packages can prevent security updates. Fire OS may refuse, '
+                                'continue an update already in progress or use another update route.')
+            else:
+                plan = replace(plan, title='Enable Fire OS updater packages')
+                warnings.append('Enabling an updater allows it to resume its work. Fire OS controls the update schedule.')
+            if saved:
+                warnings.append('A new package batch replaces the last saved package undo. Review its targets before continuing.')
         if OFFERS in requested and op in {'ads-disable', 'ads-restore', 'undo'}:
             if plan.device.state_key in self._load_state().get('paired_ads', {}):
                 raise _error('Restore the paired ad controls before changing the Special Offers package separately.')
@@ -426,6 +500,8 @@ class PackageWorkflows:
             if not re.search(r'^\s*uninstall-system-updates\s+\[<?(?:PACKAGE(?:_NAME)?|package(?:_name)?)>?\]', help_text, re.M):
                 raise _error('This firmware does not advertise a package-specific rollback command.')
             system = self._pkg_list(plan.serial, '-s')
+        check_updaters = op in {'ota-disable', 'ota-enable', 'undo'} and any(p in UPDATERS for p in requested)
+        system_updaters = self._pkg_list(plan.serial, '-s') if check_updaters else set()
         for p in requested:
             display_name = package_display_name(p) if op == 'debloat' else p
             if op == 'debloat' and is_protected(p):
@@ -436,6 +512,13 @@ class PackageWorkflows:
                 guard_op = 'ads-restore' if p == OFFERS else 'ota-enable'
             _guard_selection(p, guard_op)
             before = states.get(p, 'missing')
+            if check_updaters and p in UPDATERS:
+                if op == 'undo' and (before not in {'enabled', 'disabled'} or p not in system_updaters):
+                    details.append(f'Skipped {p}: not an installed system package for owner user 0. '
+                                   'Its undo record will be kept.')
+                    continue
+                if before in {'enabled', 'disabled'} and p not in system_updaters:
+                    raise _error(f'{p} is not an installed system package for owner user 0.')
             if before == 'missing' or before == 'uninstalled' and op not in {'undo', 'restore'}:
                 if op == 'undo' and before == 'missing':
                     details.append(f'Skipped {p}: original signed APK required. Its undo record will be kept.')
@@ -446,11 +529,21 @@ class PackageWorkflows:
                     continue
                 raise _error(f'{p} is unavailable for this operation. Restoring a missing app requires its original signed APK.')
             if op in _STATE_OPS:
-                target = saved[p] if op == 'undo' else _state_after(mode, before)
-                if target == before and op != 'undo':
-                    details.append(f'Skipped {display_name}: already {target}.')
+                effective = before
+                if check_updaters and p in UPDATERS:
+                    before += ':' + self._pkg_owner_mode(plan.serial, p)
+                target = _owner_target(mode, before, saved.get(p))
+                effective_target = target.partition(':')[0]
+                if effective_target == effective and op != 'undo':
+                    details.append(f'Skipped {display_name}: already {effective}.')
                     continue
-                details.append(f'{display_name}: {before} → {target} for owner user 0.')
+                details.append(f'{display_name}: {effective} → {effective_target} for owner user 0.')
+                if ':' in before:
+                    current_mode = OWNER_MODE_COMMANDS[before.partition(':')[2]]
+                    target_mode = OWNER_MODE_COMMANDS[target.partition(':')[2]]
+                    details.append(f'Owner mode: {current_mode} → {target_mode}.')
+                    if op == 'undo' and ':' not in saved[p]:
+                        details.append('This older undo record contains only the enabled/disabled state.')
             elif op == 'launch':
                 if before != 'enabled':
                     raise _error(f'Enable {p} before launching it.')
@@ -578,16 +671,7 @@ class PackageWorkflows:
             staged = []
             for index, apk in enumerate(plan.apks):
                 target = staging / f'{index}.apk'
-                with _open_regular_file(apk.path) as (source, size):
-                    if not 0 < size <= MAX_APK_BYTES:
-                        raise _error('Choose a regular APK of at most 512 MiB.')
-                    with target.open('xb') as output:
-                        remaining = MAX_APK_BYTES
-                        while block := source.read(min(1024 * 1024, remaining + 1)):
-                            remaining -= len(block)
-                            if remaining < 0:
-                                raise _error('APK grew beyond 512 MiB during staging.')
-                            output.write(block)
+                stage_apk(apk.path, target)
                 if file_sha256(target) != apk.sha256:
                     raise _error('APK contents changed since preview. Review again.')
                 checked = verifier.inspect(target)
@@ -626,9 +710,23 @@ class PackageWorkflows:
                 raise _error(f'The installed bytes for {apk.package} do not match the reviewed APK.')
         self._pkg_confirm(plan, completed, f'Verified installed {apk.package} version {apk.version_code} for owner user 0.')
 
-    def _pkg_move(self, plan, p, before, target, completed):
+    def _pkg_move(self, plan, p, before, target, completed, prepare_write):
+        if p in UPDATERS:
+            current = self._pkg_states(plan.serial).get(p, 'missing')
+            if self._pkg_updater_state(plan.serial, p, current) != before:
+                raise _error(f'Owner mode for {p} changed since preview. Review a fresh plan.')
+            if before != target:
+                prepare_write()
+                verb = OWNER_MODE_COMMANDS[target.partition(':')[2]]
+                self._pkg_write(plan, completed, 'pm', verb, *_OWNER, p)
+                current = self._pkg_states(plan.serial).get(p, 'missing')
+                if self._pkg_updater_state(plan.serial, p, current) != target:
+                    raise _error(f'Android did not confirm {p} in owner mode {verb}.')
+                self._pkg_confirm(plan, completed, f'{p}: verified {current} ({verb}) for user 0.')
+            return
         if target == before:
             return
+        prepare_write()
         if before == 'uninstalled':
             self._pkg_write(plan, completed, 'cmd', 'package', 'install-existing', *_OWNER, p)
             before = self._pkg_states(plan.serial).get(p, 'missing')
@@ -661,52 +759,50 @@ class PackageWorkflows:
             source = snapshot['package sha256']
         else:
             mode = snapshot['list-mode'] if plan.operation == 'debloat' else plan.operation
-            changes = [(p, snapshot[p], previous[p] if undo else _state_after(mode, snapshot[p]))
+            changes = [(p, snapshot[p], _owner_target(mode, snapshot[p], previous.get(p)))
                        for p in plan.packages]
 
         # Only a retry of the same incomplete import or list may extend the undo batch.
         recorded = dict(previous) if source and source == previous_source else {}
+        remaining = dict(previous)
         for p, before, target in changes:
             current = self._pkg_states(plan.serial)
-            if current.get(p, 'missing') != before:
+            if current.get(p, 'missing') != before.partition(':')[0]:
                 raise _error(f'{p} changed since preview. Review a fresh plan.')
-            if before == target:
-                continue
-            if target in {'disabled', 'uninstalled'}:
+            if before != target and target.partition(':')[0] in {'disabled', 'uninstalled'}:
                 self._pkg_guard_active(plan.serial, (p,), current)
                 if restore_steps is not None:
                     self._guard_optional_package(plan.serial, p)
             self._pkg_device(plan)
-            first_change = not undo and not recorded
-            if not undo:
-                recorded.setdefault(p, before)
-                if first_change:
-                    self._pkg_save_undo(plan.device, data, previous, pending=recorded,
-                                        source=previous_source, pending_source=source)
-                else:
-                    self._pkg_save_undo(plan.device, data, recorded, source=source)
+            pending = False
+
+            def prepare_write():
+                nonlocal pending
+                if not undo and p not in recorded:
+                    self._pkg_save_undo(plan.device, data, recorded or previous, pending={p: before},
+                                        source=source if recorded else previous_source,
+                                        pending_source=source, extend_pending=bool(recorded))
+                    pending = True
+
             try:
-                self._pkg_move(plan, p, before, target, completed)
+                self._pkg_move(plan, p, before, target, completed, prepare_write)
             except (ToolkitError, AdbError, OSError, RuntimeError) as exc:
-                if first_change:
+                if pending:
                     try:
-                        self._pkg_device(plan)
-                        after = self._pkg_states(plan.serial).get(p, 'missing')
-                        self._pkg_device(plan)
+                        data, recovered = self._pkg_undo_record(plan.device)
                     except (ToolkitError, AdbError, OSError, RuntimeError):
-                        raise _error(f'{exc} The first change is unverified. Both undo records were retained.') from exc
-                    if after == before:
-                        self._pkg_save_undo(plan.device, data, previous, source=previous_source)
-                    else:
-                        self._pkg_save_undo(plan.device, data, recorded, source=source)
+                        raise _error(f'{exc} The change is unverified. Saved and pending undo records were retained.') from exc
+                    self._pkg_save_undo(plan.device, data, recovered.get('states', {}), source=recovered.get('restore_source'))
                 raise
-            if first_change:
+            if pending:
+                recorded[p] = before
                 self._pkg_save_undo(plan.device, data, recorded, source=source)
+            if undo:
+                self._pkg_device(plan)
+                remaining.pop(p)
+                self._pkg_save_undo(plan.device, data, remaining)
 
         if undo:
-            self._pkg_device(plan)
-            remaining = {p: state for p, state in previous.items() if p not in plan.packages}
-            self._pkg_save_undo(plan.device, data, remaining)
             completed.append('Previous owner states confirmed for the reviewed packages.')
         elif source and recorded:
             # This request completed. A later operation starts its own undo batch.

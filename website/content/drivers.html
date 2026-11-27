@@ -1,0 +1,47 @@
+<section id="connect">
+  <h2>Try the connection first</h2>
+  <p>On Windows 10 or 11, <strong>you need a separate driver download only if Windows hasn’t set up the tablet’s ADB interface</strong>. Fire Tools uses the copy of Google’s Android Debug Bridge (ADB) you select. It ships no USB driver and has no driver installer. <a href="https://developer.android.com/tools/releases/platform-tools">Google Platform-Tools</a> · <a href="https://support.microsoft.com/en-us/windows/hardware/drivers/automatically-get-recommended-and-updated-hardware-drivers">Windows driver updates</a></p>
+  <ol class="steps">
+    <li>Unlock the tablet, enable <strong>USB debugging</strong>, and connect with a data-capable cable. Give Windows time to finish device setup. <a href="setup.html#usb">Enable USB debugging</a></li>
+    <li>In Fire Tools, choose <strong>Connection → ADB → Browse</strong> and select <code>platform-tools/adb.exe</code>. Choose <strong>Scan devices</strong>.</li>
+    <li>If the state is <code>device</code>, select the tablet and choose <strong>Use selected tablet</strong>. Driver setup is complete.</li>
+  </ol>
+</section>
+
+<section id="troubleshoot">
+  <h2>Read the scan result</h2>
+  <dl>
+    <dt><code>unauthorized</code></dt><dd>ADB already sees the tablet. Unlock it and approve the USB debugging prompt for your computer. Choose “Always allow” only on a computer you trust, then scan again.</dd>
+    <dt><code>offline</code></dt><dd>Disconnect and reconnect the tablet, check the debugging prompt and scan again. Try another cable or USB port if the state persists.</dd>
+    <dt>File Explorer sees the tablet, but the scan is empty</dt><dd>File Explorer uses MTP for file transfers. ADB has its own USB interface. Confirm USB debugging is on, then look for <strong>Android Composite ADB Interface</strong> in Windows Device Manager. A Fire entry with a yellow warning under <strong>Other devices</strong> can indicate a missing ADB driver.</dd>
+  </dl>
+  <p>If the interface is missing, check Windows Update for applicable optional driver updates. If one is still needed, use the Amazon download and the signature checks below. <a href="https://developer.amazon.com/docs/fire-tablets/connecting-adb-to-device#install_usb_driver">Amazon’s driver download and instructions</a> · <a href="https://developer.amazon.com/docs/fire-tablets/connecting-adb-to-device#confirm-the-fire-driver-is-installed-correctly">Device Manager check</a></p>
+  <p><strong>Linux and macOS.</strong> Android’s Linux instructions cover USB permissions and udev rules. On Ubuntu, check the <code>plugdev</code> group if ADB reports “no permissions.” macOS needs no separate USB driver for ADB. Fire Tools provides launchers for Windows and Linux. <a href="https://developer.android.com/studio/run/device#setting-up">Android hardware setup</a></p>
+</section>
+
+<section id="audit">
+  <h2>What the driver audit covers</h2>
+  <p><strong>Amazon’s separate download.</strong> The ZIP linked by Amazon contained <code>Fire_Devices ADB drivers.exe</code>. To compare your copy with the file inspected on November 27, 2026, run PowerShell from the download folder.</p>
+  <pre><code>Get-FileHash -Algorithm SHA256 '.\kindle_fire_usb_driver.zip'</code></pre>
+  <p>Expected ZIP SHA-256 for this sample <code>f423cf47f837d74dbb7b9541701dae281ac548b2e8df5f556dfd71708c83d786</code>. A different digest identifies a different file requiring its own checks. <a href="https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-filehash">Microsoft’s file-hash documentation</a></p>
+  <p><strong>The outer installer has no embedded Authenticode signature.</strong> The x86 and x64 driver catalogs are signed by Amazon Services LLC. Both November 2016 timestamps and revocation checks verified on Linux. Current Windows driver policy and installation remain untested. ClamAV 1.5.5, using 3,628,228 signatures, reported zero detections on the ZIP, installer and all 18 extracted files. <a href="https://learn.microsoft.com/en-us/windows-hardware/drivers/install/catalog-files">How Windows checks a driver catalog</a></p>
+  <details>
+    <summary>Use the driver files with Windows Device Manager</summary>
+    <ol>
+      <li>Download the ZIP using the link in Amazon’s guide and compare its hash. Extract the ZIP. Using a trusted archive utility such as 7-Zip, open <code>Fire_Devices ADB drivers.exe</code> as an archive and extract its contents to a folder. This reads the files without launching the unsigned installer.</li>
+      <li>Keep <code>android_winusb.inf</code>, its <code>.cat</code> files and the architecture subfolders together. In <strong>Device Manager</strong>, select the Fire device needing its ADB driver. Choose <strong>Update driver → Browse my computer for drivers</strong>, select that folder and include subfolders.</li>
+      <li>Let Windows enforce driver signing. If Windows rejects the signature or says the driver is incompatible, stop and use Windows Update or Amazon support. After a successful install, reconnect, authorize the tablet and scan in Fire Tools. <a href="https://developer.android.com/studio/run/oem-usb#InstallingDriver">Android’s OEM driver instructions</a></li>
+    </ol>
+  </details>
+  <details>
+    <summary>Amazon file and signature evidence</summary>
+    <p>REA found zero entries in the outer installer's certificate table and inspected its Windows imports and those of its x64 setup utility. The unsigned installer had SHA-256 <code>85d0a457773ccf9eed9a8b103aa23d4403e7892177215f9ae5643ea83488bd4f</code>. The extracted <code>android_winusb.inf</code> uses Microsoft’s built-in WinUSB driver.</p>
+    <p>Both Amazon catalogs contain the INF’s digest. Each architecture’s catalog also matched the Authenticode digests of the two DLLs the INF copies, <code>WdfCoInstaller01009.dll</code> and <code>WinUSBCoInstaller2.dll</code>. The bundled <code>dpinst.exe</code> and <code>WUDFUpdate_01009.dll</code> use separate embedded Microsoft signatures. Those signatures and timestamps verified offline for both x86 and x64 at signing time. Current revocation status for these Microsoft files remains unverified. <a href="https://www.microsoft.com/pki/certs/MicrosoftRootCert.crt">Microsoft Root Certificate Authority</a> · <a href="https://www.microsoft.com/pki/certs/MicrosoftRootAuthority.crt">Microsoft Root Authority</a></p>
+    <p>Both catalog signatures and timestamps validated against the Microsoft Code Verification Root at signing time. The issuer’s signed revocation list, valid November 27 through December 4, 2026, did not list Amazon’s signing certificate. The verifier reported historical certificate-expiry warnings. No driver or installer was run. <a href="https://www.microsoft.com/pki/certs/MicrosoftCodeVerifRoot.crt">Microsoft’s verification root</a> · <a href="https://github.com/morluto/rea">REA static-analysis tool</a></p>
+  </details>
+  <details>
+    <summary>Original Toolbox v46 driver path and evidence</summary>
+    <p>The original Toolbox bundles ADB and its Windows DLLs. Its driver installer downloads a separate XDA attachment. REA found an expected SHA-256 and a completion callback that starts <code>DPInst_x64.exe</code> or <code>DPInst_x86.exe</code>. The code inspected did not establish that a valid signature or matching checksum was required before launch. The attachment and its archived copy could not be retrieved. Its signer and malware scan result remain unknown. Amazon’s separately hosted ZIP has a different hash. <a href="https://xdaforums.com/t/windows-linux-tool-fire-toolbox-v46-0.3889604/#post-78664542">Original XDA setup</a> · <a href="https://github.com/morluto/rea">REA project</a></p>
+    <p>v46 driver archive’s expected SHA-256 <code>1a8fedb2530cdc0088e01a1a517355e2c1d52d1b6e2b14959f241c42813b562f</code>. The inspected Toolbox executable had SHA-256 <code>34be37dff0c3bf40cb34155896e92b70d9dfdff5cb969c780cade88f13f74079</code>. The driver methods were <code>InstallDeviceDrivers_DoWork</code> (0x060004c5), the completion callback (0x060004c6) and <code>InstallADBDrivers</code> (0x060004c8). REA 6.10.1 evidence ID <code>ev_fc5db9867700526f2b9fcb8892c6520131103f11a021f323e213fd390cacb642</code>.</p>
+  </details>
+</section>

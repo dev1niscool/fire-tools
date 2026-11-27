@@ -9,12 +9,14 @@ companion/src/org/firetools/adshelper/AdsState.java
 companion/src/org/firetools/adshelper/BootReceiver.java
 companion/src/org/firetools/adshelper/HelperSettings.java
 companion/src/org/firetools/adshelper/MainActivity.java
+docs/APK-AUDIT.md
 docs/FEATURES.md
 docs/GOOGLE-APKS.md
 docs/PARITY-RESEARCH.md
 docs/REA-AUDIT.md
 docs/REA-NOTES.md
 docs/TESTING.md
+docs/V46-INVENTORY.md
 docs/images/demo.png
 docs/reviews/boundary-rereview.txt
 docs/reviews/boundary-review.txt

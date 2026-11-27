@@ -11,19 +11,23 @@ from pathlib import Path
 from urllib.parse import unquote, urljoin, urlsplit
 from xml.etree import ElementTree
 
-
 REPOSITORY = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPOSITORY))
+from open_fire_toolkit.apk import GOOGLE_SIGNER_SHA256, _GMS_ROTATED_SIGNER
+from open_fire_toolkit.apk_checks import SCANNED_FILES
+
 SITE_URL = "https://dev1niscool.github.io/fire-tools/"
 PAGES = {
     "index.html", "setup.html", "compatibility.html", "google-play.html",
     "ads.html", "apps.html", "tools.html", "resources.html", "firmware.html", "animations.html",
+    "apkmirror.html", "drivers.html", "updates.html",
 }
 
 
 class Page(HTMLParser):
     def __init__(self, path):
         super().__init__()
-        self.labels = {"h1": [], "title": []}
+        self.labels = {"h1": [], "title": [], "code": []}
         self.label_tag = None
         self.ids = []
         self.references = []
@@ -98,6 +102,12 @@ class HandbookTests(unittest.TestCase):
 
     def test_build_emits_all_handbook_pages(self):
         self.assertFalse(PAGES - self.pages.keys(), f"Missing pages: {PAGES - self.pages.keys()}")
+
+    def test_published_audit_digests_match_runtime_scan_records_and_signers(self):
+        published = {value for value in self.pages["apkmirror.html"].labels["code"]
+                     if re.fullmatch(r"[0-9a-f]{64}", value)}
+        core_hashes = {digest for digest, label in SCANNED_FILES.items() if "Sync" not in label}
+        self.assertEqual(published, core_hashes | {GOOGLE_SIGNER_SHA256, _GMS_ROTATED_SIGNER})
 
     def test_pages_have_distinct_titles_and_headings(self):
         for tag in ("title", "h1"):

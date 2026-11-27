@@ -1,7 +1,7 @@
 <section id="desktop">
   <h2>Start Fire Tools on your computer</h2>
   <ol class="steps">
-    <li><strong>Download the 0.3.3 source ZIP.</strong> Extract it and open the folder containing the launchers. <a href="https://github.com/dev1niscool/fire-tools/archive/refs/tags/v0.3.3.zip">Download Fire Tools from GitHub</a> · <a href="https://github.com/dev1niscool/fire-tools/releases/tag/v0.3.3">Release notes and checksum</a>.</li>
+    <li><strong>Download the 0.4.0 source ZIP.</strong> Extract it and open the folder containing the launchers. <a href="https://github.com/dev1niscool/fire-tools/archive/refs/tags/v0.4.0.zip">Download Fire Tools from GitHub</a> · <a href="https://github.com/dev1niscool/fire-tools/releases/tag/v0.4.0">Release notes and checksum</a>.</li>
     <li><strong>Install Python 3.11+ with Tk.</strong> Select Tcl/Tk on Windows or install <code>python3-tk</code> on Debian/Ubuntu. <a href="https://www.python.org/downloads/">Python downloads</a>.</li>
     <li><strong>Run a launcher</strong> from the extracted folder. The offline demo works without a tablet.</li>
   </ol>
@@ -12,7 +12,7 @@
       <tr><th scope="row">Linux terminal</th><td><code>sh launch-linux.sh</code></td><td><code>sh launch-linux.sh gui --demo</code></td></tr>
     </tbody>
   </table></div>
-  <p><a href="https://github.com/dev1niscool/fire-tools/blob/main/docs/TESTING.md#rea-audit-release-033">Check the download hash and scan results</a>.</p>
+  <p><a href="https://github.com/dev1niscool/fire-tools/blob/main/docs/TESTING.md#apk-and-driver-audit-release-040">Check the download hash and verification results</a>.</p>
 </section>
 <section id="android-tools">
   <h2>Select the Android tools</h2>
@@ -28,7 +28,7 @@
   <h2>Authorize the USB connection</h2>
   <ol class="steps">
     <li><strong>Switch to the primary adult profile.</strong> In <strong>Settings → Device Options → About Fire Tablet</strong>, tap <strong>Serial Number</strong> seven times.</li>
-    <li><strong>Return to Device Options → Developer Options.</strong> Turn on Developer Options and <strong>USB debugging</strong> (sometimes <strong>Enable ADB</strong>). Windows may need Amazon’s driver. <a href="https://developer.amazon.com/docs/fire-tablets/connecting-adb-to-device">Amazon’s Fire tablet USB and driver guide</a>.</li>
+    <li><strong>Return to Device Options → Developer Options.</strong> Turn on Developer Options and <strong>USB debugging</strong> (sometimes <strong>Enable ADB</strong>). If Windows cannot see the ADB interface, check the <a href="drivers.html">USB driver guide and audit</a>. <a href="https://developer.amazon.com/docs/fire-tablets/connecting-adb-to-device">Amazon’s Fire tablet USB and driver guide</a>.</li>
     <li><strong>Unlock the tablet and connect a USB data cable.</strong> Choose <strong>Connection → Scan devices</strong>, then approve your computer’s RSA fingerprint on the tablet.</li>
     <li><strong>Scan again.</strong> Highlight your serial with state <code>device</code> and choose <strong>Use selected tablet</strong>. Note the model, Fire OS, SDK and ABIs.</li>
   </ol>

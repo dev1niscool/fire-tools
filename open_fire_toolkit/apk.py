@@ -102,6 +102,22 @@ def _open_regular_file(path: str | Path):
         os.close(descriptor)
 
 
+def stage_apk(source_path: Path, target: Path) -> None:
+    """Make a bounded regular-file copy in the caller's private working directory."""
+    with _open_regular_file(source_path) as (source, size):
+        if not 0 < size <= MAX_APK_BYTES:
+            raise ApkError("Choose a nonempty APK of at most 512 MiB.")
+        with target.open("xb") as output:
+            remaining = size
+            while chunk := source.read(min(1024 * 1024, remaining + 1)):
+                remaining -= len(chunk)
+                if remaining < 0:
+                    raise ApkError("APK grew during staging. Select the file again.")
+                output.write(chunk)
+            if remaining:
+                raise ApkError("APK shrank during staging. Select the file again.")
+
+
 def file_sha256(path: str | Path) -> str:
     """Return a streaming SHA-256 digest of a local file."""
     try:
@@ -389,6 +405,18 @@ class ApkVerifier:
         return ApkInfo(apk, package, version_code, version_name, min_sdk, abis, digest, signers, split=requires_splits, signer_lineage=lineage)
 
 
+def check_google_component(apk: ApkInfo, sdk: int) -> None:
+    """Check one inspected APK without assuming that a complete set was selected."""
+    if apk.package not in PLAY_PACKAGES:
+        raise ApkError(f"Unexpected Google Play package: {apk.package}")
+    if apk.split:
+        raise ApkError(f"Split APK is unsupported: {apk.package}")
+    if not 0 < apk.min_sdk <= sdk:
+        raise ApkError(f"{apk.package} requires Android SDK {apk.min_sdk}, selected SDK is {sdk}.")
+    if not google_signer_is_trusted(apk):
+        raise ApkError(f"Google signing certificate mismatch: {apk.package}")
+
+
 def google_play_order(
     apks: Sequence[ApkInfo], sdk: int, abis: Sequence[str],
 ) -> tuple[ApkInfo, ...]:
@@ -396,18 +424,11 @@ def google_play_order(
     entries = {}
     device_abis = set(abis)
     for apk in apks:
-        if apk.package not in PLAY_PACKAGES:
-            raise ApkError(f"Unexpected Google Play package: {apk.package}")
+        check_google_component(apk, sdk)
         if apk.package in entries:
             raise ApkError(f"Duplicate Google Play package: {apk.package}")
-        if apk.split:
-            raise ApkError(f"Split APK is unsupported: {apk.package}")
-        if not 0 < apk.min_sdk <= sdk:
-            raise ApkError(f"{apk.package} requires Android SDK {apk.min_sdk}, device SDK is {sdk}.")
         if apk.abis and not device_abis.intersection(apk.abis):
             raise ApkError(f"{apk.package} has no native ABI supported by the device.")
-        if not google_signer_is_trusted(apk):
-            raise ApkError(f"Google signing certificate mismatch: {apk.package}")
         entries[apk.package] = apk
     # The service checks the tablet's enabled core packages for an adapter-only addition.
     if not entries or not entries.keys() <= SYNC_PROVIDERS.keys():

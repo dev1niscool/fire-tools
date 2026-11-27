@@ -1,6 +1,6 @@
 # Fire Tools
 
-An independent, MIT-licensed desktop and command-line toolkit for Amazon Fire tablets. Install Google Play, manage lock-screen ads, compare debloat presets, and back up settings and files. Version 0.3.3 adds Google component status, per-app details and stronger device checks for Wi-Fi ADB. [What the REA review found in Fire Toolbox v46](docs/REA-AUDIT.md)
+An independent, MIT-licensed desktop and command-line toolkit for Amazon Fire tablets. Install Google Play, manage lock-screen ads, compare debloat presets, and back up settings and files. Version 0.4.0 adds offline Google APK signature checks and a System updates tab. [What the REA review found in Fire Toolbox v46](docs/REA-AUDIT.md)
 
 [Read the Fire tablet field guide](https://dev1niscool.github.io/fire-tools/) for setup, model compatibility and step-by-step tool guides.
 
@@ -8,15 +8,18 @@ This release is designed for Fire tablets running Android API 23 or later. Devic
 
 ## Checking your download
 
-Fire Tools runs from Python source on your computer. Extract the folder containing the launchers. The optional Android helper ships as Java source, and Google apps are separate downloads. Compare your ZIP with the published SHA-256. [Download Fire Tools 0.3.3](https://github.com/dev1niscool/fire-tools/archive/refs/tags/v0.3.3.zip) · [Release notes and ZIP checksum](https://github.com/dev1niscool/fire-tools/releases/tag/v0.3.3) · [Verification record](https://github.com/dev1niscool/fire-tools/blob/main/docs/TESTING.md#rea-audit-release-033)
+Fire Tools runs from Python source on your computer. Extract the folder containing the launchers. The optional Android helper ships as Java source, and Google apps are separate downloads. Compare your ZIP with the published SHA-256. [Download Fire Tools 0.4.0](https://github.com/dev1niscool/fire-tools/archive/refs/tags/v0.4.0.zip) · [Release notes and ZIP checksum](https://github.com/dev1niscool/fire-tools/releases/tag/v0.4.0) · [Verification record](https://github.com/dev1niscool/fire-tools/blob/main/docs/TESTING.md#apk-and-driver-audit-release-040)
 
 **Before connecting the tablet**, open **Google Play → Choose APKs → Check scan records**. This reads the files locally and shows whether their SHA-256 hashes match files examined in the project audit. The command-line equivalent is `./launch-linux.sh check-apks file.apk` or `.\launch-windows.cmd check-apks "C:\Downloads\file.apk"` in PowerShell. For Google components, use the **Google Play** tab. It checks Google’s signing identity and verifies the installed bytes. The general **sideload** tool also accepts apps from other publishers. [Links to the six scanned builds](docs/GOOGLE-APKS.md#files-with-a-local-scan-record) · [Audit and scan results](docs/TESTING.md)
 
-## The three main workflows
+After setting the AAPT, APK signer and Java paths, choose **Verify Google signatures...** and enter the Android API level reported for your tablet. This also works before connecting a device. [APKMirror audit](https://dev1niscool.github.io/fire-tools/apkmirror.html)
+
+## Common workflows
 
 | Goal | Where to find it | What it does |
 | --- | --- | --- |
 | Install Google Play | **Google Play** | Verifies locally selected Google components against the pinned Google signing certificate, checks compatibility and installs them in dependency order. |
+| Manage firmware updates | **System updates** | Read updater package states, review a disable request and restore changes. A disabled package can delay security patches. Fire OS controls which changes take effect. [Step-by-step guide](https://dev1niscool.github.io/fire-tools/updates.html) |
 | Debloat Amazon apps | **Apps → Debloat Amazon apps** | Choose Standard (Recommended), Complete or a custom list. Review the installed targets and skipped packages before disabling or removing apps for the owner. |
 | Disable lock-screen ads | **Lock-screen ads** | Temporary setting, Special Offers package disable/restore, or optional [source-built helper](companion/README.md). All depend on firmware; no mode guarantees that ads disappear. |
 
@@ -59,7 +62,7 @@ In PowerShell, prefix the Windows launcher with `.\`. You can also run `python -
 1. Install Python 3.11 or later. For the GUI use a Python installation with Tk support. The official Windows installer includes an optional Tcl/Tk component. On Debian or Ubuntu, install `python3-tk` for the distribution's Python. The CLI does not require Tk. [Python downloads](https://www.python.org/downloads/)
 2. Download Google's SDK Platform-Tools and extract the entire archive. For Google Play, also install Android SDK Build Tools using the SDK Manager in Android Studio or Google's SDK command-line tools. Use a JDK compatible with your chosen tools. JDK 17 or newer is a practical starting point. The Build Tools 36.0.0 verifier launched with OpenJDK 21 in a local smoke check. Android Studio's bundled runtime is also an option. The toolkit leaves tool and APK downloads to you. [Platform-Tools](https://developer.android.com/tools/releases/platform-tools) · [SDK Manager](https://developer.android.com/studio/command-line/sdkmanager) · [Build Tools](https://developer.android.com/tools/releases/build-tools)
 3. On the tablet, open **Settings → Device Options → About Fire Tablet**, tap **Serial Number** seven times, then enable USB debugging under **Developer Options**. Names can vary with Fire OS. Connect a USB data cable, unlock the tablet and approve your computer’s RSA fingerprint in the debugging prompt.
-4. In **Connection**, supply the full ADB executable path, choose **Scan devices**, select your tablet, and choose **Use selected tablet**. The view shows its Android API level and supported ABIs. If it reports `unauthorized`, check the prompt on the unlocked tablet. If nothing appears, try a data-capable cable and check your operating system's ADB driver or USB permissions. [Android USB setup](https://developer.android.com/studio/run/device)
+4. In **Connection**, supply the full ADB executable path, choose **Scan devices**, select your tablet, and choose **Use selected tablet**. The view shows its Android API level and supported ABIs. If it reports `unauthorized`, check the prompt on the unlocked tablet. If nothing appears, try a data-capable cable and check your operating system's ADB driver or USB permissions. [USB driver setup and audit](https://dev1niscool.github.io/fire-tools/drivers.html) · [Android USB setup](https://developer.android.com/studio/run/device)
 
 | GUI field | Windows example | Linux example |
 | --- | --- | --- |

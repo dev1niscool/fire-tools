@@ -85,8 +85,10 @@ FEATURES = (
     _device('helper-start', 'Set up the on-tablet ad helper', 'helper-start', (SIGNER,), 'Verify the installed source-built helper, grant its setting permission, then press Enable on the tablet. Firmware may ignore the setting.', 'Lock-screen ads'),
     _device('helper-stop', 'Open helper to stop monitoring', 'helper-stop', (SIGNER,), description='Verifies and opens the helper; press Stop on the tablet. Opening it alone does not stop the service.', category='Lock-screen ads'),
     _device('helper-restore', 'Open helper to restore ad setting', 'helper-restore', (SIGNER,), 'Verify helper identity, then press Restore on the tablet. Uses the original saved value.', 'Lock-screen ads'),
+    _package('ota-status', 'Read updater states', 'ota-status', description='Check owner state and system-package classification for both known updater IDs.', category='System updates', read_only=True),
     _package('ota-disable', 'Disable update packages', 'ota-disable', (PACKAGES,), 'Select the installed updater package IDs explicitly. Blocks security updates if accepted. Some Fire OS versions protect these packages; this is not a guarantee that every update route is blocked.', 'System updates'),
     _package('ota-enable', 'Enable update packages', 'ota-enable', (PACKAGES,), category='System updates'),
+    _package('ota-undo', 'Undo last updater package changes', 'undo', description='Restore the previous owner states from the last saved batch if it contains only updater packages.', category='System updates'),
     _package('launcher-set', 'Set an installed home launcher', 'launcher-set', (COMPONENT, Field('disable_stock', 'Disable Fire launcher after verifying replacement', 'false', ('false', 'true'))), 'Fire OS may refuse default-home changes. Keep a working launcher.', 'Launcher and input'),
     _package('launcher-restore', 'Restore Fire home launcher', 'launcher-restore', category='Launcher and input'),
     _device('home', 'Read current home activity', 'home', category='Launcher and input', read_only=True),
@@ -199,6 +201,10 @@ def run_feature(toolkit, serial: str, feature: Feature, values: dict[str, str]):
             return toolkit.package_inventory(serial, **params)
         if feature.operation == 'info':
             return toolkit.package_info(serial, **params)
+        if feature.key == 'ota-undo':
+            return toolkit.plan_package_action(serial, 'undo', scope='updaters')
+        if feature.operation == 'ota-status':
+            return toolkit.updater_status(serial)
         if feature.operation == 'google-status':
             return toolkit.google_status(serial)
         if feature.key == 'debloat-restore':

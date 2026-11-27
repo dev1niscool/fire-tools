@@ -33,6 +33,8 @@ def button(label, parent=None):
         item for item in widgets(parent or root)
         if isinstance(item, ttk.Button) and item.cget("text") == label
     ]
+    if len(buttons) > 1:
+        buttons = [item for item in buttons if item.winfo_viewable()]
     assert len(buttons) == 1, label
     return buttons[0]
 

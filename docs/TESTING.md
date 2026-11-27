@@ -23,11 +23,19 @@ Run `python3 -m open_fire_toolkit gui --demo` in a desktop session with Tk. On L
 
 ## Release archive
 
-The GitHub release page provides the checksum for GitHub’s tagged source ZIP. If you build the separate source-only distribution using `scripts/package_release.py`, compare that ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c fire-tools-0.3.3.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\fire-tools-0.3.3.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `fire-tools-0.3.3.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
+The GitHub release page provides the checksum for GitHub’s tagged source ZIP. If you build the separate source-only distribution using `scripts/package_release.py`, compare that ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c fire-tools-0.4.0.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\fire-tools-0.4.0.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `fire-tools-0.4.0.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
 
 On Linux, use an archive utility that preserves executable permissions, such as `unzip`, when running launcher tests. To start Fire Tools from a folder extracted without Unix permissions, use `sh launch-linux.sh`.
 
 The checksum verifies that the ZIP matches the checksum you obtained. Obtain both files from a source you trust.
+
+## APK and driver audit release 0.4.0
+
+All 302 application tests and six handbook tests passed on Linux with JDK 21 available. Both rendered desktop smoke tests passed. The System updates tab was also exercised on Tk 8.6 and 9.0 at 680 × 660. A simulated tablet accepted a reviewed disable request and returned to its saved state on undo. Tests covered all five Android owner modes, including a disabled system default, firmware refusal partway through a batch, a package replaced with a non-system app, and refusal to undo an unrelated app batch from this tab. No physical tablet or firmware update was used.
+
+Bandit reported zero medium or high findings in the Python application and build scripts. The offline Google signature checker accepted all six reference APKs at API 30 and rejected a modified APK and a Framework build on an API below its minimum. It authenticated the Play services signing-key rotation without connecting to ADB. The Windows driver checks used extracted files on Linux. Current Windows driver acceptance remains untested.
+
+The [APK catalog audit](APK-AUDIT.md) records the selected releases, signer checks and simulated installation. The [Windows archive inventory](V46-INVENTORY.md) distinguishes embedded files from separately fetched software. The [driver audit](https://dev1niscool.github.io/fire-tools/drivers.html#audit) gives the Amazon files examined and the limits for the original XDA attachment. The tagged source ZIP’s SHA-256 and verification results are on the [0.4.0 release](https://github.com/dev1niscool/fire-tools/releases/tag/v0.4.0).
 
 ## REA audit release 0.3.3
 

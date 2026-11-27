@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 PLATFORM_TOOLS = "https://developer.android.com/tools/releases/platform-tools"
 BUILD_TOOLS = "https://developer.android.com/tools/releases/build-tools"
 AMAZON_DEVICES = "https://www.amazon.com/mycd"
+USB_DRIVER_GUIDE = "https://dev1niscool.github.io/fire-tools/drivers.html"
 
 
 class Worker:
@@ -155,6 +156,7 @@ class App:
         self._play_tab()
         self._ads_tab()
         self._apps_tab()
+        self._updates_tab()
         self.advanced = AdvancedTools(self, FEATURES)
 
         footer = ttk.Frame(self.root, padding=(16, 0, 16, 12))
@@ -234,11 +236,12 @@ class App:
         guides.pack(fill="x", pady=(5, 8))
         self._button(guides, "Google Platform-Tools", lambda: self._open(PLATFORM_TOOLS)).pack(side="left")
         self._button(guides, "Google Build Tools", lambda: self._open(BUILD_TOOLS)).pack(side="left", padx=6)
+        self._button(guides, "USB driver guide", lambda: self._open(USB_DRIVER_GUIDE)).pack(side="left")
         if self.fixed_toolkit:
-            self._description(guides, "Tool paths are managed by the active toolkit.").pack(side="left", padx=5)
+            self._description(tab, "Tool paths are managed by the active toolkit.").pack(fill="x")
         else:
             self._description(
-                tab, "ADB is required. Google Play also needs aapt, lib/apksigner.jar, and Java.",
+                tab, "Tablet tools need ADB. Offline Google signature checks need only AAPT, APK signer and Java.",
             ).pack(fill="x", pady=(0, 7))
         self.firmware = self.tk.StringVar(value="Select a scanned tablet to see firmware and Android details.")
         self._description(tab, variable=self.firmware).pack(side="bottom", fill="x")
@@ -279,6 +282,11 @@ class App:
         self._button(
             actions, "Clear list", self._clear_apks, condition=lambda: bool(self.apk_paths),
         ).pack(side="left", padx=6)
+        if not self.demo:
+            self._button(
+                actions, "Verify Google signatures...", self._verify_google_files,
+                condition=lambda: bool(self.apk_paths),
+            ).pack(side="left")
         self._button(
             actions, "Verify and review...", self._plan_play,
             condition=lambda: self._connected() and bool(self.apk_paths), primary=True,
@@ -420,6 +428,62 @@ class App:
             recovery, "Undo saved package changes...", lambda: self.advanced.show_feature("packages-undo"),
         ).pack(side="left", padx=6)
 
+    def _updates_tab(self):
+        from .feature_catalog import BY_KEY
+
+        tab = self._panel(
+            "System updates", "Manage Fire OS updates",
+            "Disabling an updater can stop future security fixes. Fire OS may refuse the change, "
+            "use another update route or finish an update already in progress.",
+        )
+        self._description(
+            tab, "1. Select your tablet in Connection, then read its updater states. "
+                 "Select an installed system row, or Ctrl-click both rows.",
+        ).pack(fill="x", pady=(0, 5))
+        self._button(tab, "Read updater states", self._read_updaters,
+                     condition=self._connected).pack(anchor="w", pady=(0, 5))
+        self.updater_table = self._table(tab, (
+            ("package", "Updater package", 340), ("state", "Owner state", 98), ("type", "Package type", 104),
+        ), 2, self._sync_controls, selectmode="extended")
+        self._description(
+            tab, "2. Review the change, confirm it, then read states again. "
+                 "Disabled is the owner package state. Future update delivery is unverified.",
+        ).pack(fill="x", pady=(6, 4))
+        actions = self.ttk.Frame(tab, style="Panel.TFrame")
+        actions.pack(fill="x")
+        for label, key, state in (("Review disable...", "ota-disable", "enabled"),
+                                  ("Review enable...", "ota-enable", "disabled")):
+            self._button(
+                actions, label, lambda k=key: self._run_tool(
+                    BY_KEY[k], lambda: {"packages": ",".join(self.updater_table.selection())}),
+                condition=lambda s=state: self._can_change_updaters(s),
+            ).pack(side="left", padx=(0, 6))
+        self._description(
+            tab, "3. To reverse the last updater batch, review its saved package undo. "
+                 "Enable changes each selected updater to enabled regardless of its previous state.",
+        ).pack(fill="x", pady=(6, 3))
+        self._button(
+            tab, "Review last package undo...", lambda: self._run_tool(BY_KEY["ota-undo"], dict),
+            condition=self._connected,
+        ).pack(anchor="w")
+
+    def _read_updaters(self):
+        toolkit, serial = self.toolkit, self.device.serial
+        self._clear_table(self.updater_table)
+
+        def complete(rows):
+            for row in rows:
+                self.updater_table.insert("", "end", iid=row["package"],
+                                          values=(row["package"], row["state"], row["type"]))
+            self._append_log(f"Read owner updater states for {serial}.")
+
+        self._start("Read updater states", lambda log: toolkit.updater_status(serial), complete)
+
+    def _can_change_updaters(self, state):
+        selected = self.updater_table.selection()
+        return (self._connected() and all(self.updater_table.set(p, "type") == "system" for p in selected)
+                and any(self.updater_table.set(p, "state") == state for p in selected))
+
     def _table(self, parent, columns, height, on_selection, *, selectmode="browse"):
         container = self.ttk.Frame(parent, style="Panel.TFrame")
         container.pack(fill="both", expand=True)
@@ -445,7 +509,7 @@ class App:
         for widget, condition in self.controls:
             enabled = not blocked and (condition is None or condition())
             widget.state(["!disabled"] if enabled else ["disabled"])
-        for table in (self.device_table, self.apk_table, self.app_table):
+        for table in (self.device_table, self.apk_table, self.app_table, self.updater_table):
             table.state(["disabled"] if blocked else ["!disabled"])
         self.advanced.sync_controls()
         prefix = "Demo · " if self.demo else ""
@@ -531,6 +595,7 @@ class App:
         self.device = None
         self.firmware.set("Select a scanned tablet to see firmware and Android details.")
         self._forget_apps()
+        self._clear_table(self.updater_table)
 
     def _forget_device_list(self):
         self.devices = []
@@ -689,7 +754,7 @@ class App:
         box = self._text_box(panel, height=12)
         if isinstance(result, list):
             result = "\n".join(
-                f"{row['package']}  ·  {row['state']}  ·  {row['label']}" for row in result
+                f"{row['package']}  ·  {row['state']}  ·  {row.get('label') or row['type']}" for row in result
             )
         self._write_text(box, result or "No results.")
         close = self.ttk.Button(panel, text="Close", command=window.destroy)
@@ -704,6 +769,30 @@ class App:
         title = "APK scan records"
         self._start(title, lambda _log: check_apk_files(paths)[0],
                     lambda report: self._show_tool_output(title, "", report))
+
+    def _verify_google_files(self):
+        from tkinter.simpledialog import askinteger
+        from .apk_checks import verify_google_apk_files
+
+        title = "Verify Google signatures"
+        if self.demo or not self.apk_paths:
+            return
+        aapt, jar, java = (value.get().strip() for value in self.paths[1:])
+        if not all((aapt, jar, java)):
+            self._show_error(title, ValueError("Choose AAPT, APK signer and Java on the Connection tab."))
+            return
+        sdk = askinteger(title, "Android API level of the intended tablet (for example, 30 for the 2023 Fire HD 10):",
+                         parent=self.root, minvalue=1, maxvalue=2_147_483_647,
+                         initialvalue=self.device.sdk if self.device is not None else None)
+        if sdk is None:
+            return
+        paths = tuple(self.apk_paths)
+        def show_result(result):
+            report, verified = result
+            self._show_tool_output(title if verified else "Google signature check failed", "", report)
+
+        self._start(title, lambda _log: verify_google_apk_files(
+            paths, sdk=sdk, aapt_path=aapt, apksigner_jar=jar, java_path=java), show_result)
 
     def _plan_play(self):
         paths = tuple(self.apk_paths)
@@ -837,6 +926,7 @@ class App:
             self._forget_device_list()
         else:
             self._forget_apps()
+            self._clear_table(self.updater_table)
 
         def execute(log):
             emitted = []

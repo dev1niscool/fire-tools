@@ -2,6 +2,8 @@
 
 On a Fire HD 10, open **Connection → Scan devices**, then select the tablet and choose **Use selected tablet**. Note its model, Android API level and supported ABIs (processor architectures). Amazon lists the 2023 13th-generation Fire HD 10 as `KFTUWI`, with Fire OS 8, Android 11 (API 30) and 32-bit and 64-bit app support. The examples below use that model. For any other model, choose variants for the API and ABIs reported by your tablet. Amazon’s 2026 **Alexa Tablet** 8, 11 and 12 Pro already include Google Play. [Fire HD 10 specifications](https://developer.amazon.com/docs/device-specs/ft-device-specifications-firehd-models?v=firehd10_2023) · [Alexa Tablet announcement](https://www.aboutamazon.com/news/devices/new-amazon-alexa-tablets-alexa-plus)
 
+See the [APKMirror audit](https://dev1niscool.github.io/fire-tools/apkmirror.html) for how to compare whole-file hashes, verify Google signers offline and interpret the scan results.
+
 ## Files with a local scan record
 
 These are the six exact builds examined in the project audit. Before enabling USB debugging, open **Google Play → Choose APKs → Check scan records** to compare your downloads by SHA-256. The CLI offers the same check. A match identifies the bytes examined on November 27, 2026. Version changes, including security updates, produce a different hash. [Scan scope and results](TESTING.md)
@@ -51,6 +53,8 @@ The Framework example above matches the file Fire Toolbox selected for Android 1
 | Contacts Sync | `4af1f2b93744d5730c6e44b82d1d6dbbcab03531091669bd75e3c0636b4e38ef` |
 
 </details>
+
+For other tablet generations, the [v46 catalog audit](APK-AUDIT.md) covers Android-specific archive selections. Both labels in the original Android 9 catalog lead to an ARM64-primary Play services build. Owners of 32-bit-only Fire OS 7 tablets need a compatible standalone variant.
 
 ## Files selected by Fire Toolbox 46 for Android 11
 

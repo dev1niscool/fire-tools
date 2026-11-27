@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from open_fire_toolkit.adb import Device, DeviceInfo
 from open_fire_toolkit.feature_catalog import FEATURES
 from open_fire_toolkit.gui import App
-from open_fire_toolkit.package_catalog import DEBLOAT_TITLES
+from open_fire_toolkit.package_catalog import DEBLOAT_TITLES, UPDATERS
 from open_fire_toolkit.service import Plan
 from open_fire_toolkit.workflows import TransportPlan
 
@@ -73,10 +73,10 @@ def smoke(root):
     assert root.title() == "Fire Tools · Demo"
     assert app.log_box.winfo_height() > 50
     assert [app.tabs.tab(tab, "text") for tab in app.tabs.tabs()] == [
-        "Connection", "Google Play", "Lock-screen ads", "Apps", "Tools",
+        "Connection", "Google Play", "Lock-screen ads", "Apps", "System updates", "Tools",
     ]
 
-    app.tabs.select(4)
+    app.tabs.select(app.advanced.tab)
     root.update()
     assert app.advanced.action.instate(["disabled"])
     assert app.advanced.tool_list.get_children() == tuple(feature.key for feature in FEATURES)
@@ -247,6 +247,7 @@ def smoke(root):
         assert "Simulation finished" in app.log_box.get("1.0", "end")
         assert not destination.exists()
 
+    check_updater_controls(app)
     check_debloat_presets(app, review)
     app.tabs.select(2)
     root.update()
@@ -258,6 +259,58 @@ def smoke(root):
     assert app.advanced.feature.key == "helper-start"
     assert serial in app.status.get()
     assert not callback_errors, callback_errors
+
+
+def check_updater_controls(app):
+    root = app.root
+    app.tabs.select(4)
+    root.update()
+    assert app.tabs.tab(app.tabs.select(), "text") == "System updates"
+    table = app.updater_table
+
+    def refresh():
+        click(root, "Read updater states")
+        wait(root, lambda: table.get_children() == UPDATERS and not app.worker.busy, "updater states")
+
+    def review(label):
+        click(root, label)
+        window = wait(root, lambda: app.review, "updater plan review")
+        return window, text_box(window).get("1.0", "end")
+
+    refresh()
+    assert all(table.set(p, "type") == "system" for p in UPDATERS)
+    assert button(root, "Review disable...").instate(["disabled"])
+    table.selection_set(UPDATERS)
+    root.update()
+    assert button(root, "Review enable...").instate(["disabled"])
+    window, preview = review("Review disable...")
+    assert all(p in preview for p in UPDATERS)
+    assert "security updates" in preview
+    click(window, "Cancel")
+    assert all(p not in app.toolkit.disabled for p in UPDATERS)
+    window, _ = review("Review disable...")
+    click(window, "Confirm simulation")
+    wait(root, lambda: not app.worker.busy, "updater disable completion")
+    assert not table.get_children()
+    refresh()
+    assert all(table.set(p, "state") == "disabled" for p in UPDATERS)
+    table.selection_set(UPDATERS[0])
+    root.update()
+    window, preview = review("Review enable...")
+    assert "disabled → enabled" in preview and UPDATERS[1] not in preview
+    click(window, "Cancel")
+    window, preview = review("Review last package undo...")
+    assert all(p in preview for p in UPDATERS)
+    click(window, "Confirm simulation")
+    wait(root, lambda: not app.worker.busy, "updater undo completion")
+    refresh()
+    assert all(table.set(p, "state") == "enabled" for p in UPDATERS)
+    app.advanced.show_feature("ota-status")
+    root.update()
+    click(root, "Read")
+    window = wait(root, lambda: displayed_window(root, "Read updater states"), "updater state report")
+    assert all(p in text_box(window).get("1.0", "end") for p in UPDATERS)
+    click(window, "Close")
 
 
 def check_debloat_presets(app, review):

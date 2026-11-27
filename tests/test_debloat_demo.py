@@ -105,6 +105,12 @@ class DebloatDemoTests(unittest.TestCase):
                 self.plan(profile='custom', list_file='example.debloat')
         self.assertEqual(self.states(), before)
 
+    def test_update_undo_rejects_an_unrelated_package_batch(self):
+        self.apply(self.demo.plan_package_action(self.serial, 'disable', (KINDLE,)))
+        with self.assertRaisesRegex(ToolkitError, 'other apps'):
+            run_feature(self.demo, self.serial, BY_KEY['ota-undo'], {})
+        self.assertEqual(self.states()[KINDLE], 'disabled')
+
     def test_enabling_an_explicit_removed_app_keeps_it_removed(self):
         self.apply(self.demo.plan_package_action(self.serial, 'uninstall', (SILK,)))
         self.apply(self.demo.plan_package_action(self.serial, 'enable', (SILK,)))
