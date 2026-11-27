@@ -16,7 +16,7 @@ REPOSITORY = Path(__file__).resolve().parents[2]
 SITE_URL = "https://dev1niscool.github.io/fire-tools/"
 PAGES = {
     "index.html", "setup.html", "compatibility.html", "google-play.html",
-    "ads.html", "apps.html", "tools.html", "resources.html",
+    "ads.html", "apps.html", "tools.html", "resources.html", "firmware.html", "animations.html",
 }
 
 
@@ -27,6 +27,7 @@ class Page(HTMLParser):
         self.label_tag = None
         self.ids = []
         self.references = []
+        self.label_references = set()
         self.stylesheets = []
         self.links = []
         self.nav_links = []
@@ -41,6 +42,8 @@ class Page(HTMLParser):
             self.labels[tag].append("")
         if tag == "nav":
             self.nav_depth += 1
+        if "aria-labelledby" in attrs:
+            self.label_references.update(attrs["aria-labelledby"].split())
         if "id" in attrs:
             self.ids.append(attrs["id"])
         for attr in ("href", "src", "poster"):
@@ -111,6 +114,8 @@ class HandbookTests(unittest.TestCase):
         svg_ids = {}
         for name, page in self.pages.items():
             with self.subTest(page=name):
+                missing = page.label_references - set(page.ids)
+                self.assertFalse(missing, f"Missing accessible label on {name}: {missing}")
                 duplicate = [anchor for anchor, count in Counter(page.ids).items() if count > 1]
                 self.assertFalse(duplicate, f"Duplicate IDs on {name}: {duplicate}")
             for reference in page.references:
@@ -160,13 +165,8 @@ class HandbookTests(unittest.TestCase):
         for name, page in self.pages.items():
             with self.subTest(page=name):
                 destinations = {self.local_target(name, link) for link in page.nav_links}
-                self.assertTrue(
-                    any(
-                        target and target[0] in self.pages and target[0] != name
-                        for target in destinations
-                    ),
-                    f"No navigation link out of {name}",
-                )
+                linked = {target[0] for target in destinations if target}
+                self.assertFalse(PAGES - linked, f"Missing guides in navigation on {name}: {PAGES - linked}")
 
 
 if __name__ == "__main__":

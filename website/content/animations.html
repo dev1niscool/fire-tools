@@ -1,0 +1,19 @@
+<section id="on-tablet">
+  <h2>Shorten animations on your tablet</h2>
+  <p>At <strong>0.5×</strong>, a transition normally lasting half a second takes about a quarter second. Opening a menu can feel quicker. App loading still depends on the app and hardware. You can do this entirely on the tablet with USB debugging off.</p>
+  <ol class="steps">
+    <li>Open <strong>Settings → Device Options → Developer Options</strong>. If the menu is hidden, open <strong>About Fire Tablet</strong>, tap <strong>Serial Number</strong> seven times, then return to <strong>Device Options</strong>. Turn on the Developer Options switch if shown. <a href="https://developer.amazon.com/docs/fire-tablets/connecting-adb-to-device">Amazon’s menu instructions</a>.</li>
+    <li>Find <strong>Window animation scale</strong>, <strong>Transition animation scale</strong> and <strong>Animator duration scale</strong>. Look under <strong>Drawing</strong>, or scroll through Developer Options for those names.</li>
+    <li>Note each current value, then tap each setting and choose <strong>0.5×</strong>. Go Home and reopen Settings to try the change. <a href="https://developer.android.com/studio/debug/dev-options#drawing">Android animation controls</a> · <a href="https://developer.android.com/reference/android/provider/Settings.Global#ANIMATOR_DURATION_SCALE">Animator duration</a>.</li>
+  </ol>
+</section>
+
+<section id="restore">
+  <h2>Restore your original speed</h2>
+  <p>Return to the same three settings and put each back to the value you recorded. Choose <strong>1×</strong> on all three for standard timing.</p>
+</section>
+
+<section id="desktop">
+  <h2>Change all three with Fire Tools</h2>
+  <p>With your tablet connected and selected, open <strong>Tools → Display and sounds → Animation speed</strong>. Set <strong>Animation scale</strong> to <strong>0.5</strong>, choose <strong>Review</strong>, then <strong>Confirm and run</strong>. Repeat with <strong>1</strong> for standard timing. <a href="setup.html#usb">Connect your tablet over USB</a>.</p>
+</section>

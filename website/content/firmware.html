@@ -1,0 +1,37 @@
+<section class="firmware-example" id="hd10-8338" aria-labelledby="fire-hd-10-on-8-3-3-8">
+  <h2>Fire HD 10 on 8.3.3.8</h2>
+  <p>The <strong>2023 HD 10 (13th gen)</strong> runs Android 11 (API 30) and meets the requirements for Fire Tools 0.3.3. Use the primary adult profile and authorize the computer under USB debugging.</p>
+  <dl class="firmware-verdicts">
+    <div><dt>Google Play</dt><dd><strong>Installer available.</strong> Use the Android 11 APKs if your tablet reports ARM64. Installation was simulated. Sign-in on this build is unverified.</dd></div>
+    <div><dt>Debloat</dt><dd><strong>Preview available.</strong> Check which installed apps the preset selects. Fire OS can refuse to disable protected packages.</dd></div>
+    <div><dt>Lock-screen ads</dt><dd><strong>Removal unreliable.</strong> Fire OS can protect Special Offers or reset the setting. Amazon offers account-based removal on eligible devices.</dd></div>
+  </dl>
+  <p><a href="google-play.html">Google Play setup</a> · <a href="apps.html">Debloat presets</a> · <a href="ads.html#amazon">Amazon’s ad-removal option</a></p>
+</section>
+
+<section id="model-builds">
+  <h2>Look up your model and build</h2>
+  <p>Open <strong>Settings → Device Options → About Fire Tablet</strong> for the generation and <strong>System Updates</strong> for the installed version. These are Amazon’s U.S. download listings as of November 27, 2026. Your tablet may be on an earlier build.</p>
+  <div class="table-scroll" role="region" aria-label="Fire Tools eligibility by tablet and firmware" tabindex="0"><table>
+    <thead><tr><th scope="col">Tablet and generation</th><th scope="col">Listed Fire OS</th><th scope="col">Fire Tools device changes</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">HD 10 or Max 11 (13th)<br>HD 8 (12th, 2022/2024) or Fire 7 (12th)</th><td><strong>8.3.3.8</strong><br>Android 11 · API 30</td><td>Eligible. Google APKs must match the tablet’s architecture. Protected app changes and ad removal can fail.</td></tr>
+      <tr><th scope="row">HD 10 / Plus (11th), HD 8 / Plus (10th), HD 10 or Fire 7 (9th), HD 8 (8th)</th><td><strong>7.3.3.1</strong><br>Android 9 · API 28</td><td>Eligible. Choose API 28-compatible APKs. Stock launcher and updater packages may be protected.</td></tr>
+      <tr><th scope="row">HD 10, HD 8 or Fire 7 (7th)</th><td><strong>5.3.7.3</strong><br>Android 5.1 · API 22</td><td>Below the API 23 minimum. Device info may still be readable over ADB.</td></tr>
+      <tr><th scope="row">HD 8 (6th), HD 10, HD 8 or Fire (5th)</th><td><strong>5.3.6.4</strong><br>Android 5.1 · API 22</td><td>Below the minimum for changes, including Play installation and debloating.</td></tr>
+      <tr><th scope="row">HDX 8.9, HD 7 or HD 6 (4th)</th><td><strong>5.3.6.2</strong><br>Android 5.1 · API 22</td><td>Below the minimum. Earlier Kindle Fire generations also fall below API 23.</td></tr>
+    </tbody>
+  </table></div>
+  <p>Eligibility means Fire Tools can offer its workflows. The project has tested simulated tablets. <a href="compatibility.html">Find your model and API</a> · <a href="https://digprjsurvey.amazon.com/csad/help/node/G2JXLC4L34GX73TE">Amazon’s firmware listings</a> · <a href="https://developer.amazon.com/docs/device-specs/ft-identify-tablet-devices.html">Amazon’s device specifications</a> · <a href="https://github.com/dev1niscool/fire-tools/blob/v0.3.3/docs/TESTING.md">Test coverage</a></p>
+</section>
+
+<section id="build-limits">
+  <h2>If your installed build differs</h2>
+  <ul>
+    <li><strong>Fire OS 8.</strong> The original Fire Toolbox v46 flags builds <strong>above 8.3.3.7</strong> for its restricted path. Earlier builds can still refuse individual actions. This threshold concerns protected packages, including Special Offers.</li>
+    <li><strong>Fire OS 7.</strong> Starting at <strong>7.3.2.2</strong>, v46 flags restrictions on system packages such as the updater. Earlier 7.x builds meet Fire Tools’ API requirement too. Neither threshold determines whether Google Play can sign in.</li>
+    <li><strong>Fire OS 6.</strong> An HD 8 (2018) or Fire 7 (2019) still on OS 6 runs Android 7.1 (API 25). It meets the minimum. Choose APKs compatible with the installed API and processor.</li>
+  </ul>
+  <p>For an unlisted build, check the SDK and ABIs in <strong>Fire Tools → Connection</strong>. API 22 or lower blocks tablet changes. On API 23 or higher, review each tool’s requirements and the tablet’s response.</p>
+  <p><a href="https://xdaforums.com/t/windows-linux-tool-fire-toolbox-v46-0.3889604/#post-78664542">XDA’s original model table</a> (<a href="https://web.archive.org/web/20261108011721/https://xdaforums.com/t/windows-linux-tool-fire-toolbox-v46-0.3889604/">archived copy</a>) · <a href="https://xdaforums.com/t/windows-linux-tool-fire-toolbox-v46-0.3889604/#post-78664546">XDA firmware FAQ</a> · <a href="https://github.com/dev1niscool/fire-tools/blob/v0.3.3/docs/REA-AUDIT.md#reproduce-the-audit">v46 version check (MainMenu.CheckOSVer)</a> · <a href="https://github.com/dev1niscool/fire-tools/blob/v0.3.3/docs/REA-NOTES.md#suppressing-and-restoring-lock-screen-offers">v46 ad behavior</a> · <a href="https://developer.amazon.com/docs/fire-tablets/ft-launcher-icon-guidelines.html#fire-os-6-device-support-table">Fire OS 6 models</a></p>
+</section>
