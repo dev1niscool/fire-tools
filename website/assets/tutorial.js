@@ -229,7 +229,8 @@
   function load(focus) {
     const state = history.state;
     const session = readSession();
-    const saved = state && Object.hasOwn(state, "fireTutorial") ? state.fireTutorial : session?.profile;
+    const hasHistoryProfile = state && Object.hasOwn(state, "fireTutorial");
+    const saved = hasHistoryProfile ? state.fireTutorial : profile || session?.profile;
     // The latest choice for this run also applies when revisiting an older history entry.
     const sameRun = typeof saved?.updateRun === "string" && saved.updateRun === profile?.updateRun;
     const storedRun = typeof saved?.updateRun === "string" && saved.updateRun === session?.profile?.updateRun;
@@ -240,8 +241,8 @@
     if (profile && !hash && (session?.view === "#complete" ||
         sections.some((section) => session?.view === "#section-" + section.id))) {
       hash = session.view;
-      history.replaceState(historyState(), "", hash);
     }
+    if (profile && (!hasHistoryProfile || hash !== location.hash)) history.replaceState(historyState(), "", hash);
     showView(hash, focus);
   }
 
