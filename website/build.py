@@ -31,6 +31,7 @@ class Page:
 
 PAGES = (
     Page("index", "Overview", "A field guide to setting up and managing Amazon Fire tablets.", "book", "Get started", "start home documentation"),
+    Page("tutorial", "Guided setup", "Choose your tablet, Fire OS version and goals. Follow your instructions one section at a time.", "book", "Get started", "tutorial walkthrough personalized wizard beginner step by step next model firmware Google Play ads debloat"),
     Page("setup", "Setup", "Install Fire Tools on your computer and connect your tablet over USB.", "plug", "Get started", "install launcher windows linux macos demo adb driver usb debugging developer options"),
     Page("drivers", "USB drivers", "Find out whether Windows needs an ADB driver and what the driver audit verified.", "plug", "Get started", "windows 10 11 linux mac usb mtp rsa unauthorized driver installation amazon adb signature catalog dpinst xda"),
     Page("compatibility", "Tablet models", "Identify your Fire tablet generation, Android API level and processor architecture.", "tablet", "Get started", "compatibility model generation android sdk abi hd 10 hd 8 max 11 fire 7"),
@@ -120,6 +121,12 @@ def build(output):
             description=escape(page.intro, quote=True), title=escape(page.title), group=page.group,
             repo=REPO, version=escape(version), desktop_nav=nav(page), mobile_nav=nav(page, mobile=True),
             contents=contents, search_links=search_links(),
+            page_assets=(
+                '<link rel="stylesheet" href="assets/tutorial.css">\n'
+                '  <script defer src="assets/tutorial-route.js"></script>\n'
+                '  <script defer src="assets/tutorial.js"></script>'
+                if page.slug == "tutorial" else ""
+            ),
         )
         for name in ("github", "search", "external", "chevron", "menu", "close", "book", "shield"):
             variables[name] = icon(name, 18)

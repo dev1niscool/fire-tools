@@ -18,7 +18,7 @@ from open_fire_toolkit.apk_checks import SCANNED_FILES
 
 SITE_URL = "https://dev1niscool.github.io/fire-tools/"
 PAGES = {
-    "index.html", "setup.html", "compatibility.html", "google-play.html",
+    "index.html", "setup.html", "tutorial.html", "compatibility.html", "google-play.html",
     "ads.html", "apps.html", "tools.html", "resources.html", "firmware.html", "animations.html",
     "apkmirror.html", "drivers.html", "updates.html",
 }
@@ -33,6 +33,7 @@ class Page(HTMLParser):
         self.references = []
         self.label_references = set()
         self.stylesheets = []
+        self.scripts = []
         self.links = []
         self.nav_links = []
         self.nav_depth = 0
@@ -53,6 +54,8 @@ class Page(HTMLParser):
         for attr in ("href", "src", "poster"):
             if attrs.get(attr):
                 self.references.append(attrs[attr])
+        if tag == "script" and attrs.get("src"):
+            self.scripts.append((attrs["src"], "defer" in attrs))
         if tag == "link" and "stylesheet" in attrs.get("rel", "").lower().split():
             self.stylesheets.append(attrs["href"])
         if tag == "a" and attrs.get("href"):
@@ -102,6 +105,18 @@ class HandbookTests(unittest.TestCase):
 
     def test_build_emits_all_handbook_pages(self):
         self.assertFalse(PAGES - self.pages.keys(), f"Missing pages: {PAGES - self.pages.keys()}")
+
+    def test_guided_setup_assets_are_local_and_load_in_order(self):
+        scripts = [("assets/tutorial-route.js", True), ("assets/tutorial.js", True)]
+        for name, page in self.pages.items():
+            found = [script for script in page.scripts if script[0].startswith("assets/tutorial")]
+            if name == "tutorial.html":
+                self.assertEqual(found, scripts)
+                self.assertIn("assets/tutorial.css", page.stylesheets)
+            else:
+                self.assertEqual(found, [])
+                self.assertNotIn("assets/tutorial.css", page.stylesheets)
+        self.assertIn("tutorial.html", self.pages["index.html"].links)
 
     def test_published_audit_digests_match_runtime_scan_records_and_signers(self):
         published = {value for value in self.pages["apkmirror.html"].labels["code"]

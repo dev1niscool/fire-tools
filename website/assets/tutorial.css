@@ -1,0 +1,331 @@
+.tutorial {
+  --control-border: #58718a;
+}
+
+.tutorial-panel {
+  background: var(--panel);
+  border: 1px solid #32465e;
+  border-radius: 12px;
+  padding: clamp(18px, 3vw, 32px);
+  scroll-margin-top: 86px;
+}
+
+.tutorial .tutorial-panel + .tutorial-panel {
+  margin-top: 0;
+}
+
+.tutorial-panel h2 {
+  font-size: clamp(1.4rem, 2.6vw, 1.85rem);
+  margin: 0 0 18px;
+}
+
+.tutorial-fields,
+.tutorial-goals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tutorial-fields {
+  gap: 18px 24px;
+}
+
+.tutorial-field,
+.tutorial fieldset {
+  min-width: 0;
+}
+
+.tutorial-field > label:first-child,
+.tutorial legend {
+  display: block;
+  color: var(--text);
+  font-weight: 650;
+}
+
+.tutorial-field > label:first-child {
+  margin-bottom: 7px;
+}
+
+.tutorial-field select,
+.tutorial-field input:not([type="checkbox"]) {
+  display: block;
+  width: 100%;
+  min-height: 46px;
+  padding: 9px 12px;
+  color: var(--text);
+  background-color: #0b1625;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  font: inherit;
+}
+
+.tutorial-field input::placeholder {
+  color: #99adc2;
+  opacity: 1;
+}
+
+.tutorial-field input:disabled {
+  opacity: .65;
+}
+
+.tutorial-field small,
+.tutorial-goal small {
+  display: block;
+  color: var(--muted);
+  font-size: .875rem;
+  line-height: 1.45;
+}
+
+.tutorial-field small {
+  margin-top: 7px;
+}
+
+.tutorial-field label:has(input[type="checkbox"]) {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  color: var(--muted);
+  font-size: .875rem;
+  cursor: pointer;
+}
+
+.tutorial input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+  flex: none;
+  cursor: pointer;
+}
+
+.tutorial fieldset {
+  margin: 24px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.tutorial legend {
+  padding: 0;
+  font-size: 1.18rem;
+  letter-spacing: -.025em;
+  margin-bottom: 4px;
+}
+
+.tutorial .tutorial-goals-hint {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: .9rem;
+}
+
+.tutorial-goals {
+  gap: 10px;
+}
+
+.tutorial-goal {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  padding: 13px 14px;
+  background: #101e30;
+  border: 1px solid #40546b;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.tutorial-goal input[type="checkbox"] {
+  margin-top: 3px;
+}
+
+.tutorial-goal strong {
+  display: block;
+  line-height: 1.4;
+  margin-bottom: 3px;
+}
+
+.tutorial-goal:has(input:checked) {
+  background: #142e43;
+  border-color: var(--accent);
+}
+
+@media (hover: hover) {
+  .tutorial-goal:hover {
+    border-color: #a0bdd7;
+  }
+}
+
+.tutorial-progress {
+  display: grid;
+  gap: 6px;
+}
+
+.tutorial-progress-label {
+  color: #a7dcff;
+  font: 600 .8rem/1.55 var(--mono);
+}
+
+.tutorial progress {
+  display: block;
+  width: 100%;
+  height: 5px;
+  border: 0;
+  border-radius: 5px;
+  appearance: none;
+  overflow: hidden;
+  background: #2c4057;
+  color: var(--accent);
+  accent-color: var(--accent);
+}
+
+.tutorial progress::-webkit-progress-bar {
+  background: #2c4057;
+}
+
+.tutorial progress::-webkit-progress-value {
+  background: var(--accent);
+}
+
+.tutorial progress::-moz-progress-bar {
+  background: var(--accent);
+}
+
+.tutorial-context {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 13px 0 22px;
+}
+
+.tutorial .tutorial-profile {
+  color: var(--muted);
+  font-size: .875rem;
+  overflow-wrap: anywhere;
+}
+
+.tutorial .tutorial-steps {
+  margin: 20px 0;
+  padding-left: 1.6em;
+}
+
+.tutorial .tutorial-steps li {
+  padding-left: .35em;
+}
+
+.tutorial .tutorial-steps li + li {
+  margin-top: 12px;
+}
+
+.tutorial-steps li::marker {
+  font-weight: 700;
+}
+
+.tutorial-check {
+  display: grid;
+  gap: 3px;
+  padding: 12px 16px;
+  border-left: 3px solid #77ccb4;
+  background: #132a31;
+  border-radius: 0 6px 6px 0;
+  color: #d0e6df;
+}
+
+.tutorial-check strong {
+  color: #9fe2cb;
+}
+
+.tutorial-links,
+.tutorial-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.tutorial-links {
+  margin-top: 14px;
+  font-size: .9rem;
+}
+
+.tutorial-controls {
+  justify-content: flex-end;
+  border-top: 1px solid var(--line);
+  margin-top: 24px;
+  padding-top: 18px;
+}
+
+.tutorial :is(.tutorial-primary, .tutorial-secondary) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 9px 16px;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: #162536;
+  color: var(--text);
+  font: 650 .94rem/1.45 "DM Sans", system-ui, sans-serif;
+}
+
+.tutorial .tutorial-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #092035;
+}
+
+.tutorial-controls .tutorial-secondary {
+  margin-inline-end: auto;
+}
+
+.tutorial .tutorial-primary:hover {
+  background: #b1e5ff;
+}
+
+.tutorial .tutorial-secondary:hover {
+  background: #20334a;
+}
+
+.tutorial-edit {
+  border: 0;
+  padding: 3px 0;
+  background: none;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: .2em;
+  font: inherit;
+  font-size: .875rem;
+}
+
+.tutorial .tutorial-error {
+  color: #ffbcae;
+  font-weight: 600;
+}
+
+.tutorial [aria-invalid="true"] {
+  border-color: #ffbcae;
+}
+
+.tutorial :is(input, select, a, button):focus-visible {
+  outline: 3px solid #b0e6ff;
+  outline-offset: 3px;
+}
+
+@media (max-width: 650px) {
+  .tutorial-fields,
+  .tutorial-goals {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tutorial-controls {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 420px) {
+  .tutorial-controls > button {
+    flex: 1 1 auto;
+  }
+}

@@ -1,0 +1,80 @@
+<div class="tutorial" id="tutorial">
+  <div id="tutorial-fallback" class="tutorial-panel">
+    <h2>Follow the written guides</h2>
+    <p>Enable JavaScript to build a personal tutorial, or start with <a href="compatibility.html">your tablet model</a>, <a href="firmware.html">firmware support</a> and <a href="setup.html">computer setup</a>.</p>
+    <ul>
+      <li><a href="google-play.html">Install Google Play</a></li>
+      <li><a href="apps.html">Debloat and restore apps</a></li>
+      <li><a href="ads.html">Manage lock-screen ads</a></li>
+      <li><a href="updates.html">Manage system updates</a></li>
+      <li><a href="animations.html">Adjust animation speed</a></li>
+      <li><a href="tools.html">Browse more tools</a></li>
+    </ul>
+  </div>
+
+  <form id="tutorial-setup" class="tutorial-panel" aria-labelledby="tutorial-setup-title" novalidate hidden>
+    <h2 id="tutorial-setup-title" tabindex="-1">Your tablet</h2>
+    <div class="tutorial-fields">
+      <div class="tutorial-field">
+        <label for="tutorial-model">Tablet model</label>
+        <select name="model" id="tutorial-model" aria-describedby="tutorial-model-hint" required>
+          <option value="">Choose your tablet</option>
+        </select>
+        <small id="tutorial-model-hint">Look under Settings → Device Options → About Fire Tablet. <a href="compatibility.html">Find your model</a></small>
+      </div>
+      <div class="tutorial-field">
+        <label for="tutorial-firmware">Fire OS version</label>
+        <input type="text" name="firmware" id="tutorial-firmware" maxlength="31" placeholder="e.g. 8.3.3.8" aria-describedby="tutorial-firmware-hint" spellcheck="false" autocomplete="off" required>
+        <small id="tutorial-firmware-hint">Look under Settings → Device Options → System Updates.</small>
+        <label class="tutorial-unknown"><input type="checkbox" id="tutorial-unknown"> I don’t know the version</label>
+      </div>
+    </div>
+
+    <fieldset>
+      <legend>What do you want to do?</legend>
+      <p class="tutorial-goals-hint">Choose one or more tasks.</p>
+      <div id="tutorial-goals" class="tutorial-goals"></div>
+      <div id="tutorial-ads-options" class="tutorial-field" hidden>
+        <label for="tutorial-ads-method">Ad-removal method</label>
+        <select id="tutorial-ads-method" name="adsMethod" disabled>
+          <option value="amazon">Remove offers through Amazon (may have a fee)</option>
+          <option value="tool">Try Fire Tools on a computer (experimental)</option>
+        </select>
+      </div>
+    </fieldset>
+    <p id="tutorial-error" class="tutorial-error" role="alert" hidden></p>
+    <div class="tutorial-controls">
+      <button class="tutorial-primary" id="tutorial-start" type="submit">Start tutorial <svg class="icon" width="17" height="17" aria-hidden="true" focusable="false"><use href="assets/icons.svg#arrow"></use></svg></button>
+    </div>
+  </form>
+
+  <section id="tutorial-reader" class="tutorial-panel" aria-labelledby="tutorial-title" hidden>
+    <div class="tutorial-progress">
+      <label id="tutorial-progress-label" class="tutorial-progress-label" for="tutorial-progress"></label>
+      <progress id="tutorial-progress" value="0" max="1"></progress>
+    </div>
+    <div class="tutorial-context">
+      <span class="tutorial-profile" id="tutorial-profile"></span>
+      <button type="button" class="tutorial-edit" id="tutorial-edit">Edit choices</button>
+    </div>
+    <h2 id="tutorial-title" aria-describedby="tutorial-progress-label" tabindex="-1"></h2>
+    <p id="tutorial-intro"></p>
+    <ol id="tutorial-steps" class="tutorial-steps"></ol>
+    <div class="tutorial-check" id="tutorial-check"><strong>Before you continue</strong><span id="tutorial-check-text"></span></div>
+    <nav class="tutorial-links" id="tutorial-links" aria-label="Guides for this section"></nav>
+    <div class="tutorial-controls">
+      <button type="button" class="tutorial-secondary" id="tutorial-back">Back</button>
+      <button type="button" class="tutorial-primary" id="tutorial-next"><span>Next</span> <svg class="icon" width="17" height="17" aria-hidden="true" focusable="false"><use href="assets/icons.svg#arrow"></use></svg></button>
+    </div>
+  </section>
+
+  <section class="tutorial-panel" id="tutorial-finished" aria-labelledby="tutorial-finished-title" hidden>
+    <h2 id="tutorial-finished-title" tabindex="-1">Tutorial complete</h2>
+    <p id="tutorial-finished-profile" class="tutorial-profile"></p>
+    <p>You’ve reached the end of your guide. You can revisit the last section or start a guide for another task.</p>
+    <div class="tutorial-controls">
+      <button type="button" class="tutorial-secondary" id="tutorial-review">Back</button>
+      <button type="button" class="tutorial-primary" id="tutorial-restart">Start again</button>
+    </div>
+  </section>
+</div>
