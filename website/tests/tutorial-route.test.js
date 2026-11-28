@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 require("../assets/tutorial-route.js");
 
-const { models, goals, build } = globalThis.FireTutorialRoute;
+const { models, goals, build, firmwareUpdateStatus } = globalThis.FireTutorialRoute;
 const plan = (goals, model = "hd10-2023", firmware = "8.3.3.8", adsMethod = "amazon") => build({ model, firmware, goals, adsMethod });
 const ids = sections => sections.map(section => section.id);
 const words = section => [section.intro, ...section.steps, section.check].join(" ");
@@ -92,7 +92,7 @@ test("abbreviated builds request the full firmware before interpreting restricti
 
 test("HD 10 firmware advice uses the entered version and precedes app and updater changes", () => {
     for (const [version, message] of [
-        ["8.3.3.6", /back up.*stock USB update/i],
+        ["8.3.3.6", /Edit choices.*select Update to Fire OS 8\.3\.3\.7/i],
         ["8.3.3.7", /skip the firmware installation/i],
         ["8.3.3.8", /downgrade/i],
         ["8.3.3.10", /downgrade/i],
@@ -105,7 +105,6 @@ test("HD 10 firmware advice uses the entered version and precedes app and update
         const steps = ids(route);
         const sequence = ["backup", "firmware-order", "updates", "play", "debloat", "ads-desktop", "finish"];
         assert.deepEqual(steps.filter(id => sequence.includes(id)), sequence);
-        if (version === "8.3.3.6") assert.match(words(order), /restart.*Edit choices/i);
         assert.doesNotMatch(route.find(s => s.id === "play").steps.join(" "), /try signing in/i);
         assert.match(words(route.at(-1)), /sign in/i);
     }
@@ -121,6 +120,63 @@ test("firmware advice reaches HD 10 app goals even without selecting updates", (
     for (const [model, version] of [["hd10-2021", "7.3.3.1"], ["max11-2023", "8.3.3.6"], ["unknown", "8.3.3.7"]]) {
         assert.ok(!ids(plan(["play", "updates"], model, version)).includes("firmware-order"));
     }
+});
+
+const localUpdateIds = ["fw8337-prepare", "fw8337-package", "fw8337-install", "fw8337-confirm"];
+
+test("the optional stock update is available only on the exact model and a known earlier Fire OS 8 build", () => {
+    assert.ok(goals.some(goal => goal.id === "firmware-8337"));
+    for (const [model, version, status] of [
+        ["hd10-2023", "8.3.2.10", "available"], ["hd10-2023", "8.3.3.6", "available"],
+        ["hd10-2023", "8.3.3.7", "installed"], ["hd10-2023", "8.3.3.10", "newer"],
+        ["hd10-2023", "8.4.0.0", "newer"], ["hd10-2023", "8.3.3", "unknown"],
+        ["hd10-2023", "", "unknown"], ["hd10-2023", "8.3.3.6rc1", "unknown"],
+        ["hd10-2023", "7.3.2.1", "other"], ["hd10-2021", "8.3.3.6", "other"],
+        ["hd8-2024", "8.3.3.6", "other"], ["unknown", "8.3.3.6", "other"],
+    ]) {
+        assert.equal(firmwareUpdateStatus(model, version), status);
+        const route = plan(["firmware-8337"], model, version);
+        assert.deepEqual(ids(route), status === "available" ? localUpdateIds : []);
+        if (status !== "available") {
+            assert.deepEqual(plan(["firmware-8337", "play"], model, version), plan(["play"], model, version));
+        }
+    }
+});
+
+test("standalone stock update includes the handbook package, checksum, local installation and post-restart check", () => {
+    const route = plan(["firmware-8337"], "hd10-2023", "8.3.3.6");
+    assert.deepEqual(ids(route), localUpdateIds);
+    const [prepare, file, install, confirm] = route;
+    assert.match(words(prepare), /KFTUWI/);
+    assert.match(words(prepare), /back up/i);
+    assert.match(words(prepare), /queued|pending/i);
+    const guide = fs.readFileSync(path.join(__dirname, "../content/hd10-8337.html"), "utf8");
+    const download = guide.match(/href="(https:\/\/fireos-tablet-src\.[^"]+\.bin)"/)[1];
+    const digest = guide.replaceAll("<wbr>", "").match(/<code>([a-f0-9]{64})<\/code>/)[1];
+    assert.ok(file.links.some(l => l.href === download));
+    assert.ok(words(file).includes(digest));
+    assert.match(words(install), /internal storage/i);
+    assert.match(words(install), /System Updates → Update/);
+    assert.match(words(confirm), /8\.3\.3\.7/);
+    assert.match(words(confirm), /Edit choices/);
+});
+
+test("opting in puts all stock update steps first and resumes other goals on the confirmed firmware", () => {
+    const goals = ["play", "backup", "debloat", "ads", "updates"];
+    const route = plan([...goals, "firmware-8337"], "hd10-2023", "8.3.3.6", "tool");
+    const steps = ids(route);
+    assert.deepEqual(steps.slice(0, localUpdateIds.length), localUpdateIds);
+    assert.equal(steps[localUpdateIds.length], "computer");
+    assert.ok(!steps.includes("firmware-order"));
+    assert.match(words(route.find(s => s.id === "connect")), /Fire OS 8\.3\.3\.7/);
+    const ordered = ["backup", "updates", "play", "debloat", "ads-desktop", "finish"];
+    assert.deepEqual(steps.filter(id => ordered.includes(id)), ordered);
+    assert.match(words(route.find(s => s.id === "play")), /offline/i);
+    assert.match(words(route.at(-1)), /sign in/i);
+    assert.deepEqual(ids(plan(["firmware-8337", "animations"], "hd10-2023", "8.3.3.6")), [...localUpdateIds, "animations"]);
+    const skip = plan(goals, "hd10-2023", "8.3.3.6", "tool");
+    assert.ok(!ids(skip).some(id => localUpdateIds.includes(id)));
+    assert.match(words(skip.find(s => s.id === "connect")), /Fire OS 8\.3\.3\.6/);
 });
 
 test("backup precedes changes and SDK verification is shared only by install goals", () => {
@@ -141,7 +197,7 @@ test("every offered choice produces bounded readable sections and valid handbook
     const content = path.join(__dirname, "../content");
     assert.equal(new Set(models.map(m => m.id)).size, models.length);
     assert.equal(new Set(goals.map(g => g.id)).size, goals.length);
-    for (const model of models) for (const version of ["", "5.3.7.3", "6.3.1.5", "7.3.3.1", "8.3.3.8"]) {
+    for (const model of models) for (const version of ["", "5.3.7.3", "6.3.1.5", "7.3.3.1", "8.3.3.6", "8.3.3.8"]) {
         const route = plan(goals.map(g => g.id), model.id, version);
         const tool = plan(["ads"], model.id, version, "tool");
         assert.equal(new Set(ids(route)).size, route.length);

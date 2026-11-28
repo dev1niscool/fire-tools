@@ -149,8 +149,19 @@
   border-color: var(--accent);
 }
 
+.tutorial-goal:has(input:disabled),
+.tutorial-goal input:disabled {
+  cursor: default;
+}
+
+.tutorial-goal:has(input:disabled) {
+  background: var(--panel);
+  border-color: var(--line);
+  color: var(--muted);
+}
+
 @media (hover: hover) {
-  .tutorial-goal:hover {
+  .tutorial-goal:hover:has(input:enabled) {
     border-color: #a0bdd7;
   }
 }
@@ -212,6 +223,7 @@
 
 .tutorial .tutorial-steps li {
   padding-left: .35em;
+  overflow-wrap: anywhere;
 }
 
 .tutorial .tutorial-steps li + li {
@@ -234,6 +246,16 @@
 
 .tutorial-check strong {
   color: #9fe2cb;
+}
+
+.tutorial-confirm {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  width: fit-content;
+  font-weight: 650;
+  cursor: pointer;
 }
 
 .tutorial-links,
@@ -280,8 +302,15 @@
   margin-inline-end: auto;
 }
 
-.tutorial .tutorial-primary:hover {
+.tutorial .tutorial-primary:enabled:hover {
   background: #b1e5ff;
+}
+
+.tutorial .tutorial-primary:disabled {
+  background: #273c4c;
+  border-color: var(--line);
+  color: var(--muted);
+  cursor: default;
 }
 
 .tutorial .tutorial-secondary:hover {

@@ -25,6 +25,7 @@
     { id: "debloat", label: "Debloat Amazon apps", description: "Review preinstalled apps and disable the ones you choose." },
     { id: "ads", label: "Remove lock-screen ads", description: "Check Amazon’s removal option and Fire OS limits." },
     { id: "updates", label: "Manage firmware updates", description: "Inspect the updater and review what can be disabled." },
+    { id: "firmware-8337", label: "Update to Fire OS 8.3.3.7", description: "Install Amazon’s update over USB before your other tasks." },
     { id: "animations", label: "Speed up animations", description: "Shorten menus and transitions on the tablet." },
     { id: "backup", label: "Back up settings", description: "Save a copy of settings and the installed-app list." },
     { id: "sideload", label: "Install other APKs", description: "Review and install a folder of standalone Android apps." },
@@ -32,8 +33,15 @@
   ];
 
   const apiLevels = { 6: 25, 7: 28, 8: 30 };
+  const targetFirmware = "8.3.3.7";
+  const targetParts = targetFirmware.split(".").map(Number);
   const link = (label, href) => ({ label, href });
   const section = (id, title, intro, steps, check, links) => ({ id, title, intro, steps, check, links });
+
+  function versionParts(firmware) {
+    return typeof firmware === "string" && /^\d{1,3}(?:\.\d{1,3}){1,3}$/.test(firmware)
+      ? firmware.split(".").map(Number) : [];
+  }
 
   function compareBuilds(parts, target) {
     for (let i = 0; i < target.length; i++) {
@@ -41,6 +49,48 @@
     }
     return 0;
   }
+
+  function firmwareUpdateStatus(modelId, firmware) {
+    if (modelId !== "hd10-2023") return "other";
+    const parts = versionParts(firmware);
+    if (parts.length !== 4) return "unknown";
+    if (parts[0] !== 8) return "other";
+    const difference = compareBuilds(parts, targetParts);
+    if (difference === 0) return "installed";
+    return difference < 0 ? "available" : "newer";
+  }
+
+  const firmwareUpdate = [
+    section("fw8337-prepare", "Prepare your Fire HD 10 for the update",
+      "Start with the tablet offline. You can download the update on your computer while the tablet’s Wi-Fi stays off.",
+      ["On a new tablet, choose offline setup if offered. Stop if setup requires an online update.",
+        "Open Settings → Device Options → About Fire Tablet. Confirm Fire HD 10 (2023, 13th generation), model KFTUWI. Under System Updates, check that your installed Fire OS 8 version is earlier than 8.3.3.7.",
+        "Stop if another update is queued. Otherwise, back up important files to your computer and charge the tablet. Leave the stock updater enabled."],
+      "You’ve checked the model and current version, saved your files and kept the tablet offline.",
+      [link("Check your model and firmware", "hd10-8337.html#start-here")]),
+    section("fw8337-package", "Download and verify Fire OS 8.3.3.7",
+      "Use your computer to get the 1.45 GB update for the 2023 Fire HD 10.",
+      ["Download the Amazon package linked below. Keep the .bin file intact.",
+        "Use the checksum instructions for your computer to calculate the file’s SHA-256.",
+        "Compare the result with 4613c5f88f5bf4d6d6ee581d8fc887648b974e1d0ae23b515190327a8d17d084. Stop if any character differs."],
+      "The downloaded file matches the expected SHA-256.",
+      [link("Download 8.3.3.7 from Amazon (.bin)", "https://fireos-tablet-src.s3.us-west-2.amazonaws.com/01DwywcfWtLerpg32xZ18Mg25Z/update-kindle-Fire_HD10_13th_Gen-RS8337_user_3186_0029461607044.bin"),
+        link("Checksum instructions for Windows, macOS and Linux", "hd10-8337.html#package")]),
+    section("fw8337-install", "Install the verified file over USB",
+      "The tablet’s built-in updater handles the installation. USB debugging can stay off.",
+      ["With Wi-Fi off, unlock the tablet and connect a USB data cable. Tap the USB charging notification and choose Transfer files.",
+        "On your computer, open Fire → Internal storage. Copy the verified .bin directly there, alongside the Download folder. Wait for the copy to finish, then disconnect the cable.",
+        "Open Settings → Device Options → System Updates → Update. Stop if it only offers an online check, shows another version or rejects the file.",
+        "Start the local update and let the tablet finish restarting."],
+      "The tablet has finished restarting.",
+      [link("Amazon’s manual USB instructions", "https://digprjsurvey.amazon.com/csad/help/node/GVKSH9UN8NKKU4PL"), link("Local installation guide", "hd10-8337.html#install")]),
+    section("fw8337-confirm", "Confirm Fire OS 8.3.3.7 on the tablet",
+      "Keep the tablet offline while you check the result.",
+      ["After the restart, open Settings → Device Options → System Updates and read the installed version.",
+        "Continue only if it shows 8.3.3.7. If it shows a different version, stop and choose Edit choices to enter the version you see."],
+      "Going online can bring a newer update. If you want to stay on this version, review the updater controls before reconnecting.",
+      [link("Review future updates", "hd10-8337.html#future-updates")]),
+  ];
 
   function restrictionNotice(parts, firmware) {
     const major = parts[0];
@@ -55,10 +105,9 @@
     if (parts.length < 4) {
       steps.push("Read the full version in Settings → Device Options → System Updates. Choose Edit choices and enter all four numbers before deciding whether the package applies.");
     } else {
-      const difference = compareBuilds(parts, [8, 3, 3, 7]);
+      const difference = compareBuilds(parts, targetParts);
       if (difference < 0) {
-        steps.push("You can keep your current firmware. If you want 8.3.3.7, back up important files and follow the stock USB update guide while the tablet is offline. Leave its updater enabled until installation finishes.",
-          "After the restart, confirm 8.3.3.7 in System Updates. Choose Edit choices and enter the installed version to rebuild your guide.");
+        steps.push("Continue on Fire OS " + firmware + ". If you decide to update first, choose Edit choices and select Update to Fire OS 8.3.3.7.");
       } else if (difference === 0) {
         steps.push("You already have Fire OS 8.3.3.7. Skip the firmware installation.");
       } else {
@@ -145,7 +194,7 @@
   }
 
   const backup = section("backup", "Save your settings and app list",
-    "Do this before the other changes in your guide. This backup covers supported settings and package states.",
+    "Save the current settings and package states before making any changes in Fire Tools.",
     ["Open Tools → Backup and restore → Back up settings and package inventory.",
       "Enter the full path of a new folder on the computer. Choose Review, check the destination and tablet, then Confirm and run.",
       "Open the resulting folder and look for settings.json and packages.json. For photos or downloads, use Copy shared-storage folder separately."],
@@ -251,11 +300,12 @@
     "You have checked the results and know where to find saved recovery information.",
     [link("Find your undo files", "resources.html#undo-files")]);
 
-  function build({ model: modelId, firmware = "", goals: goalIds = [], adsMethod = "amazon" }) {
+  function build({ model: modelId, firmware: startingFirmware = "", goals: goalIds = [], adsMethod = "amazon" }) {
     const model = models.find(item => item.id === modelId);
     const selected = new Set(goalIds);
-    const parts = typeof firmware === "string" && /^\d{1,3}(?:\.\d{1,3}){1,3}$/.test(firmware)
-      ? firmware.split(".").map(Number) : [];
+    const installFirmware = selected.has("firmware-8337") && firmwareUpdateStatus(modelId, startingFirmware) === "available";
+    const firmware = installFirmware ? targetFirmware : startingFirmware;
+    const parts = versionParts(firmware);
     const major = parts[0];
     const api = apiLevels[major];
     const compatible = Boolean(api && model && model.families.includes(major));
@@ -263,26 +313,26 @@
     const needsComputer = useAdsTool || ["backup", "play", "debloat", "updates", "sideload"].some(id => selected.has(id));
     const wantsDesktop = needsComputer || selected.has("dns");
     const desktop = compatible && (needsComputer || (selected.has("dns") && api >= 28));
-    const showFirmwareOrder = compatible && model.id === "hd10-2023" &&
+    const planOffline = compatible && model.id === "hd10-2023" &&
       (useAdsTool || ["play", "debloat", "updates"].some(id => selected.has(id)));
     const restricted = compatible ? restrictionNotice(parts, firmware) : "";
-    const route = [];
+    const route = installFirmware ? [...firmwareUpdate] : [];
     if (!compatible && wantsDesktop) {
       const limits = eligibility(model, major, firmware);
       if (useAdsTool) limits.links.push(link("Optional Amazon account method", "ads.html#amazon"));
       route.push(limits);
     }
     if (desktop) {
-      route.push(selected.has("updates") || showFirmwareOrder
+      route.push(selected.has("updates") || planOffline
         ? { ...computer, intro: computer.intro + " If you want to delay an update, your tablet can stay off Wi-Fi during USB setup while your computer downloads the tools." }
         : computer);
       // Changing a tool path in the desktop clears the selected tablet.
       if (selected.has("play") || selected.has("sideload")) route.push(apkTools);
       route.push(usb, connect(model, firmware, api));
       if (selected.has("backup")) route.push(backup);
-      if (showFirmwareOrder) route.push(firmwareOrder(parts, firmware));
+      if (planOffline && !installFirmware) route.push(firmwareOrder(parts, firmware));
       if (selected.has("updates")) route.push(updates(model, restricted));
-      if (selected.has("play")) route.push(playFiles(model, api), play(showFirmwareOrder));
+      if (selected.has("play")) route.push(playFiles(model, api), play(planOffline));
       if (selected.has("sideload")) route.push(sideload);
       if (selected.has("debloat")) route.push(debloat(restricted));
       if (useAdsTool) route.push(adsDesktop(restricted));
@@ -292,12 +342,12 @@
     if (selected.has("ads") && !useAdsTool) route.push(accountAds(restricted));
     if (selected.has("animations")) route.push(animations);
     if (desktop) {
-      route.push(showFirmwareOrder && selected.has("play")
+      route.push(planOffline && selected.has("play")
         ? { ...finish, steps: [...finish.steps, "When you are ready to go online, connect to Wi-Fi, open Play Store and sign in. Amazon may also download a firmware update."] }
         : finish);
     }
     return route;
   }
 
-  globalThis.FireTutorialRoute = { models: models.map(({id, label}) => ({id, label})), goals, build };
+  globalThis.FireTutorialRoute = { models: models.map(({id, label}) => ({id, label})), goals, build, firmwareUpdateStatus };
 })();
