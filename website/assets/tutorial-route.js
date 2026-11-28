@@ -156,7 +156,9 @@
       [link("Ad controls and undo", "ads.html#desktop-controls"), link("Amazon’s separate option", "ads.html#amazon")]);
   }
 
-  function updates(restricted) {
+  function updates(model, restricted) {
+    const links = [link("Updater limits and instructions", "updates.html#disable"), link("Allow updates again", "updates.html#restore")];
+    if (model.id === "hd10-2023") links.push(link("Fire OS 8.3.3.7 local update guide", "hd10-8337.html"));
     return section("updates", "Inspect the firmware updater",
       restricted + "Disabling updater packages may delay security fixes. You can stop after reading their states.",
       ["Open System updates → Read updater states. Look for enabled system updater packages. If none qualify, leave them as they are.",
@@ -164,7 +166,7 @@
         "Choose Read updater states again. Already-downloaded updates or other update routes may still run.",
         "To undo, use Review last package undo while the updater changes are still the last saved batch. To enable an individual row, use Review enable."],
       "Record the state of each updater. A disabled row confirms only that package’s state for the owner.",
-      [link("Updater limits and instructions", "updates.html#disable"), link("Allow updates again", "updates.html#restore")]);
+      links);
   }
 
   const animations = section("animations", "Shorten the tablet’s animations",
@@ -248,7 +250,7 @@
       if (selected.has("play") || selected.has("sideload")) route.push(apkTools);
       route.push(usb, connect(model, firmware, api));
       if (selected.has("backup")) route.push(backup);
-      if (selected.has("updates")) route.push(updates(restricted));
+      if (selected.has("updates")) route.push(updates(model, restricted));
       if (selected.has("play")) route.push(playFiles(model, api), play);
       if (selected.has("sideload")) route.push(sideload);
       if (selected.has("debloat")) route.push(debloat(restricted));

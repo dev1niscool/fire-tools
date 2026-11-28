@@ -90,6 +90,17 @@ test("abbreviated builds request the full firmware before interpreting restricti
     assert.ok(!words(updates).includes("v46 flags"));
 });
 
+test("the 8.3.3.7 package guide is linked only in the 2023 HD 10 updater section", () => {
+    const matches = route => route.filter(s => s.links.some(l => l.href === "hd10-8337.html"));
+    for (const version of ["8.3.3.6", "8.3.3.7", "8.3.3.8"]) {
+        assert.deepEqual(ids(matches(plan(["play", "updates"], "hd10-2023", version))), ["updates"]);
+    }
+    assert.deepEqual(matches(plan(["play"])), []);
+    for (const [model, version] of [["hd10-2021", "7.3.3.1"], ["max11-2023", "8.3.3.6"], ["unknown", "8.3.3.7"]]) {
+        assert.deepEqual(matches(plan(["updates"], model, version)), []);
+    }
+});
+
 test("backup precedes changes and SDK verification is shared only by install goals", () => {
     assert.deepEqual(ids(plan(["debloat", "backup"])), ids(plan(["backup", "debloat", "backup"])));
     const route = ids(plan(["debloat", "backup"]));

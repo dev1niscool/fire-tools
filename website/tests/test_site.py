@@ -22,7 +22,7 @@ SITE_URL = "https://dev1niscool.github.io/fire-tools/"
 PAGES = {
     "index.html", "setup.html", "tutorial.html", "browser.html", "compatibility.html", "google-play.html",
     "ads.html", "apps.html", "tools.html", "resources.html", "firmware.html", "animations.html",
-    "apkmirror.html", "drivers.html", "updates.html",
+    "apkmirror.html", "drivers.html", "updates.html", "hd10-8337.html",
 }
 
 
@@ -121,6 +121,13 @@ class HandbookTests(unittest.TestCase):
 
     def test_build_emits_all_handbook_pages(self):
         self.assertFalse(PAGES - self.pages.keys(), f"Missing pages: {PAGES - self.pages.keys()}")
+
+    def test_hd10_local_update_points_to_the_verified_full_package(self):
+        guide = self.pages["hd10-8337.html"]
+        fixed_url = ("https://fireos-tablet-src.s3.us-west-2.amazonaws.com/01DwywcfWtLerpg32xZ18Mg25Z/"
+                     "update-kindle-Fire_HD10_13th_Gen-RS8337_user_3186_0029461607044.bin")
+        self.assertEqual([url for url in guide.links if urlsplit(url).path.endswith(".bin")], [fixed_url])
+        self.assertIn("4613c5f88f5bf4d6d6ee581d8fc887648b974e1d0ae23b515190327a8d17d084", guide.labels["code"])
 
     def test_every_page_has_a_share_card_for_its_own_url(self):
         image = "assets/share-card.jpg"

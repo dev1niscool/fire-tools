@@ -1,0 +1,47 @@
+<section id="start-here">
+  <h2>Check the tablet before connecting to Wi-Fi</h2>
+  <p>This package is for the <strong>Fire HD 10 (2023, 13th generation)</strong>, model <code>KFTUWI</code>. On a new tablet, choose the offline setup option if offered. If setup requires an online update, stop here. Amazon can download a newer build as soon as the tablet connects. <a href="https://developer.amazon.com/docs/device-specs/ft-device-specifications-firehd-models?v=firehd10_2023">Model specifications</a> · <a href="https://digprjsurvey.amazon.com/csad/help/node/G2JXLC4L34GX73TE">Amazon’s current updates</a>.</p>
+  <p>With Wi-Fi off, open <strong>Settings → Device Options</strong>. Check the generation under <strong>About Fire Tablet</strong> and the installed version under <strong>System Updates</strong>.</p>
+  <ul>
+    <li><strong>Earlier than 8.3.3.7 on this model?</strong> Back up important files and charge the tablet before continuing. Stop if another update is already queued to install.</li>
+    <li><strong>Already on 8.3.3.7?</strong> Skip the download and go to <a href="#future-updates">future updates</a>.</li>
+    <li><strong>On 8.3.3.8 or newer, or using a different model?</strong> Stop here. This package rejects newer installed builds and other models. A factory reset cannot roll back Fire OS. <a href="https://www.amazonforum.com/s/question/0D54P00007fU7vVSAS/how-can-i-roll-back-to-previous-os?language=en_US">Amazon’s downgrade guidance</a>.</li>
+  </ul>
+</section>
+
+<section id="package">
+  <h2>Download and verify the update on your computer</h2>
+  <p><a href="https://fireos-tablet-src.s3.us-west-2.amazonaws.com/01DwywcfWtLerpg32xZ18Mg25Z/update-kindle-Fire_HD10_13th_Gen-RS8337_user_3186_0029461607044.bin"><strong>Download Fire OS 8.3.3.7 from Amazon</strong></a> (1.45 GB). This fixed link is the full <code>tungsten</code> build <code>RS8337/3186</code>. Keep the <code>.bin</code> file intact. <a href="https://ftvdb.com/firetablet/firmware/com.amazon.tungsten.android.os/ffd0cfa86f6ea743daeb25ebdbab25dd-29461607044-fire-os-8-3-3-7-rs8337-3186-2025-09-23/">Build record</a>.</p>
+  <p>Compare your file’s SHA-256 with the value below before copying it. Stop if any character differs. <a href="https://github.com/fireos-archive/fireos-archive/blob/610b9502c6a941482c4fbbccd4db0e8d2bd5c405/README.md#fire-hd-10-13th-gen">Independent checksum record</a>.</p>
+  <p><code>4613c5f88f5bf4d6<wbr>d6ee581d8fc88764<wbr>8b974e1d0ae23b51<wbr>5190327a8d17d084</code></p>
+  <details><summary>How to check the SHA-256</summary>
+    <p>Open PowerShell or a terminal in the folder containing the downloaded file. Use the command for your computer.</p>
+    <p><strong>Windows PowerShell</strong></p>
+    <pre><code>Get-FileHash -Algorithm SHA256 .\update-kindle-Fire_HD10_13th_Gen-RS8337_user_3186_0029461607044.bin</code></pre>
+    <p><strong>macOS</strong></p>
+    <pre><code>shasum -a 256 update-kindle-Fire_HD10_13th_Gen-RS8337_user_3186_0029461607044.bin</code></pre>
+    <p><strong>Linux</strong></p>
+    <pre><code>sha256sum update-kindle-Fire_HD10_13th_Gen-RS8337_user_3186_0029461607044.bin</code></pre>
+    <p>Uppercase and lowercase letters in the digest are equivalent.</p>
+  </details>
+</section>
+
+<section id="install">
+  <h2>Install the local file over USB</h2>
+  <ol class="steps">
+    <li>Keep the tablet offline. Connect it to your computer with a USB data cable. Unlock it, tap the USB charging notification and select <strong>Transfer files</strong>.</li>
+    <li>On your computer, open <strong>Fire → Internal storage</strong>. Copy the verified <code>.bin</code> directly there, alongside folders such as <strong>Download</strong>. Wait for the copy to finish, then disconnect the cable.</li>
+    <li>On the tablet, open <strong>Settings → Device Options → System Updates → Update</strong>. If it only offers an online check, reports a different version or rejects the package, stop. Let the tablet finish restarting, then check that System Updates shows <strong>8.3.3.7</strong>.</li>
+  </ol>
+  <p>The stock updater performs the installation. USB debugging is only needed for the Fire Tools controls below. We verified the full download’s SHA-256, update signature and target build. Physical installation remains untested. <a href="https://digprjsurvey.amazon.com/csad/help/node/GVKSH9UN8NKKU4PL">Amazon’s manual USB update instructions</a>.</p>
+</section>
+
+<section id="future-updates">
+  <h2>Before reconnecting to Wi-Fi</h2>
+  <p><strong>Fire Tools cannot guarantee that an online tablet will stay on 8.3.3.7.</strong> If keeping this version is essential, leave the tablet offline. An update downloaded earlier may still install.</p>
+  <ol class="steps">
+    <li>On the primary adult profile, <a href="setup.html#usb">enable USB debugging and select the tablet</a>. In desktop Fire Tools, open <strong>System updates → Read updater states</strong>.</li>
+    <li>Select the eligible enabled updater packages, choose <strong>Review disable… → Confirm and run</strong>, then read their states again. If Fire OS refuses or any updater stays enabled, treat automatic updates as active.</li>
+  </ol>
+  <p>A disabled state confirms the change for those packages. Other update routes may remain available, and blocking updates can delay security patches. <a href="updates.html#restore">Restore the updater packages</a>.</p>
+</section>
