@@ -1,0 +1,115 @@
+<div class="web-tools" id="web-tools">
+  <div class="web-notice">
+    <strong>Experimental</strong>
+    <p>This page can make real changes over USB. It has been tested with simulated tablets. Physical Fire tablet behavior, Google sign-in and ad removal still need hardware testing. <a href="firmware.html" target="_blank" rel="noopener noreferrer">Check your firmware</a>.</p>
+  </div>
+
+  <p id="web-fallback">Enable JavaScript in desktop Chrome to use the USB tools. The <a href="tutorial.html" target="_blank" rel="noopener noreferrer">guided setup</a> also links to written instructions.</p>
+
+  <div id="web-app" hidden>
+    <section class="web-panel" aria-labelledby="web-connection-heading">
+      <div class="web-panel-head">
+        <h2 id="web-connection-heading">Tablet connection</h2>
+        <span class="web-state" id="web-state">Disconnected</span>
+      </div>
+      <p id="web-connection-help">Enable USB debugging on the tablet, plug it into this computer with a data cable, then select it in Chrome.</p>
+      <div class="web-buttons">
+        <button class="web-primary" type="button" id="web-connect">Connect tablet</button>
+        <button type="button" id="web-disconnect" hidden>Disconnect</button>
+      </div>
+      <p id="web-message" role="status"></p>
+      <dl class="web-identity" id="web-identity" hidden></dl>
+      <p id="web-permission" hidden></p>
+      <details class="web-help">
+        <summary>USB setup and troubleshooting</summary>
+        <ol>
+          <li>On the primary adult profile, open <strong>Settings → Device Options → About Fire Tablet</strong>. Tap <strong>Serial Number</strong> seven times.</li>
+          <li>Return to <strong>Device Options → Developer Options</strong> and enable <strong>USB debugging</strong> (sometimes <strong>Enable ADB</strong>). Keep the tablet unlocked.</li>
+          <li>Choose <strong>Connect tablet</strong>, pick your Fire in Chrome, then approve the USB debugging prompt on the tablet. Leave <strong>Always allow</strong> unchecked. Finish your work in this tab.</li>
+        </ol>
+        <p>If Chrome cannot open the tablet, close other ADB tools and tabs, reconnect the cable, then try again. Windows may need an ADB driver and Linux may need USB permissions. <a href="drivers.html" target="_blank" rel="noopener noreferrer">USB driver guide</a>.</p>
+      </details>
+    </section>
+
+    <section class="web-panel web-workspace" aria-labelledby="web-workspace-heading">
+      <h2 id="web-workspace-heading">Tablet tools</h2>
+      <div class="web-tabs" role="tablist" aria-label="Browser tools">
+        <button role="tab" type="button" id="web-tab-google" aria-controls="web-panel-google" aria-selected="true">Google Play</button>
+        <button role="tab" type="button" id="web-tab-changes" aria-controls="web-panel-changes" aria-selected="false" tabindex="-1">Apps &amp; settings</button>
+        <button role="tab" type="button" id="web-tab-device" aria-controls="web-panel-device" aria-selected="false" tabindex="-1">Device info</button>
+      </div>
+
+      <div role="tabpanel" id="web-panel-google" aria-labelledby="web-tab-google" class="web-tab-panel">
+        <h3>Install Google Play</h3>
+        <p>Save the <a href="google-play.html#choose-files" target="_blank" rel="noopener noreferrer">audited APK builds</a> on your computer. For a new installation, choose Google Services Framework, Google Play services and Play Store together. Add Account Manager for the four-file setup. The browser checks exact file hashes locally. <a href="apkmirror.html#check-files" target="_blank" rel="noopener noreferrer">About the scan records</a>.</p>
+        <label class="web-label" for="web-google-files">Standalone APK files</label>
+        <input id="web-google-files" type="file" accept=".apk" multiple aria-describedby="web-files-hint">
+        <small id="web-files-hint">You can check files before connecting. The reference Play services build requires Android 11 (API 30) or later and ARM64.</small>
+        <div class="web-buttons">
+          <button type="button" id="web-inspect">Check selected files</button>
+          <button type="button" class="web-primary" id="web-google-review">Review installation</button>
+        </div>
+        <div id="web-apk-results" hidden>
+          <h4>File checks</h4>
+          <ul class="web-results" id="web-apk-list"></ul>
+        </div>
+      </div>
+
+      <div role="tabpanel" id="web-panel-changes" aria-labelledby="web-tab-changes" class="web-tab-panel" hidden>
+        <h3>Review a tablet change</h3>
+        <label class="web-label" for="web-action">Action</label>
+        <select id="web-action" aria-describedby="web-action-help"></select>
+        <p id="web-action-help"></p>
+        <div class="web-buttons"><button type="button" class="web-primary" id="web-change-review">Preview action</button></div>
+        <p class="web-footnote">For undo, reconnect the same tablet using this browser profile. Private browsing and clearing site data can erase recovery records. <a href="apps.html#debloat" target="_blank" rel="noopener noreferrer">Compare debloat presets</a> · <a href="ads.html#firmware" target="_blank" rel="noopener noreferrer">Ad-removal limits</a> · <a href="updates.html#firmware-limits" target="_blank" rel="noopener noreferrer">Update limits</a>.</p>
+      </div>
+
+      <div role="tabpanel" id="web-panel-device" aria-labelledby="web-tab-device" class="web-tab-panel" hidden>
+        <h3>Read tablet information</h3>
+        <p>Check installed packages, device health or selected settings. Download a JSON snapshot to keep a local record.</p>
+        <div class="web-buttons">
+          <button type="button" id="web-read-report">Read device report</button>
+          <button type="button" id="web-inventory">List installed apps</button>
+          <button type="button" id="web-export">Download snapshot</button>
+        </div>
+        <details class="web-help web-file-backup">
+          <summary>Save one shared-storage file</summary>
+          <p>Copy one file (up to 32 MiB) from the primary profile to this computer.</p>
+          <label class="web-label" for="web-folder">Tablet folder</label>
+          <select id="web-folder"><option>Download</option><option>DCIM</option><option>Pictures</option></select>
+          <label class="web-label" for="web-path">Path inside that folder</label>
+          <input type="text" id="web-path" placeholder="e.g. Camera/photo.jpg" autocomplete="off" spellcheck="false">
+          <div class="web-buttons"><button type="button" id="web-file-read">Read file</button></div>
+          <div id="web-file-preview" hidden>
+            <p id="web-file-meta" class="web-results"></p>
+            <div class="web-buttons"><button type="button" class="web-primary" id="web-file-save">Save file to computer</button></div>
+          </div>
+        </details>
+        <div id="web-device-results" hidden>
+          <h4 id="web-result-heading"></h4>
+          <pre id="web-report" tabindex="0"></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="web-panel web-review" id="web-review" aria-labelledby="web-review-heading" hidden>
+      <h2 id="web-review-heading" tabindex="-1">Review</h2>
+      <p id="web-review-device"></p>
+      <ul id="web-preview-details" class="web-results"></ul>
+      <ul id="web-preview-warnings" class="web-warnings"></ul>
+      <div class="web-buttons">
+        <button type="button" class="web-primary" id="web-confirm">Confirm and apply</button>
+        <button type="button" id="web-cancel">Cancel</button>
+      </div>
+    </section>
+
+    <section class="web-panel web-activity" id="web-activity" aria-labelledby="web-activity-heading" hidden>
+      <h2 id="web-activity-heading">Activity</h2>
+      <details id="web-log-box">
+        <summary>Session log</summary>
+        <ol id="web-log"></ol>
+      </details>
+    </section>
+  </div>
+  <p class="web-desktop">For other APK builds, full shared-folder backups and the complete tool catalog, use <a href="setup.html" target="_blank" rel="noopener noreferrer">desktop Fire Tools</a>. <a href="tutorial.html" target="_blank" rel="noopener noreferrer">Open guided setup</a>.</p>
+</div>

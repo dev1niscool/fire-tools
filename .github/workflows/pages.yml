@@ -34,6 +34,24 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Rebuild and verify the pinned browser USB adapter
+        working-directory: website/browser-transport
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+          npm run build
+          git diff --exit-code -- ../assets/adb-transport.js
+      - name: Test experimental browser tools
+        run: node --test website/tests/browser-*.test.mjs
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Exercise the browser UI with a simulated USB tablet
+        timeout-minutes: 5
+        run: |
+          python -m venv "$RUNNER_TEMP/fire-tools-browser-test"
+          "$RUNNER_TEMP/fire-tools-browser-test/bin/pip" install --only-binary=:all: --require-hashes -r website/tests/webusb/requirements-ci.txt
+          CHROMIUM_PATH="$(command -v google-chrome)" "$RUNNER_TEMP/fire-tools-browser-test/bin/python" website/tests/webusb/smoke.py
       - name: Build handbook
         run: python3 website/build.py --output _site
       - name: Check handbook integrity

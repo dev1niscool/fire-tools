@@ -18,7 +18,7 @@ from open_fire_toolkit.apk_checks import SCANNED_FILES
 
 SITE_URL = "https://dev1niscool.github.io/fire-tools/"
 PAGES = {
-    "index.html", "setup.html", "tutorial.html", "compatibility.html", "google-play.html",
+    "index.html", "setup.html", "tutorial.html", "browser.html", "compatibility.html", "google-play.html",
     "ads.html", "apps.html", "tools.html", "resources.html", "firmware.html", "animations.html",
     "apkmirror.html", "drivers.html", "updates.html",
 }
@@ -117,6 +117,17 @@ class HandbookTests(unittest.TestCase):
                 self.assertEqual(found, [])
                 self.assertNotIn("assets/tutorial.css", page.stylesheets)
         self.assertIn("tutorial.html", self.pages["index.html"].links)
+
+    def test_usb_tab_is_self_contained_and_reachable(self):
+        page = self.pages["browser.html"]
+        self.assertIn(("assets/browser-ui.mjs", False), page.scripts)
+        self.assertIn("assets/browser-tools.css", page.stylesheets)
+        self.assertIn("browser.html", self.pages["index.html"].links)
+        html = (self.site / "browser.html").read_text(encoding="utf-8")
+        self.assertIn('type="module" src="assets/browser-ui.mjs"', html)
+        self.assertIn("connect-src 'none'", html)
+        self.assertFalse(list(self.site.rglob("*.apk")))
+        self.assertFalse((self.site / "browser-transport" / "node_modules").exists())
 
     def test_published_audit_digests_match_runtime_scan_records_and_signers(self):
         published = {value for value in self.pages["apkmirror.html"].labels["code"]

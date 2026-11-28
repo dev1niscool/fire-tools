@@ -4,7 +4,11 @@ An independent, MIT-licensed desktop and command-line toolkit for Amazon Fire ta
 
 [Read the Fire tablet field guide](https://dev1niscool.github.io/fire-tools/) for setup, model compatibility and step-by-step tool guides.
 
-Use Windows or Linux for changes on a tablet. macOS supports the offline demo and local checks. This release is designed for Fire tablets running Android API 23 or later. Device changes require the primary adult (owner) profile. Compatibility on a physical tablet, including the Fire HD 10, remains unverified.
+The desktop app supports tablet changes on Windows and Linux. Its macOS launcher supports the offline demo and local checks. This release is designed for Fire tablets running Android API 23 or later. Device changes require the primary adult (owner) profile. Compatibility on a physical tablet, including the Fire HD 10, remains unverified.
+
+## Use Fire Tools in Chrome
+
+Open **Browser tools (experimental)** on a computer, enable USB debugging on the Fire tablet and choose **Connect tablet**. Chrome handles the USB connection directly. You can preview debloat or ad changes, install the exact audited Google APKs, and save a tablet report. The page identifies its supported operations and firmware limits. [Open browser tools](https://dev1niscool.github.io/fire-tools/browser.html)
 
 ## Checking your download
 

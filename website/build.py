@@ -32,6 +32,7 @@ class Page:
 PAGES = (
     Page("index", "Overview", "A field guide to setting up and managing Amazon Fire tablets.", "book", "Get started", "start home documentation"),
     Page("tutorial", "Guided setup", "Choose your tablet, Fire OS version and goals. Follow your instructions one section at a time.", "book", "Get started", "tutorial walkthrough personalized wizard beginner step by step next model firmware Google Play ads debloat"),
+    Page("browser", "Browser tools", "Connect your Fire tablet directly to desktop Chrome over USB. This experimental version runs on this page.", "plug", "Get started", "experimental WebUSB browser only ADB Google Play install APK debloat ads animations updates DNS undo inventory"),
     Page("setup", "Setup", "Install Fire Tools on your computer and connect your tablet over USB.", "plug", "Get started", "install launcher windows linux macos demo adb driver usb debugging developer options"),
     Page("drivers", "USB drivers", "Find out whether Windows needs an ADB driver and what the driver audit verified.", "plug", "Get started", "windows 10 11 linux mac usb mtp rsa unauthorized driver installation amazon adb signature catalog dpinst xda"),
     Page("compatibility", "Tablet models", "Identify your Fire tablet generation, Android API level and processor architecture.", "tablet", "Get started", "compatibility model generation android sdk abi hd 10 hd 8 max 11 fire 7"),
@@ -46,6 +47,18 @@ PAGES = (
     Page("resources", "Source & safety", "Inspect the code, read the audit and find the original project references.", "code", "Project", "github security malware viruses privacy trust license resources xda forum issue source code"),
 )
 BY_SLUG = {page.slug: page for page in PAGES}
+
+
+PAGE_ASSETS = {
+    "tutorial": '<link rel="stylesheet" href="assets/tutorial.css">\n'
+                '  <script defer src="assets/tutorial-route.js"></script>\n'
+                '  <script defer src="assets/tutorial.js"></script>',
+    "browser": '<link rel="stylesheet" href="assets/browser-tools.css">\n'
+               '  <script type="module" src="assets/browser-ui.mjs"></script>',
+}
+# The USB interface and the local APK reader need no network connection.
+BROWSER_POLICY = ("default-src 'none'; base-uri 'none'; form-action 'none'; "
+                  "script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'")
 
 
 def icon(name, size=20):
@@ -121,12 +134,9 @@ def build(output):
             description=escape(page.intro, quote=True), title=escape(page.title), group=page.group,
             repo=REPO, version=escape(version), desktop_nav=nav(page), mobile_nav=nav(page, mobile=True),
             contents=contents, search_links=search_links(),
-            page_assets=(
-                '<link rel="stylesheet" href="assets/tutorial.css">\n'
-                '  <script defer src="assets/tutorial-route.js"></script>\n'
-                '  <script defer src="assets/tutorial.js"></script>'
-                if page.slug == "tutorial" else ""
-            ),
+            page_assets=PAGE_ASSETS.get(page.slug, ""),
+            page_policy=(f'<meta http-equiv="Content-Security-Policy" content="{BROWSER_POLICY}">\n'
+                         '  <meta name="referrer" content="no-referrer">' if page.slug == "browser" else ""),
         )
         for name in ("github", "search", "external", "chevron", "menu", "close", "book", "shield"):
             variables[name] = icon(name, 18)
