@@ -12,6 +12,7 @@ from string import Template
 
 ROOT = Path(__file__).resolve().parent
 REPO = "https://github.com/dev1niscool/fire-tools"
+SITE_URL = "https://dev1niscool.github.io/fire-tools/"
 GROUPS = ("Get started", "Tool guides", "Project")
 
 
@@ -58,7 +59,7 @@ PAGE_ASSETS = {
 }
 # The USB interface and the local APK reader need no network connection.
 BROWSER_POLICY = ("default-src 'none'; base-uri 'none'; form-action 'none'; "
-                  "script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'")
+                  "script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; manifest-src 'self'; connect-src 'none'")
 
 
 def icon(name, size=20):
@@ -125,12 +126,15 @@ def search_links():
 def build(output):
     output.mkdir(parents=True, exist_ok=True)
     shutil.copytree(ROOT / "assets", output / "assets", dirs_exist_ok=True)
+    shutil.copyfile(ROOT / "site.webmanifest", output / "site.webmanifest")
     template = Template((ROOT / "layout.html").read_text(encoding="utf-8"))
     version = tomllib.loads((ROOT.parent / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
     for page in PAGES:
         contents = overview() if page.slug == "index" else article(page)
         variables = dict(
             browser_title="Fire Tools — Fire tablet field guide" if page.slug == "index" else f"{escape(page.title)} · Fire Tools",
+            site_url=SITE_URL, canonical_url=SITE_URL if page.slug == "index" else SITE_URL + page.url,
+            share_image_alt="Fire Tools, a field guide for Amazon Fire tablets, beside a tablet displaying blue contour lines.",
             description=escape(page.intro, quote=True), title=escape(page.title), group=page.group,
             repo=REPO, version=escape(version), desktop_nav=nav(page), mobile_nav=nav(page, mobile=True),
             contents=contents, search_links=search_links(),
