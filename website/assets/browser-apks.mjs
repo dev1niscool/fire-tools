@@ -1,4 +1,4 @@
-import { isStoredFile, writeStoredPack, readStoredPack } from "./browser-apk-library.mjs";
+import { addStoredPack, readStoredPack, withPackLock } from "./browser-apk-library.mjs";
 
 // These are whole-file identities from the project's SDK signer, manifest and
 // antivirus review. No APK or remotely supplied verification catalog is used.
@@ -40,10 +40,9 @@ async function inspect(files, stage) {
     }
     if (matches.has(record.package)) throw Error("Duplicate component: " + record.package);
     const match = {...record, filename: file.name};
-    // Disk selections can change. Snapshot their reviewed bytes before any device
-    // write. IndexedDB already provides immutable snapshots: another 218 MiB
-    // Play services Blob can exhaust Chrome's memory-backed private storage.
-    if (stage) match.blob = isStoredFile(file) ? file : new Blob([bytes], {type: "application/vnd.android.package-archive"});
+    // Retain the private array that was actually hashed. Creating another large
+    // Blob can exhaust the private Chrome profile's memory-backed Blob storage.
+    if (stage) match.bytes = new Uint8Array(bytes);
     matches.set(record.package, match);
   }
   return records.filter(row => matches.has(row.package)).map(row => matches.get(row.package));
@@ -55,27 +54,16 @@ export async function inspectApks(files) {
 
 // The reusable personal pack contains the four APKMirror reference variants.
 // The same verifier still handles optional individually selected sync adapters.
-async function verifyPersonalPack(files, snapshot = false) {
+async function verifyPersonalPack(files, stage = false) {
   const primary = records.filter(row => row.package === account || core.includes(row.package));
   if (!Array.isArray(files) || files.length !== primary.length || !primary.every(row =>
     files.some(file => file instanceof File && file.size === row.size))) {
     throw Error("Choose the four audited APKs: Account Manager, Services Framework, Play services and Play Store.");
   }
-  const checked = await inspect(files, snapshot);
-  return snapshot ? checked.map(row => new File([row.blob], row.package + ".apk",
-    {type: row.blob.type, lastModified: 0})) : files;
+  return inspect(files, stage);
 }
 
-export async function savePack(files, signal) {
-  signal?.throwIfAborted();
-  // Save an immutable snapshot of exactly the verified bytes. One transaction
-  // replaces the whole set, so a failed write leaves the previous set intact.
-  const verified = await verifyPersonalPack(files, true);
-  await writeStoredPack(verified, signal);
-}
-
-export async function loadPack(signal) {
-  const files = await readStoredPack(signal);
+async function checkedStoredPack(files, signal) {
   if (files === undefined) throw Error("No saved APK set. Choose the four files on your computer first.");
   if (!Array.isArray(files)) throw Error("The saved APK set is damaged. Forget it and choose the four files again.");
   try { await verifyPersonalPack(files); }
@@ -84,6 +72,25 @@ export async function loadPack(signal) {
   }
   signal?.throwIfAborted();
   return files;
+}
+
+export async function savePack(files, signal) {
+  return withPackLock("exclusive", async () => {
+    const checked = await verifyPersonalPack(files, true);
+    const existing = await readStoredPack(signal);
+    if (existing !== undefined) return checkedStoredPack(existing, signal);
+    // Chrome can persist a disk-backed File as a reference to its original
+    // path. Make independent Files from the verified bytes for the first save.
+    const snapshots = checked.map(row => new File([row.bytes], row.package + ".apk",
+      {type: "application/vnd.android.package-archive", lastModified: 0}));
+    await verifyPersonalPack(snapshots);
+    await addStoredPack(snapshots, signal);
+    return checkedStoredPack(await readStoredPack(signal), signal);
+  }, signal);
+}
+
+export async function loadPack(signal) {
+  return withPackLock("shared", async () => checkedStoredPack(await readStoredPack(signal), signal), signal);
 }
 
 function checkDevice(session, device) {
@@ -209,7 +216,7 @@ export async function previewGoogle(session, device, files) {
         if (version !== reviewed.actions[i].version) throw Error(apk.package + " changed since review. Check earlier results.");
         report("Installing " + apk.name + "…");
         try {
-          await session.install(apk.blob);
+          await session.install(apk.bytes);
           await verifyInstalled(session, apk);
           const active = await inventory(session, "--show-versioncode");
           if (active.get(apk.package) !== String(apk.code) || (await inventory(session, "-d")).has(apk.package)) {

@@ -73,12 +73,26 @@ async function readText(stream) {
     }
 }
 
+function inputStream(input) {
+    if (input instanceof Blob) return input.stream();
+    if (!(input instanceof Uint8Array)) throw new Error("Expected reviewed APK bytes.");
+    let offset = 0;
+    return new ReadableStream({
+        pull(controller) {
+            if (offset === input.byteLength) { controller.close(); return; }
+            const next = Math.min(offset + 64 * 1024, input.byteLength);
+            controller.enqueue(input.slice(offset, next));
+            offset = next;
+        }
+    });
+}
+
 export async function runShell(adb, args, input) {
     const proc = await adb.subprocess.shellProtocol.spawn([shellArgs(args)]);
     try {
         // Android reads exactly -S bytes for a streamed installation. Closing
         // stdin afterwards races successful package processes that already exited.
-        const feed = input ? input.stream().pipeTo(proc.stdin, {preventClose: true}) : undefined;
+        const feed = input ? inputStream(input).pipeTo(proc.stdin, {preventClose: true}) : undefined;
         const [out, err, code] = await Promise.all([
             readText(proc.stdout), readText(proc.stderr), proc.exited, feed
         ]);
@@ -149,10 +163,11 @@ function session(adb, raw, serial) {
         serial, disconnected, close,
         shell: args => run(30_000, () => runShell(adb, args)),
         async install(file) {
-            if (!(file instanceof Blob) || !validSize(file.size))
+            const size = file instanceof Uint8Array ? file.byteLength : file instanceof Blob ? file.size : 0;
+            if (!validSize(size))
                 throw new Error("Choose a nonempty reviewed APK of at most 256 MiB.");
             const reply = await run(300_000, () => runShell(adb,
-                ["cmd", "package", "install", "-r", "--user", "0", "-S", String(file.size)], file));
+                ["cmd", "package", "install", "-r", "--user", "0", "-S", String(size)], file));
             if (reply !== "Success")
                 throw new Error("Package installation was not confirmed. " + reply.slice(0, 500));
         },

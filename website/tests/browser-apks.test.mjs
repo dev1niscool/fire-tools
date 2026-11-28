@@ -48,8 +48,9 @@ class Tablet {
     assert.equal(limit, record[1]);
     return {size: record[1], sha256: record[2]};
   }
-  async install(blob) {
-    assert.equal(blob.size, calendar.size);
+  async install(bytes) {
+    assert.ok(bytes instanceof Uint8Array);
+    assert.equal(bytes.byteLength, calendar.size);
     this.writes.push(calendar.name);
     this.packages.set(calendar.name, [calendar.code, calendar.size, calendar.hash]);
   }

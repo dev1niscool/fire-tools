@@ -81,6 +81,12 @@ def change_ads(page, action, *, confirm):
     expect(page.locator("#web-change-review")).to_be_enabled()
 
 
+def connect_for_install(page):
+    page.locator("#web-connect").click()
+    expect(page.locator("#web-identity")).to_contain_text("KFTUWI")
+    page.evaluate("(sizes) => mockTablet.filesBySize = sizes", {str(k): v for k, v in SIZES.items()})
+
+
 def install_and_verify(page, package_ids):
     page.locator("#web-google-review").click()
     expect(page.locator("#web-confirm")).to_be_enabled(timeout=90_000)
@@ -139,21 +145,32 @@ def run_saved_apks(browser, url, apks):
         # Delete the selected copies after saving to prove later installs need no source files.
         with TemporaryDirectory() as selected:
             copies = [Path(shutil.copyfile(path, Path(selected) / path.name)) for path in core]
+            for _ in range(2):
+                select_real_files(page, copies)
+                page.locator("#web-pack-save").click()
+                expect(load).to_be_enabled(timeout=90_000)
+                expect(message).to_contain_text("Saved four")
+
+            # Saving and installing immediately must work, including in Chrome private profiles.
+            connect_for_install(page)
+            install_and_verify(page, ids)
+
+            # Selecting the disk copies directly must also work while the saved set exists.
+            page.reload()
             select_real_files(page, copies)
-            page.locator("#web-pack-save").click()
-            expect(message).to_contain_text("Saved four", timeout=90_000)
+            connect_for_install(page)
+            install_and_verify(page, ids)
 
         # A new page must work with only the locally stored bytes.
         page.reload()
         assert page.locator("#web-google-files").input_value() == ""
         load.click()
-        expect(message).to_contain_text("Four verified APKs are ready", timeout=90_000)
+        expect(load).to_be_enabled(timeout=90_000)
+        expect(message).to_contain_text("Four verified APKs are ready")
         expect(page.locator("#web-inspect")).to_be_enabled()
         expect(page.locator("#web-google-review")).to_be_disabled()
         assert page.evaluate("mockTablet.chooserCount") == 0
-        page.locator("#web-connect").click()
-        expect(page.locator("#web-identity")).to_contain_text("KFTUWI")
-        page.evaluate("(sizes) => mockTablet.filesBySize = sizes", {str(k): v for k, v in SIZES.items()})
+        connect_for_install(page)
         page.locator("#web-google-review").click()
         expect(page.locator("#web-confirm")).to_be_enabled(timeout=90_000)
         page.locator("#web-cancel").click()
@@ -164,7 +181,8 @@ def run_saved_apks(browser, url, apks):
         page.reload()
         corrupt_saved_apk(page)
         load.click()
-        expect(message).to_contain_text(re.compile(r"does not match|damaged"), timeout=90_000)
+        expect(load).to_be_enabled(timeout=90_000)
+        expect(message).to_contain_text(re.compile(r"does not match|damaged"))
         expect(page.locator("#web-inspect")).to_be_disabled()
         assert page.evaluate("mockTablet.installs") == []
         page.locator("#web-pack-forget").click()
@@ -173,7 +191,7 @@ def run_saved_apks(browser, url, apks):
         load.click()
         expect(message).to_contain_text("No saved APK set")
 
-        print("Passed saved four-APK install and readback, canceled preview, tamper rejection and removal.", flush=True)
+        print("Passed repeated save, immediate and reloaded four-APK installs and readbacks, canceled preview, tamper rejection and removal.", flush=True)
 
     # Disabling site storage must preserve the manual file workflow.
     page.add_init_script("""Object.defineProperty(window, 'indexedDB', {

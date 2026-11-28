@@ -686,12 +686,12 @@ var string = (/* @__NO_SIDE_EFFECTS__ */ (lengthOrField) => {
 
 // node_modules/@yume-chan/stream-extra/esm/stream.js
 var { AbortController: AbortController2 } = globalThis;
-var ReadableStream = /* @__PURE__ */ (() => {
-  const { ReadableStream: ReadableStream2 } = globalThis;
-  if (!ReadableStream2.from) {
-    ReadableStream2.from = function(iterable) {
+var ReadableStream2 = /* @__PURE__ */ (() => {
+  const { ReadableStream: ReadableStream3 } = globalThis;
+  if (!ReadableStream3.from) {
+    ReadableStream3.from = function(iterable) {
       const iterator = Symbol.asyncIterator in iterable ? iterable[Symbol.asyncIterator]() : iterable[Symbol.iterator]();
-      return new ReadableStream2({
+      return new ReadableStream3({
         async pull(controller) {
           const result = await iterator.next();
           if (result.done) {
@@ -706,8 +706,8 @@ var ReadableStream = /* @__PURE__ */ (() => {
       });
     };
   }
-  if (!ReadableStream2.prototype[Symbol.asyncIterator] || !ReadableStream2.prototype.values) {
-    ReadableStream2.prototype.values = async function* (options) {
+  if (!ReadableStream3.prototype[Symbol.asyncIterator] || !ReadableStream3.prototype.values) {
+    ReadableStream3.prototype.values = async function* (options) {
       const reader = this.getReader();
       try {
         while (true) {
@@ -724,10 +724,10 @@ var ReadableStream = /* @__PURE__ */ (() => {
         reader.releaseLock();
       }
     };
-    ReadableStream2.prototype[Symbol.asyncIterator] = // eslint-disable-next-line @typescript-eslint/unbound-method
-    ReadableStream2.prototype.values;
+    ReadableStream3.prototype[Symbol.asyncIterator] = // eslint-disable-next-line @typescript-eslint/unbound-method
+    ReadableStream3.prototype.values;
   }
-  return ReadableStream2;
+  return ReadableStream3;
 })();
 var { WritableStream, TransformStream } = globalThis;
 
@@ -781,7 +781,7 @@ var TaskQueue = class {
 };
 
 // node_modules/@yume-chan/stream-extra/esm/push-readable.js
-var PushReadableStream = class extends ReadableStream {
+var PushReadableStream = class extends ReadableStream2 {
   /**
    * Create a new `PushReadableStream` from a source.
    *
@@ -1143,7 +1143,7 @@ var BufferedTransformStream = class {
     const buffered = new BufferedReadableStream(new PushReadableStream((controller) => {
       bufferedStreamController = controller;
     }));
-    this.#readable = new ReadableStream({
+    this.#readable = new ReadableStream2({
       async pull(controller) {
         try {
           const value = await transform(buffered);
@@ -1200,7 +1200,7 @@ var ConcatStringStream = class {
     return this.#writable;
   }
   #readableController;
-  #readable = new ReadableStream({
+  #readable = new ReadableStream2({
     start: (controller) => {
       this.#readableController = controller;
     }
@@ -1260,7 +1260,7 @@ var ConcatBufferStream = class {
     return this.#writable;
   }
   #readableController;
-  #readable = new ReadableStream({
+  #readable = new ReadableStream2({
     start: (controller) => {
       this.#readableController = controller;
     }
@@ -1284,7 +1284,7 @@ var ConcatBufferStream = class {
 };
 
 // node_modules/@yume-chan/stream-extra/esm/consumable/readable.js
-var ConsumableReadableStream = class _ConsumableReadableStream extends ReadableStream {
+var ConsumableReadableStream = class _ConsumableReadableStream extends ReadableStream2 {
   static async enqueue(controller, chunk) {
     const output = new Consumable(chunk);
     controller.enqueue(output);
@@ -1330,7 +1330,7 @@ var ConsumableReadableStream = class _ConsumableReadableStream extends ReadableS
 };
 
 // node_modules/@yume-chan/stream-extra/esm/consumable/wrap-byte-readable.js
-var ConsumableWrapByteReadableStream = class extends ReadableStream {
+var ConsumableWrapByteReadableStream = class extends ReadableStream2 {
   constructor(stream, chunkSize, min) {
     const reader = stream.getReader({ mode: "byob" });
     let array = new Uint8Array(chunkSize);
@@ -1635,7 +1635,7 @@ function getWrappedReadableStream(wrapper, controller) {
     return wrapper;
   }
 }
-var WrapReadableStream = class extends ReadableStream {
+var WrapReadableStream = class extends ReadableStream2 {
   readable;
   #reader;
   constructor(wrapper, strategy) {
@@ -3050,7 +3050,7 @@ async function* adbSyncPullGenerator(socket, path) {
   }
 }
 function adbSyncPull(socket, path) {
-  return ReadableStream.from(adbSyncPullGenerator(socket, path));
+  return ReadableStream2.from(adbSyncPullGenerator(socket, path));
 }
 
 // node_modules/@yume-chan/adb/esm/commands/sync/push.js
@@ -4625,7 +4625,7 @@ var AdbDaemonWebUsbConnection = class {
       }
     }
     usbManager.addEventListener("disconnect", handleUsbDisconnect);
-    this.#readable = duplex.wrapReadable(new ReadableStream({
+    this.#readable = duplex.wrapReadable(new ReadableStream2({
       pull: async (controller) => {
         const packet = await this.#transferIn();
         if (packet) {
@@ -4942,10 +4942,26 @@ async function readText(stream) {
     reader.releaseLock();
   }
 }
+function inputStream(input) {
+  if (input instanceof Blob) return input.stream();
+  if (!(input instanceof Uint8Array)) throw new Error("Expected reviewed APK bytes.");
+  let offset = 0;
+  return new ReadableStream({
+    pull(controller) {
+      if (offset === input.byteLength) {
+        controller.close();
+        return;
+      }
+      const next = Math.min(offset + 64 * 1024, input.byteLength);
+      controller.enqueue(input.slice(offset, next));
+      offset = next;
+    }
+  });
+}
 async function runShell(adb, args, input) {
   const proc = await adb.subprocess.shellProtocol.spawn([shellArgs(args)]);
   try {
-    const feed = input ? input.stream().pipeTo(proc.stdin, { preventClose: true }) : void 0;
+    const feed = input ? inputStream(input).pipeTo(proc.stdin, { preventClose: true }) : void 0;
     const [out, err, code] = await Promise.all([
       readText(proc.stdout),
       readText(proc.stderr),
@@ -5019,11 +5035,12 @@ function session(adb, raw, serial) {
     close,
     shell: (args) => run(3e4, () => runShell(adb, args)),
     async install(file) {
-      if (!(file instanceof Blob) || !validSize(file.size))
+      const size = file instanceof Uint8Array ? file.byteLength : file instanceof Blob ? file.size : 0;
+      if (!validSize(size))
         throw new Error("Choose a nonempty reviewed APK of at most 256 MiB.");
       const reply = await run(3e5, () => runShell(
         adb,
-        ["cmd", "package", "install", "-r", "--user", "0", "-S", String(file.size)],
+        ["cmd", "package", "install", "-r", "--user", "0", "-S", String(size)],
         file
       ));
       if (reply !== "Success")

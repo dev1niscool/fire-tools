@@ -1,11 +1,11 @@
 const storeName = "packs";
 const packKey = "hd10-android11-arm64";
-const databaseFiles = new WeakSet();
 
-// Only File objects returned by a committed IndexedDB read enter this set.
-// They retain an immutable browser-storage snapshot even if the record is replaced.
-export function isStoredFile(file) {
-  return databaseFiles.has(file);
+export function withPackLock(mode, work, signal) {
+  signal?.throwIfAborted();
+  const locks = globalThis.navigator?.locks;
+  // add() also refuses an existing key in browsers without Web Locks.
+  return locks ? locks.request("fire-tools-google-apk-pack", {mode, ...(signal ? {signal} : {})}, work) : work();
 }
 
 function storageError(error) {
@@ -63,20 +63,14 @@ async function access(mode, issue, signal) {
   }
 }
 
-export async function writeStoredPack(verified, signal) {
-  await access("readwrite", store => store.put(verified, packKey), signal);
+export async function addStoredPack(files, signal) {
+  await access("readwrite", store => store.add(files, packKey), signal);
 }
 
-export async function readStoredPack(signal) {
-  const files = await access("readonly", store => store.get(packKey), signal);
-  if (Array.isArray(files)) {
-    for (const file of files) {
-      if (file instanceof File) databaseFiles.add(file);
-    }
-  }
-  return files;
+export function readStoredPack(signal) {
+  return access("readonly", store => store.get(packKey), signal);
 }
 
 export async function forgetPack(signal) {
-  await access("readwrite", store => store.delete(packKey), signal);
+  await withPackLock("exclusive", () => access("readwrite", store => store.delete(packKey), signal), signal);
 }

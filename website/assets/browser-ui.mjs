@@ -269,10 +269,13 @@ get("google-files").addEventListener("change", () => {
 get("pack-save").addEventListener("click", () => {
   const trigger = get("pack-save");
   const files = Array.from(get("google-files").files);
+  loadedPack = null;
   resetApkReview();
   run("pack", trigger, "Verifying and saving the four APKs in this Chrome profile…", async current => {
-    await savePack(files, current.abort.signal);
-    if (task === current) message("Saved four verified APKs in this Chrome profile.", trigger);
+    const verified = await savePack(files, current.abort.signal);
+    if (task !== current) return;
+    loadedPack = verified;
+    message("Saved four verified APKs in this Chrome profile. They are ready to use.", trigger);
   });
 });
 

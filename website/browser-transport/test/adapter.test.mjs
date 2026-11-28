@@ -73,3 +73,14 @@ test("streamed install input preserves exact file bytes", async () => {
     assert.deepEqual(command, ["'cmd' 'package' 'install' '-r' '--user' '0' '-S' '5'"]);
     assert.deepEqual(received, Array.from(input));
 });
+
+test("reviewed in-memory APK bytes stream in bounded chunks in exact order", async () => {
+    const original = Uint8Array.from({length: 155000}, (_, i) => i % 251);
+    const parts = [];
+    const proc = processFor("Success\n", "", 0);
+    proc.stdin = new WritableStream({write: bytes => parts.push(bytes)});
+    const adb = {subprocess: {shellProtocol: {spawn: async () => proc}}};
+    assert.equal(await runShell(adb, ["cmd", "package", "install"], original), "Success");
+    assert.ok(parts.every(part => part.length <= 65536));
+    assert.deepEqual(Buffer.concat(parts), Buffer.from(original));
+});
