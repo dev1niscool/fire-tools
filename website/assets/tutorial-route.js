@@ -35,17 +35,41 @@
   const link = (label, href) => ({ label, href });
   const section = (id, title, intro, steps, check, links) => ({ id, title, intro, steps, check, links });
 
+  function compareBuilds(parts, target) {
+    for (let i = 0; i < target.length; i++) {
+      if (parts[i] !== target[i]) return parts[i] - target[i];
+    }
+    return 0;
+  }
+
   function restrictionNotice(parts, firmware) {
-    const [major, minor, patch, build] = parts;
-    const boundary = major === 8 ? [3, 3, 8] : [3, 2, 2];
+    const major = parts[0];
     if (major !== 7 && major !== 8) return "";
     if (parts.length < 4) return "Read the full build in System Updates to check restrictions on protected packages. ";
-    const digits = [minor, patch, build];
-    for (let i = 0; i < boundary.length; i++) {
-      if (digits[i] === undefined || digits[i] < boundary[i]) return "";
-      if (digits[i] > boundary[i]) break;
-    }
+    if (compareBuilds(parts, major === 8 ? [8, 3, 3, 8] : [7, 3, 2, 2]) < 0) return "";
     return "Toolbox v46 flags Fire OS " + firmware + " for restrictions on protected packages. ";
+  }
+
+  function firmwareOrder(parts, firmware) {
+    const steps = [];
+    if (parts.length < 4) {
+      steps.push("Read the full version in Settings → Device Options → System Updates. Choose Edit choices and enter all four numbers before deciding whether the package applies.");
+    } else {
+      const difference = compareBuilds(parts, [8, 3, 3, 7]);
+      if (difference < 0) {
+        steps.push("You can keep your current firmware. If you want 8.3.3.7, back up important files and follow the stock USB update guide while the tablet is offline. Leave its updater enabled until installation finishes.",
+          "After the restart, confirm 8.3.3.7 in System Updates. Choose Edit choices and enter the installed version to rebuild your guide.");
+      } else if (difference === 0) {
+        steps.push("You already have Fire OS 8.3.3.7. Skip the firmware installation.");
+      } else {
+        steps.push("Continue on Fire OS " + firmware + ". The 8.3.3.7 package refuses a downgrade.");
+      }
+    }
+    steps.push("If you want to hold your current version, review the updater controls over USB before connecting the tablet to Wi-Fi. Fire Tools cannot guarantee it stays on that version online.");
+    return section("firmware-order", "Choose your firmware before changing apps",
+      "On the 2023 Fire HD 10, complete any planned firmware update before installing Google Play, debloating or trying the lock-screen ad controls.",
+      steps, "Continue with the version shown on the tablet.",
+      [link("8.3.3.7 setup order and local USB update", "hd10-8337.html#setup-order"), link("Review updater controls", "updates.html#disable")]);
   }
 
   const computer = section("computer", "Open Fire Tools on your computer",
@@ -107,14 +131,18 @@
       "You have the core files for the reported SDK and architecture, ready for Google signature verification.", links);
   }
 
-  const play = section("play", "Install and open Google Play",
-    "Use the Google Play tab for the Google components you selected.",
-    ["Choose Verify and review. Fire Tools checks package names, compatibility and Google signing certificates.",
-      "Check the tablet serial, components and install order in the preview. Choose Confirm and run if they match.",
-      "Read the result and choose Component status. If an install stops, check which components already succeeded before retrying.",
-      "Open Play Store on the tablet and try signing in there. If you restart, unlock it, scan again and choose Use selected tablet before continuing."],
-    "The core components show as installed and enabled, and Play Store opens on the tablet. The sign-in screen is a separate on-device check.",
-    [link("Installation and sign-in checks", "google-play.html#verify-install")]);
+  function play(offline) {
+    return section("play", offline ? "Install Google Play over USB" : "Install and open Google Play",
+      "Use the Google Play tab for the Google components you selected.",
+      ["Choose Verify and review. Fire Tools checks package names, compatibility and Google signing certificates.",
+        "Check the tablet serial, components and install order in the preview. Choose Confirm and run if they match.",
+        "Read the result and choose Component status. If an install stops, check which components already succeeded before retrying.",
+        offline ? "Keep the tablet offline for the remaining USB changes. You can sign in after those checks."
+          : "Open Play Store on the tablet and try signing in there. If you restart, unlock it, scan again and choose Use selected tablet before continuing."],
+      offline ? "The core components show as installed and enabled for the owner profile."
+        : "The core components show as installed and enabled, and Play Store opens on the tablet. The sign-in screen is a separate on-device check.",
+      [link("Installation and sign-in checks", "google-play.html#verify-install")]);
+  }
 
   const backup = section("backup", "Save your settings and app list",
     "Do this before the other changes in your guide. This backup covers supported settings and package states.",
@@ -235,6 +263,8 @@
     const needsComputer = useAdsTool || ["backup", "play", "debloat", "updates", "sideload"].some(id => selected.has(id));
     const wantsDesktop = needsComputer || selected.has("dns");
     const desktop = compatible && (needsComputer || (selected.has("dns") && api >= 28));
+    const showFirmwareOrder = compatible && model.id === "hd10-2023" &&
+      (useAdsTool || ["play", "debloat", "updates"].some(id => selected.has(id)));
     const restricted = compatible ? restrictionNotice(parts, firmware) : "";
     const route = [];
     if (!compatible && wantsDesktop) {
@@ -243,15 +273,16 @@
       route.push(limits);
     }
     if (desktop) {
-      route.push(selected.has("updates")
+      route.push(selected.has("updates") || showFirmwareOrder
         ? { ...computer, intro: computer.intro + " If you want to delay an update, your tablet can stay off Wi-Fi during USB setup while your computer downloads the tools." }
         : computer);
       // Changing a tool path in the desktop clears the selected tablet.
       if (selected.has("play") || selected.has("sideload")) route.push(apkTools);
       route.push(usb, connect(model, firmware, api));
       if (selected.has("backup")) route.push(backup);
+      if (showFirmwareOrder) route.push(firmwareOrder(parts, firmware));
       if (selected.has("updates")) route.push(updates(model, restricted));
-      if (selected.has("play")) route.push(playFiles(model, api), play);
+      if (selected.has("play")) route.push(playFiles(model, api), play(showFirmwareOrder));
       if (selected.has("sideload")) route.push(sideload);
       if (selected.has("debloat")) route.push(debloat(restricted));
       if (useAdsTool) route.push(adsDesktop(restricted));
@@ -260,7 +291,11 @@
     if (compatible && selected.has("dns") && api < 28) route.push(dnsLimit);
     if (selected.has("ads") && !useAdsTool) route.push(accountAds(restricted));
     if (selected.has("animations")) route.push(animations);
-    if (desktop) route.push(finish);
+    if (desktop) {
+      route.push(showFirmwareOrder && selected.has("play")
+        ? { ...finish, steps: [...finish.steps, "When you are ready to go online, connect to Wi-Fi, open Play Store and sign in. Amazon may also download a firmware update."] }
+        : finish);
+    }
     return route;
   }
 

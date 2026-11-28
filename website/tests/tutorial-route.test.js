@@ -53,7 +53,7 @@ test("unknown, mismatched, future, or unsupported profiles never receive desktop
 
 test("the chosen ad removal method controls setup and never silently switches to a purchase", () => {
     const desktop = plan(["ads"], "hd10-2023", "8.3.3.8", "tool");
-    assert.deepEqual(ids(desktop), ["computer", "usb", "connect", "ads-desktop", "finish"]);
+    assert.deepEqual(ids(desktop), ["computer", "usb", "connect", "firmware-order", "ads-desktop", "finish"]);
     assert.match(words(desktop.find(s => s.id === "ads-desktop")), /8\.3\.3\.8/);
     assert.ok(!ids(plan(["ads", "play"])).includes("ads-desktop"));
     for (const profile of [["unknown", ""], ["hd10-2017", "5.3.7.3"]]) {
@@ -90,14 +90,36 @@ test("abbreviated builds request the full firmware before interpreting restricti
     assert.ok(!words(updates).includes("v46 flags"));
 });
 
-test("the 8.3.3.7 package guide is linked only in the 2023 HD 10 updater section", () => {
-    const matches = route => route.filter(s => s.links.some(l => l.href === "hd10-8337.html"));
-    for (const version of ["8.3.3.6", "8.3.3.7", "8.3.3.8"]) {
-        assert.deepEqual(ids(matches(plan(["play", "updates"], "hd10-2023", version))), ["updates"]);
+test("HD 10 firmware advice uses the entered version and precedes app and updater changes", () => {
+    for (const [version, message] of [
+        ["8.3.3.6", /back up.*stock USB update/i],
+        ["8.3.3.7", /skip the firmware installation/i],
+        ["8.3.3.8", /downgrade/i],
+        ["8.3.3.10", /downgrade/i],
+        ["8.3", /full version.*Edit choices/i],
+    ]) {
+        const route = plan(["ads", "play", "debloat", "updates", "backup"], "hd10-2023", version, "tool");
+        const order = route.find(s => s.id === "firmware-order");
+        assert.match(words(order), message);
+        assert.ok(order.links.some(l => l.href === "hd10-8337.html#setup-order"));
+        const steps = ids(route);
+        const sequence = ["backup", "firmware-order", "updates", "play", "debloat", "ads-desktop", "finish"];
+        assert.deepEqual(steps.filter(id => sequence.includes(id)), sequence);
+        if (version === "8.3.3.6") assert.match(words(order), /restart.*Edit choices/i);
+        assert.doesNotMatch(route.find(s => s.id === "play").steps.join(" "), /try signing in/i);
+        assert.match(words(route.at(-1)), /sign in/i);
     }
-    assert.deepEqual(matches(plan(["play"])), []);
+});
+
+test("firmware advice reaches HD 10 app goals even without selecting updates", () => {
+    for (const goal of ["play", "debloat", "ads", "updates"]) {
+        const order = plan([goal], "hd10-2023", "8.3.3.6", "tool").find(s => s.id === "firmware-order");
+        assert.match(words(order), /before.*Wi-Fi/i);
+    }
+    assert.ok(!ids(plan(["backup"])).includes("firmware-order"));
+    assert.ok(!ids(plan(["ads"])).includes("firmware-order"));
     for (const [model, version] of [["hd10-2021", "7.3.3.1"], ["max11-2023", "8.3.3.6"], ["unknown", "8.3.3.7"]]) {
-        assert.deepEqual(matches(plan(["updates"], model, version)), []);
+        assert.ok(!ids(plan(["play", "updates"], model, version)).includes("firmware-order"));
     }
 });
 
