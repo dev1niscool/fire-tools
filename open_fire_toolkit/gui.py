@@ -448,13 +448,13 @@ class App:
         from .feature_catalog import BY_KEY
 
         tab = self._panel(
-            "System updates", "Manage Fire OS updates",
-            "Disabling an updater can stop future security fixes. Fire OS may refuse the change, "
-            "use another update route or finish an update already in progress.",
+            "System updates", "Control automatic firmware updates (OTA)",
+            "Finish any manual update first. Keep the tablet offline while using USB. On the 2023 HD 10, "
+            "an online block is unverified on 8.3.3.7. Fire OS 8.3.3.8 may protect the updaters.",
         )
         self._description(
-            tab, "1. Select your tablet in Connection, then read its updater states. "
-                 "Select an installed system row, or Ctrl-click both rows.",
+            tab, "1. Select your tablet in Connection. Read updater states, then select each enabled "
+                 "system updater (Ctrl-click for both).",
         ).pack(fill="x", pady=(0, 5))
         self._button(tab, "Read updater states", self._read_updaters,
                      condition=self._connected).pack(anchor="w", pady=(0, 5))
@@ -462,8 +462,8 @@ class App:
             ("package", "Updater package", 340), ("state", "Owner state", 98), ("type", "Package type", 104),
         ), 2, self._sync_controls, selectmode="extended")
         self._description(
-            tab, "2. Review the change, confirm it, then read states again. "
-                 "Disabled is the owner package state. Future update delivery is unverified.",
+            tab, "2. Choose Review disable... → Confirm and run. Read updater states again and check "
+                 "each row says disabled. Security fixes may be delayed. A queued update may still install.",
         ).pack(fill="x", pady=(6, 4))
         actions = self.ttk.Frame(tab, style="Panel.TFrame")
         actions.pack(fill="x")
@@ -474,13 +474,14 @@ class App:
                     BY_KEY[k], lambda: {"packages": ",".join(self.updater_table.selection())}),
                 condition=lambda s=state: self._can_change_updaters(s),
             ).pack(side="left", padx=(0, 6))
-        self._description(
-            tab, "3. Undo restores saved states. Enable turns on the selected updaters.",
-        ).pack(fill="x", pady=(6, 3))
         self._button(
-            tab, "Review last package undo...", lambda: self._run_tool(BY_KEY["ota-undo"], dict),
+            actions, "Review last package undo...", lambda: self._run_tool(BY_KEY["ota-undo"], dict),
             condition=self._connected,
-        ).pack(anchor="w")
+        ).pack(side="left")
+        self._description(
+            tab, "3. Undo restores the last updater batch. Or select disabled rows → Review enable... "
+                 "Confirm and recheck their states.",
+        ).pack(fill="x", pady=(6, 0))
 
     def _read_updaters(self):
         toolkit, serial = self.toolkit, self.device.serial

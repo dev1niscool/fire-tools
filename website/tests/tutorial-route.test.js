@@ -179,6 +179,17 @@ test("opting in puts all stock update steps first and resumes other goals on the
     assert.match(words(skip.find(s => s.id === "connect")), /Fire OS 8\.3\.3\.6/);
 });
 
+test("Install other APKs offers the official F-Droid client and its desktop instructions", () => {
+    const sideload = plan(["sideload"]).find(section => section.id === "sideload");
+    assert.match(words(sideload), /org\.fdroid\.fdroid/);
+    const handbook = fs.readFileSync(path.join(__dirname, "../content/apps.html"), "utf8");
+    assert.ok(sideload.links.some(link => link.href === "apps.html#fdroid"));
+    const download = "https://f-droid.org/F-Droid.apk";
+    assert.ok(sideload.links.some(link => link.href === download));
+    assert.ok(handbook.includes('href="' + download + '"'));
+    assert.match(handbook, /f-droid\.org\/[^"]*Release_Channels_and_Signing_Keys\//);
+});
+
 test("backup precedes changes and SDK verification is shared only by install goals", () => {
     assert.deepEqual(ids(plan(["debloat", "backup"])), ids(plan(["backup", "debloat", "backup"])));
     const route = ids(plan(["debloat", "backup"]));

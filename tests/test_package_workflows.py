@@ -827,6 +827,34 @@ Disabled system packages:
                 self.execute(plan)
         self.assertFalse(self.adb.installs)
 
+    def test_fdroid_requires_the_official_package_and_sole_signer(self):
+        package = 'org.fdroid.fdroid'
+        certificate = '43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed1552770abb9a9c9ccab'
+        folder = self.root / 'downloads'
+        folder.mkdir()
+        path = folder / 'F-Droid.apk'
+        path.write_text(package)
+        official = ApkInfo(path, package, 1, '1', 23, (), hashlib.sha256(path.read_bytes()).hexdigest(),
+                           (certificate,))
+        with patch.object(self.tool, '_verifier') as verifier:
+            inspector = verifier.return_value.inspect
+            inspector.return_value = replace(official, package='org.example.lookalike')
+            with self.assertRaisesRegex(ToolkitError, 'org.fdroid.fdroid'):
+                self.plan('install-fdroid', path=str(path))
+            for signers in [('b' * 64,), (certificate, 'b' * 64)]:
+                inspector.return_value = replace(official, signer_sha256=signers)
+                for op, params in [('install-fdroid', {'path': str(path)}),
+                                   ('sideload', {'paths': json.dumps([str(path)])}),
+                                   ('sideload-folder', {'folder': str(folder)})]:
+                    with self.subTest(op=op, signers=signers), self.assertRaisesRegex(ToolkitError, 'F-Droid'):
+                        self.plan(op, **params)
+            inspector.side_effect = lambda selected: replace(official, path=selected)
+            plan = self.plan('install-fdroid', path=str(path))
+            self.assertEqual(plan.packages, (package,))
+            self.assertFalse(self.adb.installs)
+            self.execute(plan)
+            self.assertEqual(self.adb.installs, [package])
+
     def test_selected_installed_keyboard_can_be_enabled_for_the_first_time(self):
         shell = self.adb.shell
         def enabled_only(serial, args):

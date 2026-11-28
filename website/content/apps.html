@@ -41,5 +41,16 @@
 <section id="install-folder">
   <h2>Install a folder of standalone APKs</h2>
   <p>Put only the APKs you want to install in an otherwise empty folder. Select your tablet in <strong>Connection</strong>, then open <strong>Tools → Install a folder of APKs</strong>. Choose the folder and review every filename, package ID and signer. A valid signature identifies the key used to sign the file. Compare its fingerprint with the publisher’s record, or enter a trusted fingerprint to require a match for every APK. Confirm after checking the list. Android handles runtime permission requests when you use each app.</p>
-  <p>For Google Play, use the <a href="google-play.html">Google Play guide</a> and its dedicated installer, which checks Google’s signer and component order.</p>
+  <p>For the F-Droid app store, follow the <a href="#fdroid">F-Droid installation steps</a>. For Google Play, use the <a href="google-play.html">Google Play guide</a> and its dedicated installer, which checks Google’s signer and component order.</p>
+</section>
+
+<section id="fdroid">
+  <h2>Install the official F-Droid app store</h2>
+  <ol class="steps">
+    <li><strong>Download F-Droid on your computer.</strong> Get <a href="https://f-droid.org/F-Droid.apk">F-Droid.apk directly from f-droid.org</a>. The <a href="https://f-droid.org/packages/org.fdroid.fdroid/">official app page</a> lists the current version and Android requirements.</li>
+    <li><strong>Choose the downloaded file.</strong> In desktop Fire Tools, <a href="setup.html#android-tools">set up the Android tools</a> and <a href="setup.html#usb">select your tablet</a>. Open <strong>Tools → Install F-Droid</strong> and browse to <code>F-Droid.apk</code>. You can also reach this tool from either APK installer.</li>
+    <li><strong>Choose Review.</strong> Fire Tools checks the package ID (<code>org.fdroid.fdroid</code>), the <a href="https://f-droid.org/en/docs/Release_Channels_and_Signing_Keys/">official APK signing certificate</a> and compatibility with your tablet. A mismatch stops the installation.</li>
+    <li><strong>Choose Confirm and run.</strong> Once Fire Tools reports a verified installation, open F-Droid on the tablet. It needs an internet connection to load its app catalog.</li>
+  </ol>
+  <p>We checked the publisher signatures and scanned F-Droid 2.0.3. <a href="https://github.com/dev1niscool/fire-tools/blob/v0.6.1/docs/TESTING.md#f-droid-client-verification">See the results and file hash</a> or <a href="https://f-droid.org/en/docs/Verifying_Downloaded_APK/">verify your own download</a>.</p>
 </section>

@@ -1,6 +1,6 @@
 # Fire Tools
 
-An independent, MIT-licensed desktop and command-line toolkit for Amazon Fire tablets. Install Google Play, manage lock-screen ads, compare debloat presets, and back up settings and files. Version 0.6.0 supports a personal Google APK bundle for the 2023 Fire HD 10 and an experimental USB installer in desktop Chrome. [Comparison with Hayden Plumley’s Fire-Tools](docs/HAYDEN-REVIEW.md) · [Original Fire Toolbox v46 review](docs/REA-AUDIT.md)
+An independent, MIT-licensed desktop and command-line toolkit for Amazon Fire tablets. Install Google Play, manage lock-screen ads, compare debloat presets, and back up settings and files. Fire Tools also supports a personal Google APK bundle for the 2023 Fire HD 10 and an experimental USB installer in desktop Chrome. [Comparison with Hayden Plumley’s Fire-Tools](docs/HAYDEN-REVIEW.md) · [Original Fire Toolbox v46 review](docs/REA-AUDIT.md)
 
 [Read the Fire tablet field guide](https://dev1niscool.github.io/fire-tools/) for setup, model compatibility and step-by-step tool guides.
 
@@ -18,7 +18,7 @@ The project’s MIT license covers Fire Tools. Google retains the rights to the 
 
 ## Checking your download
 
-Fire Tools runs from Python source on your computer. Extract the folder containing the launchers. The public GitHub ZIP contains the Fire Tools source. Google licenses its mobile apps separately. Compare your ZIP with the published SHA-256. [Download Fire Tools 0.6.0](https://github.com/dev1niscool/fire-tools/archive/refs/tags/v0.6.0.zip) · [Release notes and ZIP checksum](https://github.com/dev1niscool/fire-tools/releases/tag/v0.6.0) · [Verification record](https://github.com/dev1niscool/fire-tools/blob/main/docs/TESTING.md#release-archive)
+Fire Tools runs from Python source on your computer. Extract the folder containing the launchers. The public GitHub ZIP contains the Fire Tools source. Google licenses its mobile apps separately. Compare your ZIP with the published SHA-256. [Download Fire Tools 0.6.1](https://github.com/dev1niscool/fire-tools/archive/refs/tags/v0.6.1.zip) · [Release notes and ZIP checksum](https://github.com/dev1niscool/fire-tools/releases/tag/v0.6.1) · [Verification record](https://github.com/dev1niscool/fire-tools/blob/main/docs/TESTING.md#release-archive)
 
 **Before connecting the tablet**, open **Google Play → Choose APKs → Check scan records**. This reads the files locally and shows whether their SHA-256 hashes match files examined in the project audit. The command-line equivalent is `./launch-linux.sh check-apks file.apk` or `.\launch-windows.cmd check-apks "C:\Downloads\file.apk"` in PowerShell. For Google components, use the **Google Play** tab. It checks Google’s signing identity and verifies the installed bytes. The general **sideload** tool also accepts apps from other publishers. [Links to the six scanned builds](docs/GOOGLE-APKS.md#files-with-a-local-scan-record) · [Audit and scan results](docs/TESTING.md)
 
@@ -29,8 +29,9 @@ After setting the AAPT, APK signer and Java paths, choose **Verify Google signat
 | Goal | Where to find it | What it does |
 | --- | --- | --- |
 | Install Google Play | **Google Play** | Verifies locally selected Google components against the pinned Google signing certificate, checks compatibility and installs them in dependency order. |
+| Install F-Droid | **Tools → Install F-Droid** | Download the standard client from F-Droid, then select the APK. Fire Tools checks the package ID and F-Droid’s published signing certificate before installation. [Official APK](https://f-droid.org/F-Droid.apk) · [F-Droid signing keys](https://f-droid.org/docs/Release_Channels_and_Signing_Keys/) |
 | Install a folder of apps | **Tools → Install a folder of APKs** | Choose a folder containing standalone APKs. Review each package and signer before installing. Use the dedicated Google Play workflow for Google components. |
-| Manage firmware updates | **System updates** | Read updater package states, review a disable request and restore changes. A disabled package can delay security patches. Fire OS controls which changes take effect. [Step-by-step guide](https://dev1niscool.github.io/fire-tools/updates.html) |
+| Disable automatic firmware updates | **System updates** | Read updater states, select the enabled packages, review and confirm the changes, then read their states again. Fire OS can protect an updater or install an already downloaded update. [Disable or restore OTA updates](https://dev1niscool.github.io/fire-tools/updates.html#disable) |
 | Debloat Amazon apps | **Apps → Debloat Amazon apps** | Choose Standard (Recommended), Complete or a custom list. Review the installed targets and skipped packages before disabling or removing apps for the owner. |
 | Disable lock-screen ads | **Lock-screen ads** | Temporary setting, Special Offers package disable/restore, or optional [source-built helper](companion/README.md). All depend on firmware; no mode guarantees that ads disappear. |
 

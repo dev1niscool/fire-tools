@@ -24,11 +24,11 @@
     { id: "play", label: "Install Google Play", description: "Get the Play Store and its required Google components." },
     { id: "debloat", label: "Debloat Amazon apps", description: "Review preinstalled apps and disable the ones you choose." },
     { id: "ads", label: "Remove lock-screen ads", description: "Check Amazon’s removal option and Fire OS limits." },
-    { id: "updates", label: "Manage firmware updates", description: "Inspect the updater and review what can be disabled." },
+    { id: "updates", label: "Manage firmware updates", description: "Check, disable or restore automatic over-the-air (OTA) updates." },
     { id: "firmware-8337", label: "Update to Fire OS 8.3.3.7", description: "Install Amazon’s update over USB before your other tasks." },
     { id: "animations", label: "Speed up animations", description: "Shorten menus and transitions on the tablet." },
     { id: "backup", label: "Back up settings", description: "Save a copy of settings and the installed-app list." },
-    { id: "sideload", label: "Install other APKs", description: "Review and install a folder of standalone Android apps." },
+    { id: "sideload", label: "Install other APKs", description: "Install the official F-Droid app store or other standalone Android apps." },
     { id: "dns", label: "Set up Private DNS", description: "Choose an encrypted DNS provider on Android 9 or newer." },
   ];
 
@@ -128,9 +128,9 @@
       "Open a terminal in the extracted folder. On Windows PowerShell run .\\launch-windows.cmd. On Linux run sh launch.sh.",
       "Download and extract Google’s SDK Platform-Tools. In Fire Tools → Connection → ADB, browse to adb.exe (Windows) or adb (Linux)."],
     "The regular Fire Tools window is open and the ADB field points to the extracted executable.",
-    [link("Download the source ZIP", "https://github.com/dev1niscool/fire-tools/archive/refs/tags/v0.6.0.zip"),
-      link("Published checksum", "https://github.com/dev1niscool/fire-tools/releases/tag/v0.6.0"),
-      link("How to check the hash", "https://github.com/dev1niscool/fire-tools/blob/v0.6.0/docs/TESTING.md#release-archive"),
+    [link("Download the source ZIP", "https://github.com/dev1niscool/fire-tools/archive/refs/tags/v0.6.1.zip"),
+      link("Published checksum", "https://github.com/dev1niscool/fire-tools/releases/tag/v0.6.1"),
+      link("How to check the hash", "https://github.com/dev1niscool/fire-tools/blob/v0.6.1/docs/TESTING.md#release-archive"),
       link("Download Python", "https://www.python.org/downloads/"),
       link("Download Platform-Tools", "https://developer.android.com/tools/releases/platform-tools"),
       link("Launcher instructions", "setup.html#desktop")]);
@@ -169,7 +169,7 @@
     const links = reference
       ? [link("Download the audited HD 10 builds", "google-play.html#choose-files")]
       : [link("Google LLC app listings", "https://www.apkmirror.com/apk/google-inc/"),
-        link("Variant and signing guidance", "https://github.com/dev1niscool/fire-tools/blob/v0.6.0/docs/GOOGLE-APKS.md#other-download-options-and-device-requirements")];
+        link("Variant and signing guidance", "https://github.com/dev1niscool/fire-tools/blob/v0.6.1/docs/GOOGLE-APKS.md#other-download-options-and-device-requirements")];
     links.push(link("Understand the scan records", "apkmirror.html#check-files"));
     return section("play-files", "Choose the Google APKs",
       reference ? "The reference downloads were checked for the Android 11, ARM64 Fire HD 10. Installation and sign-in on a physical tablet remain unverified."
@@ -236,13 +236,13 @@
   function updates(model, restricted) {
     const links = [link("Updater limits and instructions", "updates.html#disable"), link("Allow updates again", "updates.html#restore")];
     if (model.id === "hd10-2023") links.push(link("Fire OS 8.3.3.7 local update guide", "hd10-8337.html"));
-    return section("updates", "Inspect the firmware updater",
-      restricted + "Disabling updater packages may delay security fixes. You can stop after reading their states.",
-      ["Open System updates → Read updater states. Look for enabled system updater packages. If none qualify, leave them as they are.",
-        "If you want to try disabling updates, select the enabled updater rows. Choose Review disable, verify the changes, then Confirm and run.",
-        "Choose Read updater states again. Already-downloaded updates or other update routes may still run.",
-        "To undo, use Review last package undo while the updater changes are still the last saved batch. To enable an individual row, use Review enable."],
-      "Record the state of each updater. A disabled row confirms only that package’s state for the owner.",
+    return section("updates", "Disable automatic firmware updates (OTA)",
+      restricted + "Keep the tablet’s Wi-Fi off while checking the updaters over USB. Disabling them can delay security fixes.",
+      ["In Fire Tools, open System updates → Read updater states. Select each row marked enabled and system (Ctrl-click to select both). Leave already-disabled rows alone.",
+        "Choose Review disable..., check the tablet and packages, then choose Confirm and run.",
+        "Choose Read updater states again. Check that each selected row says disabled. If a row stays enabled, that updater can still run.",
+        "To restore the last updater batch, choose Review last package undo... Or select disabled rows and choose Review enable... Confirm and read their states again."],
+      "Even with both updaters disabled, a queued update or another update route may still run. Stay offline if keeping this firmware is essential.",
       links);
   }
 
@@ -255,12 +255,15 @@
     [link("Animation settings and restore", "animations.html#on-tablet")]);
 
   const sideload = section("sideload", "Install other standalone APKs",
-    "Use this tool for apps you choose from publishers you trust.",
-    ["Put the standalone .apk files in a dedicated folder on your computer. Leave bundles and subfolders out.",
-      "Open Tools → Install a folder of APKs and choose the folder. If you know the publisher’s trusted signer fingerprint, enter it to require a match.",
-      "Choose Review. Compare each filename, package ID and signing certificate with your source before you choose Confirm and run."],
+    "Download the apps you want from their publishers to your computer.",
+    ["For F-Droid, download the official APK below. In desktop Fire Tools, open Tools → Install F-Droid and browse to F-Droid.apk.",
+      "For a group of other apps, put only their standalone .apk files in a dedicated folder. Open Tools → Install a folder of APKs and choose the folder.",
+      "Choose Review. The F-Droid installer requires the package org.fdroid.fdroid and F-Droid’s published signing certificate. For other apps, compare each package and signer with its publisher’s record.",
+      "If everything matches, choose Confirm and run. When Fire Tools reports a verified installation, open the app on your tablet."],
     "Read the result for each APK. Fire Tools checks the installed bytes, and Android asks for runtime permissions when the app needs them.",
-    [link("Folder installation guide", "apps.html#install-folder")]);
+    [link("Download the official F-Droid APK", "https://f-droid.org/F-Droid.apk"),
+      link("F-Droid’s APK signing certificate", "https://f-droid.org/en/docs/Release_Channels_and_Signing_Keys/"),
+      link("F-Droid installation steps", "apps.html#fdroid"), link("Folder installation guide", "apps.html#install-folder")]);
 
   const dns = section("dns", "Choose a Private DNS provider",
     "A DNS provider looks up domain names for the tablet. The provider you select can see those names.",

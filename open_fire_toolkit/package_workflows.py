@@ -10,7 +10,10 @@ import re
 import tempfile
 
 from .adb import AdbError
-from .apk import ApkError, PLAY_PACKAGES, _open_regular_file, file_sha256, google_signer_is_trusted, stage_apk
+from .apk import (
+    ApkError, FDROID_PACKAGE, FDROID_SIGNER_SHA256, PLAY_PACKAGES, _open_regular_file,
+    file_sha256, google_signer_is_trusted, stage_apk,
+)
 from .package_catalog import (
     APP_LABELS, DEBLOAT_COMPLETE_WARNING, DEBLOAT_PROFILES, DEBLOAT_RESTORE_DESCRIPTION,
     OFFERS, PROTECTED_SERVICES, STOCK_HOME, UPDATERS, canonical_debloat_profile, debloat_plan_title, is_protected,
@@ -26,11 +29,12 @@ _OWNER = ('--user', '0')
 _STATE_OPS = {'disable', 'enable', 'uninstall', 'restore', 'debloat', 'undo',
               'ads-disable', 'ads-restore', 'ota-disable', 'ota-enable'}
 _SIMPLE = {'disable', 'enable', 'uninstall', 'restore', 'clear-data', 'force-stop', 'launch', 'rollback-system'}
-_APK_OPS = {'sideload', 'system-update'}
+_APK_OPS = {'sideload', 'install-fdroid', 'system-update'}
 _PARAMS = {
     'undo': {'scope'},
     'debloat': {'profile', 'mode', 'list_file'}, 'launcher-set': {'component', 'disable_stock'},
     'keyboard-set': {'component'}, 'sideload': {'paths', 'signer'}, 'system-update': {'paths', 'signer'},
+    'install-fdroid': {'path'},
 }
 _STATE_LIMIT = 1024 * 1024
 _STATES = {'enabled', 'disabled', 'uninstalled'}
@@ -644,7 +648,11 @@ class PackageWorkflows:
         return replace(plan, details=tuple(details), warnings=tuple(warnings), snapshot=tuple(snap.items()))
 
     def _pkg_apk_plan(self, plan, requested):
-        raw_paths = json.loads(plan.params.get('paths') or 'null')
+        if plan.operation == 'install-fdroid':
+            raw_paths = [plan.params.get('path')]
+            plan = replace(plan, title='Install F-Droid')
+        else:
+            raw_paths = json.loads(plan.params.get('paths') or 'null')
         if not isinstance(raw_paths, list) or not 1 <= len(raw_paths) <= 32:
             raise _error('Choose 1 to 32 local standalone APK files.')
         if any(not isinstance(p, str) or len(p) > 4096 or not Path(p).is_absolute() for p in raw_paths):
@@ -672,6 +680,8 @@ class PackageWorkflows:
         if signer and not re.fullmatch('[0-9a-f]{64}', signer):
             raise _error('Enter a hexadecimal SHA-256 signer certificate digest.')
         names = _selection(tuple(apk.package for apk in apks))
+        if plan.operation == 'install-fdroid' and names != (FDROID_PACKAGE,):
+            raise _error(f'Select the official F-Droid client APK ({FDROID_PACKAGE}).')
         if plan.operation == 'system-update' and (len(requested) != 1 or names != requested):
             raise _error('A system update requires one APK matching its selected package.')
         for apk in apks:
@@ -689,6 +699,8 @@ class PackageWorkflows:
                 raise _error(f'Signer mismatch for {apk.package}.')
             if apk.package in PLAY_PACKAGES and not google_signer_is_trusted(apk):
                 raise _error(f'Google signing certificate mismatch for {apk.package}.')
+            if apk.package == FDROID_PACKAGE and apk.signer_sha256 != (FDROID_SIGNER_SHA256,):
+                raise _error(f'F-Droid signing certificate mismatch for {FDROID_PACKAGE}.')
 
     def _pkg_install(self, plan, completed):
         self._pkg_validate_apks(plan, plan.packages, plan.apks)

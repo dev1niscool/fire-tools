@@ -12,6 +12,7 @@ from typing import Callable
 from uuid import uuid4
 
 from .adb import AdbError, DeviceInfo
+from .apk import FDROID_APK_URL, FDROID_PACKAGE
 from .device_workflows import (
     PACKAGE, _args, _choice, _fail, _identity, _integer, _json, _load, _pattern,
     _pinned_directory, _private_stage, _read_file, _remote, _text, _write_json,
@@ -81,7 +82,7 @@ SOURCES = (
      'https://www.apkmirror.com/apk/google-inc/google-calendar-sync/google-calendar-sync-2026-03-0-857911644-release-release/google-calendar-sync-2026-03-0-857911644-release-2-android-apk-download/'),
     ('Listing only (different build)', 'Google Contacts Sync (optional)', 'com.google.android.syncadapters.contacts',
      'https://www.apkmirror.com/apk/google-inc/google-contacts-sync/google-contacts-sync-11-release/google-contacts-sync-11-android-apk-download/'),
-    ('FOSS', 'F-Droid', 'org.fdroid.fdroid', 'https://f-droid.org/'),
+    ('Official APK', 'F-Droid', FDROID_PACKAGE, FDROID_APK_URL),
     ('FOSS', 'NewPipe', 'org.schabi.newpipe', 'https://newpipe.net/'),
     ('FOSS', 'VLC', 'org.videolan.vlc', 'https://www.videolan.org/vlc/download-android.html'),
     ('FOSS', 'K-9 Mail', 'com.fsck.k9', 'https://k9mail.app/'),
@@ -105,6 +106,7 @@ def source_catalog_text() -> str:
         'Google component links point to independent APKMirror or Open GApps records for the 2023 Fire HD 10 (API 30).',
         'Use Check scan records in Google Play to compare downloaded bytes. Listing-only builds have no project scan record.',
         'APKMirror audit and file verification: https://dev1niscool.github.io/fire-tools/apkmirror.html',
+        'For the official F-Droid APK, use Tools → Install F-Droid to verify and install the client.',
         'Other links are project or store pages. Compatibility depends on the tablet and provider.',
         *(f'{group} | {name} | {package}\n{url}' for group, name, package, url in SOURCES),
     ])

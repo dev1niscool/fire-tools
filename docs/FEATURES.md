@@ -1,4 +1,4 @@
-# Feature coverage for Fire Tools 0.5.0
+# Fire Tools feature coverage
 
 This release implements the workflows below in original source. Automated tests exercise their commands, validation and failure handling through simulated tablets; desktop smoke tests exercise their forms and confirmation. No physical Fire tablet has been attached, so **implemented does not mean verified on your firmware**.
 
@@ -48,6 +48,7 @@ The original Google Play, temporary-ad-setting and quick-app tabs remain availab
 | `packages-launch` | Launch apps | Applications | `packages` |
 | `sideload` | Verify and install local APKs | Applications | `paths`, `signer` |
 | `sideload-folder` | Install a folder of APKs | Applications | `folder`, `signer` |
+| `install-fdroid` | Install F-Droid | Applications | `path` (standard client APK from [F-Droid](https://f-droid.org/F-Droid.apk)) |
 | `system-update` | Install a system app update | Applications | `packages`, `paths`, `signer` |
 | `system-rollback` | Revert system app updates | Applications | `packages` |
 | `ads-package-disable` | Disable Special Offers app | Lock-screen ads | None |

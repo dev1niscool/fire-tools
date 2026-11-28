@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from .apk import FDROID_APK_URL, FDROID_KEYS_URL
 from .feature_catalog import package_values
 from .package_catalog import DEBLOAT_TITLES
 
@@ -178,12 +179,28 @@ class AdvancedTools:
                 description = self.app._description(self.form, feature.description)
                 description.pack(fill="x", pady=(0, 8))
                 self._bind_wheel(description)
+            if feature.key in {"sideload", "sideload-folder", "install-fdroid"}:
+                self._add_fdroid_links(feature.key)
             if feature.key == "debloat":
                 self._add_debloat_fields(feature.fields)
             else:
                 for field in feature.fields:
                     self._add_field(field)
         self.sync_controls()
+
+    def _add_fdroid_links(self, feature_key):
+        row = self.app.ttk.Frame(self.form, style="Panel.TFrame")
+        row.pack(fill="x", pady=(0, 8))
+        download = self.app.ttk.Button(
+            row, text="Download official F-Droid APK", command=lambda: self.app._open(FDROID_APK_URL),
+        )
+        if feature_key == "install-fdroid":
+            guide = self.app.ttk.Button(row, text="F-Droid signing keys", command=lambda: self.app._open(FDROID_KEYS_URL))
+        else:
+            guide = self.app.ttk.Button(row, text="Install F-Droid...", command=lambda: self.show_feature("install-fdroid"))
+        for button in (download, guide):
+            button.pack(anchor="w", pady=(0, 3))
+            self._field_control(button, row)
 
     def _add_debloat_fields(self, fields):
         fields = {field.key: field for field in fields}
@@ -326,6 +343,8 @@ class AdvancedTools:
         if field.key == "list_file":
             options["filetypes"] = (("Fire Toolbox lists", "*.debloat"), ("Text lists", "*.txt"),
                                     ("All files", "*"))
+        elif self.feature.key == "install-fdroid" and field.key == "path":
+            options["filetypes"] = (("Android APK", "*.apk"),)
         selected = dialog(**options)
         if selected:
             value.set(json.dumps(list(selected)) if field.kind == "files" else selected)

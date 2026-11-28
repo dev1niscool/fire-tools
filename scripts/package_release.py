@@ -100,7 +100,7 @@ def main():
     parser.add_argument('--output', type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
-    path = build_release(root, args.output or root / 'dist' / 'fire-tools-0.6.0.zip')
+    path = build_release(root, args.output or root / 'dist' / 'fire-tools-0.6.1.zip')
     print(path)
     print(path.with_suffix(path.suffix + '.sha256').read_text(), end='')
 

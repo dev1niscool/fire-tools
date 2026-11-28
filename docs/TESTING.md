@@ -23,11 +23,17 @@ Run `python3 -m open_fire_toolkit gui --demo` in a desktop session with Tk. On L
 
 ## Release archive
 
-The GitHub release page provides the checksum for GitHub’s tagged source ZIP. If you build the separate source-only distribution using `scripts/package_release.py`, compare that ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c fire-tools-0.6.0.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\fire-tools-0.6.0.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `fire-tools-0.6.0.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
+The GitHub release page provides the checksum for GitHub’s tagged source ZIP. If you build the separate source-only distribution using `scripts/package_release.py`, compare that ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c fire-tools-0.6.1.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\fire-tools-0.6.1.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `fire-tools-0.6.1.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
 
-On macOS, run `shasum -a 256 fire-tools-0.6.0.zip` to display the download hash. On macOS and Linux, use an archive utility that preserves executable permissions, such as `unzip`, when running launcher tests. Start Fire Tools with `sh launch.sh` if the archive utility did not preserve permissions.
+On macOS, run `shasum -a 256 fire-tools-0.6.1.zip` to display the download hash. On macOS and Linux, use an archive utility that preserves executable permissions, such as `unzip`, when running launcher tests. Start Fire Tools with `sh launch.sh` if the archive utility did not preserve permissions.
 
 The checksum verifies that the ZIP matches the checksum you obtained. Obtain both files from a source you trust.
+
+## F-Droid client verification
+
+The official download served F-Droid 2.0.3 (version code 2000053), package `org.fdroid.fdroid`, for Android 7.0 (API 24) or later. Its file SHA-256 was `dac55a0d17b1edf7e7286b48cfbd70c7c52fbb32a00af062c68830a437c47959`. The download URL follows new releases, so a newer version will have a different file hash. [Official APK](https://f-droid.org/F-Droid.apk) · [F-Droid package listing](https://f-droid.org/packages/org.fdroid.fdroid/)
+
+Android Build Tools verified the APK’s v2 and v3 signatures with the single signing certificate F-Droid publishes, SHA-256 `43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed1552770abb9a9c9ccab`. The detached OpenPGP signature also verified under F-Droid’s published release key. ClamAV 1.5.5 scanned this file with 3,628,228 signatures and reported zero detections. [F-Droid signing keys](https://f-droid.org/docs/Release_Channels_and_Signing_Keys/) · [How to check a download independently](https://f-droid.org/docs/Verifying_Downloaded_APK/)
 
 ## Personal Google APK bundle
 

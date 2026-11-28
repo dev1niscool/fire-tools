@@ -2,16 +2,18 @@
   <h2>Can your tablet block updates?</h2>
   <p>Setting up a 2023 Fire HD 10? The <a href="hd10-8337.html">Fire OS 8.3.3.7 guide</a> covers the local update package and your options afterward.</p>
   <p>Fire Tools can ask Fire OS to disable two over-the-air (OTA) updater packages for the primary adult profile. Blocking updates can delay security patches and bug fixes. <a href="https://digprjsurvey.amazon.com/csad/help/node/G3YFLQ5Z33MZA6FT">Amazon’s security update policy</a>.</p>
-  <p class="note">The original Toolbox v46 flags <strong>Fire OS 8.3.3.8 on the 2023 Fire HD 10</strong> as restricted. Fire OS may refuse to disable the updater. The same concern applies on Fire OS 7 from 7.3.2.2. Blocking an actual update on these builds remains unverified. <a href="firmware.html#build-limits">Firmware support</a> · <a href="https://xdaforums.com/t/windows-linux-tool-fire-toolbox-v46-0.3889604/#post-78664546">XDA’s firmware FAQ</a> · <a href="https://github.com/dev1niscool/fire-tools/blob/v0.3.3/docs/PARITY-RESEARCH.md#feature-matrix-at-baseline">v46 inspection</a>.</p>
+  <p class="note">On a <strong>2023 Fire HD 10 running 8.3.3.7</strong>, you can try the steps below. Keeping that version while online remains unverified. On <strong>8.3.3.8</strong>, Fire OS may protect the updaters. Toolbox v46 also flags Fire OS 7 builds from 7.3.2.2. <a href="firmware.html#build-limits">Firmware support</a> · <a href="https://xdaforums.com/t/windows-linux-tool-fire-toolbox-v46-0.3889604/#post-78664546">XDA’s firmware FAQ</a> · <a href="https://github.com/dev1niscool/fire-tools/blob/v0.3.3/docs/PARITY-RESEARCH.md#feature-matrix-at-baseline">v46 inspection</a>.</p>
 </section>
 
 <section id="disable">
-  <h2>Review and disable updater packages</h2>
+  <h2>Disable automatic firmware updates (OTA)</h2>
   <ol class="steps">
-    <li><a href="setup.html#usb">Connect and select the tablet</a>. In Fire Tools, open <strong>System updates → Read updater states</strong>. Look for <code>com.amazon.device.software.ota</code> and <code>com.amazon.device.software.ota.override</code>. Only installed system packages are eligible. If neither qualifies on your tablet, this method is unavailable.</li>
-    <li>Select the enabled system updater rows you want to disable. Choose <strong>Review disable...</strong>, check the tablet and proposed changes, then choose <strong>Confirm and run</strong>.</li>
-    <li>Choose <strong>Read updater states</strong> again. A disabled row confirms that package’s owner state. Other update routes and already-downloaded updates may still run. If Fire OS refuses a change, read the result for each package. Earlier successful changes can remain in effect.</li>
+    <li>Turn off Wi-Fi on the tablet. Finish any planned local firmware update and check the installed version first. On the primary adult profile, <a href="setup.html#usb">connect by USB and select your tablet</a>.</li>
+    <li>In desktop Fire Tools, open <strong>System updates → Read updater states</strong>. Look for <code>com.amazon.device.software.ota</code> and <code>com.amazon.device.software.ota.override</code>. Select each row marked <strong>enabled</strong> and <strong>system</strong>. Ctrl-click to select both. Leave already-disabled rows alone.</li>
+    <li>Choose <strong>Review disable...</strong>, check the tablet and package names, then choose <strong>Confirm and run</strong>.</li>
+    <li>Choose <strong>Read updater states</strong> again. Each selected row should say <strong>disabled</strong>. If Fire OS refuses a change or a row stays enabled, that updater can still run. If neither package is an installed system package, Fire Tools cannot use this method.</li>
   </ol>
+  <p>Even when both rows say disabled, an already-downloaded update or another update route may still run. If keeping this version is essential, keep the tablet offline.</p>
 </section>
 
 <section id="restore">

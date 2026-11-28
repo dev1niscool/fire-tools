@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter.font import nametofont
 from types import SimpleNamespace
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -447,6 +448,20 @@ def tools_without_tablet(root):
     assert "https://f-droid.org" in text_box(output).get("1.0", "end")
     click(output, "Close")
     assert app.toolkit is None and app.device is None
+
+    opened = []
+    with patch.object(app, "_open", opened.append):
+        for feature in ("sideload", "sideload-folder"):
+            app.advanced.show_feature(feature)
+            root.update()
+            click(root, "Download official F-Droid APK")
+            click(root, "Install F-Droid...")
+            assert app.advanced.feature.key == "install-fdroid"
+            click(root, "Download official F-Droid APK")
+            click(root, "F-Droid signing keys")
+            assert app.advanced.action.instate(["disabled"])
+    assert opened == ["https://f-droid.org/F-Droid.apk", "https://f-droid.org/F-Droid.apk",
+                      "https://f-droid.org/docs/Release_Channels_and_Signing_Keys/"] * 2
 
     endpoint = "fire-tablet.local:5555"
     executions = []

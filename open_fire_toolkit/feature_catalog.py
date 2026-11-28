@@ -85,6 +85,10 @@ FEATURES = (
              'Review up to 32 standalone APKs in filename order, up to 512 MiB each and 2 GiB combined. '
              'Desktop metadata is ignored. Bundles, subfolders, links and other files stop the preview. '
              'Use the individual APK picker for a mixed folder.'),
+    _package('install-fdroid', 'Install F-Droid', 'install-fdroid', (Field('path', 'F-Droid APK', kind='file'),),
+             'Download the official APK to your computer. Choose Browse to select it, then Review. '
+             'Fire Tools checks org.fdroid.fdroid and the F-Droid signing certificate. '
+             'Choose Confirm and run to install it, then open F-Droid on your tablet.'),
     _package('system-update', 'Install a system app update', 'system-update', (PACKAGES, Field('paths', 'Standalone APK files', kind='files'), Field('signer', 'Expected signer SHA-256 (optional)')), 'Choose exactly one installed system package. Android enforces signing continuity, but an unsuitable update can break that service.'),
     _package('system-rollback', 'Revert system app updates', 'rollback-system', (PACKAGES,), 'May discard app data or newer app functionality; firmware must support this command.'),
     _package('ads-package-disable', 'Disable Special Offers app', 'ads-disable', description='Experimental: firmware may protect the app. Package state does not establish ad visibility.', category='Lock-screen ads'),

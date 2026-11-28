@@ -15,6 +15,11 @@ from time import monotonic, sleep
 from zipfile import BadZipFile, ZipFile
 
 
+FDROID_PACKAGE = "org.fdroid.fdroid"
+FDROID_APK_URL = "https://f-droid.org/F-Droid.apk"
+FDROID_KEYS_URL = "https://f-droid.org/docs/Release_Channels_and_Signing_Keys/"
+# The Android client signing certificate published at FDROID_KEYS_URL.
+FDROID_SIGNER_SHA256 = "43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed1552770abb9a9c9ccab"
 GOOGLE_SIGNER_SHA256 = "f0fd6c5b410f25cb25c3b53346c8972fae30f8ee7411df910480ad6b2d60db83"
 # This observed Play services rotation also requires a verified v3 signature
 # and its signed, in-APK proof of rotation from GOOGLE_SIGNER_SHA256.
