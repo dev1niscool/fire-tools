@@ -9,6 +9,7 @@ from dataclasses import asdict
 from . import __version__
 from .adb import AdbError
 from .apk import ApkError
+from .apk_pack import BUNDLED_HASHES, bundled_apks
 from .service import ToolConfig, Toolkit, ToolkitError
 from .feature_catalog import BY_KEY, FEATURES, feature_values, run_feature
 from .tablet_models import tablet_product_name
@@ -19,8 +20,14 @@ def _confirmation_options(command):
     command.add_argument('--confirm-token', help='Confirmation token from the reviewed preview')
 
 
+def _apk_sources(command, help_text):
+    group = command.add_mutually_exclusive_group(required=True)
+    group.add_argument('--bundled', action='store_true', help='Use the four audited Android 11 ARM64 APKs in your personal copy')
+    group.add_argument('apks', nargs='*', default=(), help=help_text)
+
+
 def parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description='Open Fire Toolkit for inspecting and managing tablets. No bundled APKs or tools.')
+    p = argparse.ArgumentParser(description='Fire Tools for inspecting and managing tablets.')
     p.add_argument('--version', action='version', version=__version__)
     p.add_argument('--adb', default='', help='Full path to official adb/adb.exe')
     p.add_argument('--aapt', default='', help='Full path to official aapt/aapt.exe')
@@ -33,7 +40,7 @@ def parser() -> argparse.ArgumentParser:
     check = subs.add_parser('check-apks', help='Compare local files with documented scan hashes before connecting a tablet')
     check.add_argument('--verify-google', action='store_true', help='Verify standalone Google components with local Android Build Tools and Java')
     check.add_argument('--sdk', type=int, help='Target Android API level for --verify-google, e.g. 30 for a 2023 HD 10')
-    check.add_argument('apks', nargs='+', help='Local APK file paths')
+    _apk_sources(check, 'Local APK file paths')
     subs.add_parser('devices', help='List ADB devices without selecting one')
     catalog = subs.add_parser('tools', help='List all tools and their parameters; no device required')
     catalog.add_argument('--feature', choices=sorted(BY_KEY), help='Show parameters for one tool')
@@ -50,7 +57,7 @@ def parser() -> argparse.ArgumentParser:
         if name != 'info':
             _confirmation_options(sub)
         if name == 'play':
-            sub.add_argument('apks', nargs='+', help='Standalone Google APKs: Framework, Play services and Play Store, plus optional Account Manager, Calendar Sync or Contacts Sync. Choose only adapters to add sync to an existing installation.')
+            _apk_sources(sub, 'Standalone Google APKs: Framework, Play services and Play Store, plus optional Account Manager, Calendar Sync or Contacts Sync. Choose only adapters to add sync to an existing installation.')
         if name == 'ads':
             sub.add_argument('--restore', action='store_true', help='Restore the original state saved by the selected mode')
             sub.add_argument('--with-package', action='store_true',
@@ -106,14 +113,16 @@ def main(argv=None) -> int:
             return 1
         from .apk_checks import check_apk_files, verify_google_apk_files
         try:
+            paths = bundled_apks() if args.bundled else args.apks
+            expected = {path: BUNDLED_HASHES[path.name] for path in paths} if args.bundled else None
             if args.verify_google:
                 report, success = verify_google_apk_files(
-                    args.apks, sdk=args.sdk, aapt_path=args.aapt, apksigner_jar=args.apksigner_jar,
-                    java_path=args.java)
+                    paths, sdk=args.sdk, aapt_path=args.aapt, apksigner_jar=args.apksigner_jar,
+                    java_path=args.java, expected_hashes=expected)
             elif args.sdk is not None:
                 raise ApkError('--sdk requires --verify-google.')
             else:
-                report, success = check_apk_files(args.apks)
+                report, success = check_apk_files(paths, expected_hashes=expected)
         except (ApkError, OSError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 1
@@ -152,6 +161,10 @@ def main(argv=None) -> int:
         if feature is not None and feature.backend == 'local':
             _print_report(run_feature(None, '', feature, values))
             return 0
+        if args.command == 'play' and args.bundled:
+            if demo:
+                raise ValueError('Use sample filenames for --demo. A personal APK pack is for real file verification.')
+            paths = bundled_apks()
         if demo:
             from .demo import DemoToolkit
             toolkit = DemoToolkit()
@@ -187,7 +200,10 @@ def main(argv=None) -> int:
                 print(package)
             return 0
         if args.command == 'play':
-            plan = toolkit.plan_google_play(args.serial, args.apks)
+            if args.bundled:
+                plan = toolkit.plan_bundled_google_play(args.serial, paths)
+            else:
+                plan = toolkit.plan_google_play(args.serial, args.apks)
         elif args.command == 'ads':
             plan = toolkit.plan_ads(args.serial, args.restore, paired=args.with_package)
         elif args.command == 'apps':

@@ -25,6 +25,35 @@ class CliTests(unittest.TestCase):
         with patch('subprocess.run',side_effect=AssertionError('No subprocess permitted')):
             code,out,err=self.call(['--demo','devices'])
         self.assertEqual(code,0);self.assertIn('DEMO_FIRE_HD10',out);self.assertIn('SIMULATED',out)
+    def test_bundle_and_explicit_files_are_mutually_exclusive(self):
+        for base in (['check-apks'], ['play', '--serial', 'S']):
+            for options in ([], ['other.apk', '--bundled'], ['--bundled', 'other.apk']):
+                with self.subTest(base=base, options=options), self.assertRaises(SystemExit) as error:
+                    self.call(base + options)
+                self.assertEqual(error.exception.code, 2)
+
+    def test_missing_bundle_is_reported_before_opening_adb(self):
+        from open_fire_toolkit.apk import ApkError
+        for base in (['check-apks'], ['play', '--serial', 'S']):
+            with patch('open_fire_toolkit.cli.bundled_apks', side_effect=ApkError('No personal APK pack')), \
+                    patch('open_fire_toolkit.cli.Toolkit', side_effect=AssertionError('No device needed')):
+                code, _, err = self.call(base + ['--bundled'])
+            self.assertEqual(code, 1)
+            self.assertIn('No personal APK pack', err)
+
+    def test_bundled_play_needs_the_normal_preview_and_confirmation(self):
+        serial = 'DEMO_FIRE_HD10'
+        paths = (Path('local.apk'),)
+        plan = DemoToolkit().plan_google_play(serial, paths)
+        with patch('open_fire_toolkit.cli.bundled_apks', return_value=paths), \
+                patch('open_fire_toolkit.cli.Toolkit') as toolkit:
+            toolkit.return_value.plan_bundled_google_play.return_value = plan
+            code, out, _ = self.call(['play', '--serial', serial, '--bundled'])
+            toolkit.return_value.plan_bundled_google_play.assert_called_once_with(serial, paths)
+            toolkit.return_value.execute.assert_not_called()
+            self.assertEqual(code, 0)
+            self.assertIn('--confirm-token', out)
+
     def test_info_keeps_the_hardware_digest_out_of_support_output(self):
         serial = 'DEMO_FIRE_HD10'
         info = replace(DemoToolkit().device_info(serial), hardware_serial_sha256='ab' * 32)

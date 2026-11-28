@@ -1,5 +1,6 @@
 import { connectDevice, readInventory, withDeviceLock } from "./browser-device.mjs";
-import { inspectApks, previewGoogle } from "./browser-apks.mjs";
+import { inspectApks, previewGoogle, savePack, loadPack } from "./browser-apks.mjs";
+import { forgetPack } from "./browser-apk-library.mjs";
 import { changeActions, previewChange } from "./browser-changes.mjs";
 import { readReport, createInventoryExport, previewSharedFile } from "./browser-report.mjs";
 
@@ -10,6 +11,11 @@ let session = null;
 let task = null;
 let review = null;
 let stagedFile = null;
+let loadedPack = null;
+
+function selectedApks() {
+  return loadedPack || Array.from(get("google-files").files);
+}
 
 function listText(element, items) {
   const entries = items.map(text => {
@@ -40,7 +46,7 @@ function refresh() {
   const connecting = task?.mode === "connect";
   const busy = Boolean(task);
   const writable = Boolean(session?.canWrite && navigator.locks);
-  const selected = get("google-files").files.length > 0;
+  const selected = selectedApks().length > 0;
   get("connect").hidden = Boolean(session) || connecting;
   get("connect").disabled = busy || !supportsUsb;
   get("disconnect").hidden = !session && !connecting;
@@ -51,6 +57,10 @@ function refresh() {
   for (const tab of tabs) tab.disabled = busy;
   get("action").disabled = busy;
   get("google-files").disabled = busy;
+  get("pack-selection").hidden = !loadedPack;
+  get("pack-save").disabled = busy || get("google-files").files.length !== 4 || !window.crypto?.subtle;
+  get("pack-load").disabled = busy || !window.crypto?.subtle;
+  get("pack-forget").disabled = busy;
   get("inspect").disabled = busy || !selected || !window.crypto?.subtle;
   get("google-review").disabled = busy || !selected || !writable;
   for (const id of ["change-review", "inventory", "read-report", "export"]) {
@@ -107,7 +117,7 @@ function forgetSession() {
 function lostSession(target) {
   if (target !== session) return;
   const applying = task?.mode === "apply";
-  task = null;
+  if (task?.mode !== "pack") task = null;
   forgetSession();
   refresh();
   message(applying ? "USB disconnected during a change. Some steps may have completed. Reconnect this tablet and review its state."
@@ -116,7 +126,7 @@ function lostSession(target) {
 
 async function run(mode, trigger, startText, work) {
   if (task) return;
-  const current = { mode, trigger, abort: mode === "connect" ? new AbortController() : null };
+  const current = { mode, trigger, abort: ["connect", "pack"].includes(mode) ? new AbortController() : null };
   task = current;
   refresh();
   message(startText, trigger);
@@ -243,12 +253,50 @@ get("confirm").addEventListener("click", () => {
   });
 });
 
-get("google-files").addEventListener("change", () => {
+function resetApkReview() {
   clearReview();
   get("apk-results").hidden = true;
   get("apk-list").replaceChildren();
+}
+get("google-files").addEventListener("change", () => {
+  if (task?.mode === "pack") task.abort.abort();
+  loadedPack = null;
+  resetApkReview();
   get("message").textContent = "";
   refresh();
+});
+
+get("pack-save").addEventListener("click", () => {
+  const trigger = get("pack-save");
+  const files = Array.from(get("google-files").files);
+  resetApkReview();
+  run("pack", trigger, "Verifying and saving the four APKs in this Chrome profile…", async current => {
+    await savePack(files, current.abort.signal);
+    if (task === current) message("Saved four verified APKs in this Chrome profile.", trigger);
+  });
+});
+
+get("pack-load").addEventListener("click", () => {
+  const trigger = get("pack-load");
+  loadedPack = null;
+  resetApkReview();
+  run("pack", trigger, "Checking the saved APKs against their audited hashes…", async current => {
+    const files = await loadPack(current.abort.signal);
+    if (task !== current) return;
+    get("google-files").value = "";
+    loadedPack = files;
+    message("Four verified APKs are ready. Connect your tablet and review installation.", trigger);
+  });
+});
+
+get("pack-forget").addEventListener("click", () => {
+  const trigger = get("pack-forget");
+  loadedPack = null;
+  resetApkReview();
+  run("pack", trigger, "Removing the saved APKs from this Chrome profile…", async current => {
+    await forgetPack(current.abort.signal);
+    if (task === current) message("Saved APKs removed from this Chrome profile.", trigger);
+  });
 });
 
 get("inspect").addEventListener("click", () => {
@@ -256,7 +304,7 @@ get("inspect").addEventListener("click", () => {
   get("apk-results").hidden = true;
   const trigger = get("inspect");
   run("inspect", trigger, "Checking selected file hashes on this computer…", async current => {
-    const files = await inspectApks([...get("google-files").files]);
+    const files = await inspectApks(selectedApks());
     if (task !== current) return;
     listText(get("apk-list"), files.map(file => file.filename + " — " + file.name + "\n" + file.package +
       "\nSHA-256 " + file.sha256 + (file.partialScan ? "\nA legacy Android scan check timed out for this build." : "")));
@@ -265,7 +313,7 @@ get("inspect").addEventListener("click", () => {
   });
 });
 get("google-review").addEventListener("click", () => {
-  const files = [...get("google-files").files];
+  const files = selectedApks();
   preview("google-review", target => previewGoogle(target, target.device, files));
 });
 

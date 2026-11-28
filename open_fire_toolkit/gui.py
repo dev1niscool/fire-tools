@@ -8,6 +8,7 @@ from threading import Thread
 from typing import TYPE_CHECKING
 import webbrowser
 
+from .apk_pack import bundled_apks, pack_available
 from .tablet_models import tablet_product_name
 
 if TYPE_CHECKING:
@@ -91,6 +92,7 @@ class App:
         self.device = None
         self.devices = []
         self.apk_paths: list[Path] = []
+        self.using_bundle = False
         self.loaded_apps = []
         self.worker = Worker()
         self.review = None
@@ -272,17 +274,23 @@ class App:
     def _play_tab(self):
         from .feature_catalog import BY_KEY
 
+        has_pack = not self.demo and pack_available()
+        if has_pack:
+            setup = "Use bundled APKs for the four audited Android 11 ARM64 components. Choose APKs starts a manual selection."
+        else:
+            setup = "For Android 11 ARM64, choose downloaded APKs for Account Manager, Services Framework, Play services and Play Store."
+
         tab = self._panel(
             "Google Play", "Install Google Play",
-            "For a fresh Android 11 ARM64 setup, choose standalone APKs for Google Account Manager, "
-            "Google Services Framework, Google Play services and Play Store. Calendar Sync and "
-            "Contacts Sync are optional. To add sync to an existing setup, choose just the adapters.",
+            setup + " To add Calendar or Contacts sync to an existing installation, choose only the adapters.",
         )
         self.apk_table = self._table(
             tab, (("file", "Local APK files", 440),), 3, self._sync_controls,
         )
         files = self.ttk.Frame(tab, style="Panel.TFrame")
         files.pack(fill="x", pady=(8, 6))
+        if has_pack:
+            self._button(files, "Use bundled APKs", self._load_bundled_apks).pack(side="left", padx=(0, 6))
         self._button(files, "Choose APKs...", self._choose_apks).pack(side="left")
         if self.demo:
             self._button(files, "Use demo sample", self._demo_apks).pack(side="left", padx=(6, 0))
@@ -705,7 +713,21 @@ class App:
         selected = self.files.askopenfilenames(
             parent=self.root, title="Select local Google Play APKs", filetypes=(("APK files", "*.apk"),),
         )
+        if selected and self.using_bundle:
+            self._clear_apks()
         self._add_apks(selected)
+
+    def _load_bundled_apks(self):
+        if self.worker.busy or self.review is not None:
+            return
+        self._clear_apks()
+
+        def loaded(paths):
+            self.using_bundle = True
+            self._add_apks(paths)
+            self._append_log("Four APKs match the audited APKMirror builds. Choose Verify and review to check the tablet.")
+
+        self._start("Check personal APK pack", lambda _log: bundled_apks(), loaded)
 
     def _demo_apks(self):
         self._clear_apks()
@@ -720,6 +742,7 @@ class App:
         self._sync_controls()
 
     def _clear_apks(self):
+        self.using_bundle = False
         self.apk_paths.clear()
         self._clear_table(self.apk_table)
         self._sync_controls()
@@ -825,7 +848,10 @@ class App:
 
     def _plan_play(self):
         paths = tuple(self.apk_paths)
-        self._plan("Verify local APKs", lambda toolkit, serial: toolkit.plan_google_play(serial, paths))
+        if self.using_bundle:
+            self._plan("Verify personal APK pack", lambda toolkit, serial: toolkit.plan_bundled_google_play(serial, paths))
+        else:
+            self._plan("Verify local APKs", lambda toolkit, serial: toolkit.plan_google_play(serial, paths))
 
     def _plan_ads(self, restore, paired=False):
         self._plan("Review lock-screen ad changes",

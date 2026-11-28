@@ -17,6 +17,7 @@ from .apk import (
     file_sha256, google_play_order, google_signer_is_trusted, stage_apk,
 )
 from .apk_checks import scan_record
+from .apk_pack import BUNDLED_HASHES
 from .package_catalog import OFFERS
 from .package_workflows import OWNER_MODE_COMMANDS, PackageWorkflows
 from .device_workflows import DeviceWorkflows, _load, _read_file
@@ -180,6 +181,15 @@ class Toolkit(PackageWorkflows, DeviceWorkflows, ExtraWorkflows):
                             'includes Google Account Manager. Select its APK as well if it is missing.')
         return Plan('Install Google Play components', serial, tuple(details), tuple(warnings),
                     'play', device, tuple(apks), providers_to_enable=providers)
+
+    def plan_bundled_google_play(self, serial: str, paths: Sequence[str | Path]) -> Plan:
+        plan = self.plan_google_play(serial, paths)
+        # Compare the signed APK metadata that execute() will stage and recheck.
+        # A different Google-signed build may have replaced a file since selection.
+        reviewed = {apk.package + '.apk': apk.sha256 for apk in plan.apks}
+        if len(plan.apks) != len(BUNDLED_HASHES) or reviewed != BUNDLED_HASHES:
+            raise ToolkitError('The four components no longer match the audited personal APK pack. Reload the pack.')
+        return plan
 
     def _play_providers_to_enable(self, device, apks, verifier):
         serial = device.serial

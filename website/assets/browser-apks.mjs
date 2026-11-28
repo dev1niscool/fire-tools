@@ -1,3 +1,5 @@
+import { isStoredFile, writeStoredPack, readStoredPack } from "./browser-apk-library.mjs";
+
 // These are whole-file identities from the project's SDK signer, manifest and
 // antivirus review. No APK or remotely supplied verification catalog is used.
 const account = "com.google.android.gsf.login";
@@ -38,9 +40,10 @@ async function inspect(files, stage) {
     }
     if (matches.has(record.package)) throw Error("Duplicate component: " + record.package);
     const match = {...record, filename: file.name};
-    // The installer reads this private snapshot, rather than reopening a
-    // selected disk file after its bytes have been checked.
-    if (stage) match.blob = new Blob([bytes], {type: "application/vnd.android.package-archive"});
+    // Disk selections can change. Snapshot their reviewed bytes before any device
+    // write. IndexedDB already provides immutable snapshots: another 218 MiB
+    // Play services Blob can exhaust Chrome's memory-backed private storage.
+    if (stage) match.blob = isStoredFile(file) ? file : new Blob([bytes], {type: "application/vnd.android.package-archive"});
     matches.set(record.package, match);
   }
   return records.filter(row => matches.has(row.package)).map(row => matches.get(row.package));
@@ -48,6 +51,39 @@ async function inspect(files, stage) {
 
 export async function inspectApks(files) {
   return inspect(Array.from(files), false);
+}
+
+// The reusable personal pack contains the four APKMirror reference variants.
+// The same verifier still handles optional individually selected sync adapters.
+async function verifyPersonalPack(files, snapshot = false) {
+  const primary = records.filter(row => row.package === account || core.includes(row.package));
+  if (!Array.isArray(files) || files.length !== primary.length || !primary.every(row =>
+    files.some(file => file instanceof File && file.size === row.size))) {
+    throw Error("Choose the four audited APKs: Account Manager, Services Framework, Play services and Play Store.");
+  }
+  const checked = await inspect(files, snapshot);
+  return snapshot ? checked.map(row => new File([row.blob], row.package + ".apk",
+    {type: row.blob.type, lastModified: 0})) : files;
+}
+
+export async function savePack(files, signal) {
+  signal?.throwIfAborted();
+  // Save an immutable snapshot of exactly the verified bytes. One transaction
+  // replaces the whole set, so a failed write leaves the previous set intact.
+  const verified = await verifyPersonalPack(files, true);
+  await writeStoredPack(verified, signal);
+}
+
+export async function loadPack(signal) {
+  const files = await readStoredPack(signal);
+  if (files === undefined) throw Error("No saved APK set. Choose the four files on your computer first.");
+  if (!Array.isArray(files)) throw Error("The saved APK set is damaged. Forget it and choose the four files again.");
+  try { await verifyPersonalPack(files); }
+  catch (error) {
+    throw Error("The saved APK set failed verification. Forget it and choose the four files again. " + error.message);
+  }
+  signal?.throwIfAborted();
+  return files;
 }
 
 function checkDevice(session, device) {

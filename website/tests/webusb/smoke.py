@@ -16,6 +16,7 @@ from functools import partial
 import hashlib
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -80,6 +81,117 @@ def change_ads(page, action, *, confirm):
     expect(page.locator("#web-change-review")).to_be_enabled()
 
 
+def install_and_verify(page, package_ids):
+    page.locator("#web-google-review").click()
+    expect(page.locator("#web-confirm")).to_be_enabled(timeout=90_000)
+    assert page.evaluate("mockTablet.installs") == []
+    page.locator("#web-confirm").click()
+    expect(page.locator("#web-google-review")).to_be_enabled(timeout=240_000)
+    assert page.evaluate("mockTablet.installs") == package_ids, page.locator("#web-log").text_content()
+    assert page.evaluate("mockTablet.reads") == package_ids, page.locator("#web-log").text_content()
+    assert "Open Play Store" in page.locator("#web-log").text_content()
+
+
+def corrupt_saved_apk(page):
+    # Retain name and length but change a ZIP byte. Loading it must rehash and fail.
+    page.evaluate("""async () => {
+      const db = await new Promise((ok, reject) => {
+        const req = indexedDB.open("fire-tools-apk-library", 1);
+        req.onsuccess = () => ok(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      try {
+        await new Promise((ok, reject) => {
+          const tx = db.transaction("packs", "readwrite");
+          tx.oncomplete = ok;
+          tx.onabort = () => reject(tx.error);
+          const store = tx.objectStore("packs");
+          const key = "hd10-android11-arm64";
+          const req = store.get(key);
+          req.onsuccess = () => {
+            const files = req.result;
+            const old = files[0];
+            files[0] = new File([new Uint8Array([0]), old.slice(1)], old.name);
+            store.put(files, key);
+          };
+        });
+      } finally { db.close(); }
+    }""")
+
+
+def run_saved_apks(browser, url, apks):
+    page = browser.new_page()
+    page.add_init_script(path=HERE / "fakeusb.js")
+    errors = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto(url)
+    message = page.locator("#web-message")
+    load = page.locator("#web-pack-load")
+    load.click()
+    expect(message).to_contain_text("No saved APK set")
+    assert page.evaluate("mockTablet.chooserCount") == 0
+
+    if apks:
+        ids = ["com.google.android.gsf.login", "com.google.android.gsf",
+               "com.google.android.gms", "com.android.vending"]
+        core = [path for path in apks if SIZES[path.stat().st_size] in ids]
+        assert len(core) == 4
+        # Delete the selected copies after saving to prove later installs need no source files.
+        with TemporaryDirectory() as selected:
+            copies = [Path(shutil.copyfile(path, Path(selected) / path.name)) for path in core]
+            select_real_files(page, copies)
+            page.locator("#web-pack-save").click()
+            expect(message).to_contain_text("Saved four", timeout=90_000)
+
+        # A new page must work with only the locally stored bytes.
+        page.reload()
+        assert page.locator("#web-google-files").input_value() == ""
+        load.click()
+        expect(message).to_contain_text("Four verified APKs are ready", timeout=90_000)
+        expect(page.locator("#web-inspect")).to_be_enabled()
+        expect(page.locator("#web-google-review")).to_be_disabled()
+        assert page.evaluate("mockTablet.chooserCount") == 0
+        page.locator("#web-connect").click()
+        expect(page.locator("#web-identity")).to_contain_text("KFTUWI")
+        page.evaluate("(sizes) => mockTablet.filesBySize = sizes", {str(k): v for k, v in SIZES.items()})
+        page.locator("#web-google-review").click()
+        expect(page.locator("#web-confirm")).to_be_enabled(timeout=90_000)
+        page.locator("#web-cancel").click()
+        expect(message).to_contain_text("Preview canceled")
+        assert page.evaluate("mockTablet.installs") == []
+        install_and_verify(page, ids)
+
+        page.reload()
+        corrupt_saved_apk(page)
+        load.click()
+        expect(message).to_contain_text(re.compile(r"does not match|damaged"), timeout=90_000)
+        expect(page.locator("#web-inspect")).to_be_disabled()
+        assert page.evaluate("mockTablet.installs") == []
+        page.locator("#web-pack-forget").click()
+        expect(message).to_contain_text("Saved APKs removed")
+        page.reload()
+        load.click()
+        expect(message).to_contain_text("No saved APK set")
+
+        print("Passed saved four-APK install and readback, canceled preview, tamper rejection and removal.", flush=True)
+
+    # Disabling site storage must preserve the manual file workflow.
+    page.add_init_script("""Object.defineProperty(window, 'indexedDB', {
+        get() { throw new DOMException('Storage denied', 'SecurityError'); }
+    });""")
+    page.reload()
+    load.click()
+    expect(message).to_contain_text("could not access the saved APKs")
+    if apks:
+        small_apk = min(apks, key=lambda path: path.stat().st_size)
+        select_real_files(page, [small_apk])
+        page.locator("#web-inspect").click()
+        expect(message).to_contain_text("1 file matches", timeout=30_000)
+        print("Passed manual selection with IndexedDB blocked.", flush=True)
+    assert not errors, errors
+    page.context.close()
+
+
 def run(browser, url, apks):
     page = browser.new_page()
     page.add_init_script(path=HERE / "fakeusb.js")
@@ -120,14 +232,7 @@ def run(browser, url, apks):
         page.locator("#web-tab-google").click()
         page.evaluate("(sizes) => mockTablet.filesBySize = sizes", {str(k): v for k, v in SIZES.items()})
         select_real_files(page, apks)
-        page.locator("#web-google-review").click()
-        expect(page.locator("#web-confirm")).to_be_enabled(timeout=90_000)
-        assert page.evaluate("mockTablet.installs") == []
-        page.locator("#web-confirm").click()
-        expect(page.locator("#web-google-review")).to_be_enabled(timeout=240_000)
-        assert page.evaluate("mockTablet.installs") == list(SIZES.values())
-        assert page.evaluate("mockTablet.reads") == list(SIZES.values())
-        assert "Open Play Store" in page.locator("#web-log").text_content()
+        install_and_verify(page, list(SIZES.values()))
         print("Passed all six real APKs through streamed installs and installed-byte readback.", flush=True)
     else:
         print("Skipped real APK installation; supply --apk-dir to include all six audited files.")
@@ -144,6 +249,8 @@ def run(browser, url, apks):
     assert not page.evaluate("mockTablet.failures")
     assert not errors, errors
     print("Passed disconnect with an unconfirmed change.")
+    page.context.close()
+    run_saved_apks(browser, url, apks)
 
 
 def main():

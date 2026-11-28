@@ -1,6 +1,6 @@
 # Fire Tools
 
-An independent, MIT-licensed desktop and command-line toolkit for Amazon Fire tablets. Install Google Play, manage lock-screen ads, compare debloat presets, and back up settings and files. Version 0.5.0 recognizes 33 Amazon model IDs offline, previews a folder of APKs for installation, and adds six optional Private DNS presets. [Comparison with Hayden Plumley’s Fire-Tools](docs/HAYDEN-REVIEW.md) · [Original Fire Toolbox v46 review](docs/REA-AUDIT.md)
+An independent, MIT-licensed desktop and command-line toolkit for Amazon Fire tablets. Install Google Play, manage lock-screen ads, compare debloat presets, and back up settings and files. Version 0.6.0 supports a personal Google APK bundle for the 2023 Fire HD 10 and an experimental USB installer in desktop Chrome. [Comparison with Hayden Plumley’s Fire-Tools](docs/HAYDEN-REVIEW.md) · [Original Fire Toolbox v46 review](docs/REA-AUDIT.md)
 
 [Read the Fire tablet field guide](https://dev1niscool.github.io/fire-tools/) for setup, model compatibility and step-by-step tool guides.
 
@@ -10,9 +10,15 @@ The desktop app supports tablet changes on Windows and Linux. Its macOS launcher
 
 Open **Browser tools (experimental)** on a computer, enable USB debugging on the Fire tablet and choose **Connect tablet**. Chrome handles the USB connection directly. You can preview debloat or ad changes, install the exact audited Google APKs, and save a tablet report. The page identifies its supported operations and firmware limits. [Open browser tools](https://dev1niscool.github.io/fire-tools/browser.html)
 
+## Use a personal Google APK bundle
+
+If your extracted copy includes a `google-apks` folder beside the launchers, open **Google Play → Use bundled APKs**, then **Verify and review**. The four-file set contains Google Account Manager, Google Services Framework, Google Play services and Play Store for the 2023 Fire HD 10 (Android 11, ARM64). You can check the set offline with `python -m open_fire_toolkit check-apks --bundled`.
+
+The project’s MIT license covers Fire Tools. Google retains the rights to the APKs. The public release includes a local pack builder. Save the four exact APKMirror downloads in one folder and run `python scripts/package_personal.py --output fire-tools-personal.zip PATH_TO_FOLDER`. Extract the resulting ZIP before launching it. Browser users can select the four APKs from the same folder and save the verified set in this Chrome profile. [Exact downloads and compatibility](https://dev1niscool.github.io/fire-tools/google-play.html#choose-files)
+
 ## Checking your download
 
-Fire Tools runs from Python source on your computer. Extract the folder containing the launchers. The optional Android helper ships as Java source, and Google apps are separate downloads. Compare your ZIP with the published SHA-256. [Download Fire Tools 0.5.0](https://github.com/dev1niscool/fire-tools/archive/refs/tags/v0.5.0.zip) · [Release notes and ZIP checksum](https://github.com/dev1niscool/fire-tools/releases/tag/v0.5.0) · [Verification record](https://github.com/dev1niscool/fire-tools/blob/main/docs/TESTING.md#comparison-release-050)
+Fire Tools runs from Python source on your computer. Extract the folder containing the launchers. The public GitHub ZIP contains the Fire Tools source. Google licenses its mobile apps separately. Compare your ZIP with the published SHA-256. [Download Fire Tools 0.6.0](https://github.com/dev1niscool/fire-tools/archive/refs/tags/v0.6.0.zip) · [Release notes and ZIP checksum](https://github.com/dev1niscool/fire-tools/releases/tag/v0.6.0) · [Verification record](https://github.com/dev1niscool/fire-tools/blob/main/docs/TESTING.md#release-archive)
 
 **Before connecting the tablet**, open **Google Play → Choose APKs → Check scan records**. This reads the files locally and shows whether their SHA-256 hashes match files examined in the project audit. The command-line equivalent is `./launch-linux.sh check-apks file.apk` or `.\launch-windows.cmd check-apks "C:\Downloads\file.apk"` in PowerShell. For Google components, use the **Google Play** tab. It checks Google’s signing identity and verifies the installed bytes. The general **sideload** tool also accepts apps from other publishers. [Links to the six scanned builds](docs/GOOGLE-APKS.md#files-with-a-local-scan-record) · [Audit and scan results](docs/TESTING.md)
 
@@ -48,7 +54,7 @@ python -m open_fire_toolkit tool source-catalog
 
 For a real tablet, put the tool paths before `tool`, include `--serial` from `devices`, and provide the listed `--param key=value` arguments. Mutations default to preview. Review the preview and repeat the command with its printed `--yes --confirm-token TOKEN` arguments. Each token binds the tablet, inputs, targets and state shown by that plan. Source links and Wi-Fi endpoint connection do not require a selected tablet; connecting does not automatically select it.
 
-Some v46 workflows still differ. For example, Fire Tools extracts installed split APKs and accepts standalone APKs for installation. Google APK selection is manual. [REA comparison and remaining differences](docs/REA-AUDIT.md) · [Feature coverage](docs/FEATURES.md) · [Verification](docs/TESTING.md)
+Some v46 workflows still differ. For example, Fire Tools extracts installed split APKs and accepts standalone APKs for installation. [REA comparison and remaining differences](docs/REA-AUDIT.md) · [Feature coverage](docs/FEATURES.md) · [Verification](docs/TESTING.md)
 
 ## Try the offline demo
 
@@ -65,7 +71,7 @@ In PowerShell, prefix the Windows launcher with `.\`. You can also run `python -
 ## Set up a real tablet
 
 1. Install Python 3.11 or later. For the GUI use a Python installation with Tk support. The official Windows installer includes an optional Tcl/Tk component. On Debian or Ubuntu, install `python3-tk` for the distribution's Python. The CLI does not require Tk. [Python downloads](https://www.python.org/downloads/)
-2. Download Google's SDK Platform-Tools and extract the entire archive. For Google Play, also install Android SDK Build Tools using the SDK Manager in Android Studio or Google's SDK command-line tools. Use a JDK compatible with your chosen tools. JDK 17 or newer is a practical starting point. The Build Tools 36.0.0 verifier launched with OpenJDK 21 in a local smoke check. Android Studio's bundled runtime is also an option. The toolkit leaves tool and APK downloads to you. [Platform-Tools](https://developer.android.com/tools/releases/platform-tools) · [SDK Manager](https://developer.android.com/studio/command-line/sdkmanager) · [Build Tools](https://developer.android.com/tools/releases/build-tools)
+2. Download Google's SDK Platform-Tools and extract the entire archive. For Google Play, also install Android SDK Build Tools using the SDK Manager in Android Studio or Google's SDK command-line tools. Use a JDK compatible with your chosen tools. JDK 17 or newer is a practical starting point. The Build Tools 36.0.0 verifier launched with OpenJDK 21 in a local smoke check. Android Studio's bundled runtime is also an option. Use the four files in your personal bundle or select your own local APKs. [Platform-Tools](https://developer.android.com/tools/releases/platform-tools) · [SDK Manager](https://developer.android.com/studio/command-line/sdkmanager) · [Build Tools](https://developer.android.com/tools/releases/build-tools)
 3. On the tablet, open **Settings → Device Options → About Fire Tablet**, tap **Serial Number** seven times, then enable USB debugging under **Developer Options**. Names can vary with Fire OS. Connect a USB data cable, unlock the tablet and approve your computer’s RSA fingerprint in the debugging prompt.
 4. In **Connection**, supply the full ADB executable path, choose **Scan devices**, select your tablet, and choose **Use selected tablet**. The view shows its Android API level and supported ABIs. If it reports `unauthorized`, check the prompt on the unlocked tablet. If nothing appears, try a data-capable cable and check your operating system's ADB driver or USB permissions. [USB driver setup and audit](https://dev1niscool.github.io/fire-tools/drivers.html) · [Android USB setup](https://developer.android.com/studio/run/device)
 

@@ -17,6 +17,14 @@ These are the six exact builds examined in the project audit. Before enabling US
 | Google Calendar Sync (optional) | [2021.23.3](https://gitlab.opengapps.org/opengapps/all/-/blob/b458223777512c97639cb6bb54bfad93047406d7/app/com.google.android.syncadapters.calendar/30/nodpi/2017005136.apk) |
 | Google Contacts Sync (optional) | [11](https://gitlab.opengapps.org/opengapps/all/-/blob/b458223777512c97639cb6bb54bfad93047406d7/app/com.google.android.syncadapters.contacts/30/nodpi/30.apk) |
 
+## Personal four-file bundle
+
+The personal bundle packages the four Android 11 reference APKs with Fire Tools on your computer. Their whole-file SHA-256 values match the linked APKMirror variants. These copies were obtained from the v46 catalog archives and verified against the APKMirror listings. Calendar and Contacts Sync are optional and excluded. Google licenses its mobile apps separately. [Google Mobile Services](https://www.android.com/gms/) · [Google software terms](https://policies.google.com/terms?hl=en-US#toc-software)
+
+1. For a preloaded copy, extract the ZIP and leave `google-apks/` beside the launchers. To create one from the public source release, put the four standalone downloads from the table above in a folder and run `python scripts/package_personal.py --output fire-tools-personal.zip PATH_TO_FOLDER`.
+2. Open **Google Play → Use bundled APKs → Verify and review**. The desktop checks each file’s hash and verifies its signed package and compatibility before installation. The command `python -m open_fire_toolkit check-apks --bundled` checks an extracted pack’s hashes offline.
+3. In Chrome, select all four files from the extracted folder in **Browser tools → Google Play**. You can save the set on this computer to use it again, or forget it to reclaim space. [Browser tools](https://dev1niscool.github.io/fire-tools/browser.html)
+
 ## Other download options and device requirements
 
 For a fresh setup following the Fire Toolbox Android 11 workflow, select **Google Account Manager**, **Google Services Framework**, **Google Play services** and **Google Play Store**. Fire Tools also accepts a three-file plan with the legacy Account Manager omitted. Calendar and Contacts Sync are optional for people who want to sync that data.

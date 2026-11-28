@@ -55,9 +55,9 @@
       "Open a terminal in the extracted folder. On Windows PowerShell run .\\launch-windows.cmd. On Linux run sh launch.sh.",
       "Download and extract Google’s SDK Platform-Tools. In Fire Tools → Connection → ADB, browse to adb.exe (Windows) or adb (Linux)."],
     "The regular Fire Tools window is open and the ADB field points to the extracted executable.",
-    [link("Download the source ZIP", "https://github.com/dev1niscool/fire-tools/archive/refs/tags/v0.5.0.zip"),
-      link("Published checksum", "https://github.com/dev1niscool/fire-tools/releases/tag/v0.5.0"),
-      link("How to check the hash", "https://github.com/dev1niscool/fire-tools/blob/v0.5.0/docs/TESTING.md#release-archive"),
+    [link("Download the source ZIP", "https://github.com/dev1niscool/fire-tools/archive/refs/tags/v0.6.0.zip"),
+      link("Published checksum", "https://github.com/dev1niscool/fire-tools/releases/tag/v0.6.0"),
+      link("How to check the hash", "https://github.com/dev1niscool/fire-tools/blob/v0.6.0/docs/TESTING.md#release-archive"),
       link("Download Python", "https://www.python.org/downloads/"),
       link("Download Platform-Tools", "https://developer.android.com/tools/releases/platform-tools"),
       link("Launcher instructions", "setup.html#desktop")]);
@@ -96,7 +96,7 @@
     const links = reference
       ? [link("Download the audited HD 10 builds", "google-play.html#choose-files")]
       : [link("Google LLC app listings", "https://www.apkmirror.com/apk/google-inc/"),
-        link("Variant and signing guidance", "https://github.com/dev1niscool/fire-tools/blob/v0.5.0/docs/GOOGLE-APKS.md#other-download-options-and-device-requirements")];
+        link("Variant and signing guidance", "https://github.com/dev1niscool/fire-tools/blob/v0.6.0/docs/GOOGLE-APKS.md#other-download-options-and-device-requirements")];
     links.push(link("Understand the scan records", "apkmirror.html#check-files"));
     return section("play-files", "Choose the Google APKs",
       reference ? "The reference downloads were checked for the Android 11, ARM64 Fire HD 10. Installation and sign-in on a physical tablet remain unverified."

@@ -23,11 +23,17 @@ Run `python3 -m open_fire_toolkit gui --demo` in a desktop session with Tk. On L
 
 ## Release archive
 
-The GitHub release page provides the checksum for GitHub’s tagged source ZIP. If you build the separate source-only distribution using `scripts/package_release.py`, compare that ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c fire-tools-0.5.0.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\fire-tools-0.5.0.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `fire-tools-0.5.0.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
+The GitHub release page provides the checksum for GitHub’s tagged source ZIP. If you build the separate source-only distribution using `scripts/package_release.py`, compare that ZIP with the accompanying checksum before extraction. On Linux use `sha256sum -c fire-tools-0.6.0.zip.sha256` from the directory with the ZIP and its companion checksum file. On Windows use `Get-FileHash .\fire-tools-0.6.0.zip -Algorithm SHA256` in PowerShell and compare the result with the digest in `fire-tools-0.6.0.zip.sha256`. After extraction, the internal `SHA256SUMS` lists every shipped source/document file; run `sha256sum -c SHA256SUMS` inside that extracted project folder. Inspect the ZIP's contents and run the offline demo from the extracted folder.
 
-On macOS, run `shasum -a 256 fire-tools-0.5.0.zip` to display the download hash. On macOS and Linux, use an archive utility that preserves executable permissions, such as `unzip`, when running launcher tests. Start Fire Tools with `sh launch.sh` if the archive utility did not preserve permissions.
+On macOS, run `shasum -a 256 fire-tools-0.6.0.zip` to display the download hash. On macOS and Linux, use an archive utility that preserves executable permissions, such as `unzip`, when running launcher tests. Start Fire Tools with `sh launch.sh` if the archive utility did not preserve permissions.
 
 The checksum verifies that the ZIP matches the checksum you obtained. Obtain both files from a source you trust.
+
+## Personal Google APK bundle
+
+On November 28, 2026, all four files in the private Android 11 ARM64 pack matched the whole-file SHA-256 values on the exact APKMirror listings, 298,757,952 bytes in total. Their signed manifests and Google signing identities passed the Android Build Tools 36.0.0 check at API 30, including the signing key rotation for Play services. The same checks passed on the two separate optional Open GApps sync adapters. [Builds, sources and hashes](GOOGLE-APKS.md#files-with-a-local-scan-record)
+
+The repeated scan with ClamAV 1.5.5 and 3,628,228 official signatures returned zero detections on all six files. One legacy Android bytecode check timed out on Play services and Play Store. Results apply to those exact APK files. Physical Fire tablet operation and Google sign-in remain unverified.
 
 ## Comparison release 0.5.0
 

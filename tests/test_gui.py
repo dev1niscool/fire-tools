@@ -1,6 +1,8 @@
 """Headless tests for the desktop operation boundary."""
 
 import importlib
+from pathlib import Path
+from unittest.mock import Mock, patch
 import threading
 import time
 import unittest
@@ -68,6 +70,49 @@ class WorkerTests(unittest.TestCase):
         self.assertTrue(self.worker.submit(lambda log: "retry", finished.append, self.fail))
         self.wait_for_result()
         self.assertEqual(finished, ["retry"])
+
+
+class BundledSelectionTests(unittest.TestCase):
+    def test_bundled_selection_clears_old_paths_before_loading_and_preserves_preview(self):
+        from open_fire_toolkit.gui import App
+        app = App.__new__(App)
+        app.apk_paths = [Path("stale.apk")]
+        app.using_bundle = False
+        app.worker = Mock(busy=False)
+        app.review = None
+        app.apk_table = Mock()
+        app.apk_table.get_children.return_value = []
+        app._sync_controls = Mock()
+        app._append_log = Mock()
+        app._start = Mock()
+        app._load_bundled_apks()
+        self.assertEqual(app.apk_paths, [])
+        _, load, complete = app._start.call_args.args
+        paths = tuple(map(Path, ["one.apk", "two.apk", "three.apk", "four.apk"]))
+        with patch("open_fire_toolkit.gui.bundled_apks", side_effect=ValueError("checksum")):
+            with self.assertRaisesRegex(ValueError, "checksum"):
+                load(None)
+        self.assertFalse(app.using_bundle)
+        self.assertFalse(app.apk_paths)
+        with patch("open_fire_toolkit.gui.bundled_apks", return_value=paths):
+            complete(load(None))
+        self.assertTrue(app.using_bundle)
+        self.assertEqual(tuple(app.apk_paths), paths)
+        app._plan = Mock()
+        toolkit = Mock()
+        app._plan_play()
+        app._plan.call_args.args[1](toolkit, "owner")
+        toolkit.plan_bundled_google_play.assert_called_once_with("owner", paths)
+        toolkit.execute.assert_not_called()
+        app.files = Mock()
+        app.files.askopenfilenames.return_value = ()
+        app.root = Mock()
+        app._choose_apks()
+        self.assertTrue(app.using_bundle)
+        app.files.askopenfilenames.return_value = ('adapter.apk',)
+        app._choose_apks()
+        self.assertEqual(app.apk_paths, [Path('adapter.apk')])
+        self.assertFalse(app.using_bundle)
 
 
 if __name__ == "__main__":

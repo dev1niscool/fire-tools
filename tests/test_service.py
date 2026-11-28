@@ -98,6 +98,30 @@ class ServiceTests(unittest.TestCase):
             p=Path(p)
             return replace(by_hash[file_sha256(p)],path=p)
         return patch('open_fire_toolkit.service.ApkVerifier',return_value=type('Verifier',(),{'inspect':staticmethod(inspect), 'inspect_installed_base':staticmethod(inspect)})())
+    def test_bundle_refuses_a_different_google_signed_build_before_preview(self):
+        apks = self.make_apks()
+        with self.verifier(apks):
+            manual = self.app.plan_google_play('SERIAL123', [a.path for a in apks])
+            self.assertEqual(len(manual.apks), 3)
+            with self.assertRaisesRegex(ToolkitError, 'personal APK pack'):
+                self.app.plan_bundled_google_play('SERIAL123', [a.path for a in apks])
+        self.assertEqual(self.adb.installed, [])
+
+    def test_bundle_preview_requires_exactly_its_four_reviewed_hashes(self):
+        from open_fire_toolkit.apk_pack import BUNDLED_HASHES
+        base = self.app.plan_ads('SERIAL123')
+        sample = self.make_apks()[0]
+        core = tuple(replace(sample, package=name[:-4], sha256=digest) for name, digest in BUNDLED_HASHES.items())
+        complete = replace(base, apks=core)
+        with patch.object(self.app, 'plan_google_play', return_value=complete):
+            self.assertIs(self.app.plan_bundled_google_play('SERIAL123', ()), complete)
+        changed = replace(core[0], sha256='0' * 64)
+        extra = replace(core[0], package='com.google.android.syncadapters.contacts')
+        for apks in ((changed, *core[1:]), core[1:], (*core, extra), (*core, core[0])):
+            with self.subTest(packages=len(apks)), patch.object(self.app, 'plan_google_play', return_value=replace(base, apks=apks)):
+                with self.assertRaisesRegex(ToolkitError, 'personal APK pack'):
+                    self.app.plan_bundled_google_play('SERIAL123', ())
+
     def test_unconfirmed_plan_cannot_write(self):
         plan=self.app.plan_ads('SERIAL123')
         with self.assertRaises(ToolkitError): self.app.execute(plan)

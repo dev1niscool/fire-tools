@@ -58,6 +58,7 @@ open_fire_toolkit/adb.py
 open_fire_toolkit/advanced_gui.py
 open_fire_toolkit/apk.py
 open_fire_toolkit/apk_checks.py
+open_fire_toolkit/apk_pack.py
 open_fire_toolkit/batch_folder.py
 open_fire_toolkit/cli.py
 open_fire_toolkit/demo.py
@@ -73,6 +74,7 @@ open_fire_toolkit/workflows.py
 pyproject.toml
 release-files.txt
 scripts/build_ads_helper.py
+scripts/package_personal.py
 scripts/package_release.py
 tests/gui_expanded_smoke.py
 tests/gui_smoke.py
@@ -81,6 +83,7 @@ tests/test_adb_transport.py
 tests/test_advanced_gui.py
 tests/test_apk.py
 tests/test_apk_checks.py
+tests/test_apk_pack.py
 tests/test_batch_folder.py
 tests/test_cli.py
 tests/test_companion.py

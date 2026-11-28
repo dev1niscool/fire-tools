@@ -49,6 +49,14 @@
           <button type="button" id="web-inspect">Check selected files</button>
           <button type="button" class="web-primary" id="web-google-review">Review installation</button>
         </div>
+        <h4>Personal APK pack</h4>
+        <p>Choose the four APKs from your personal copy’s <code>google-apks</code> folder, or use the exact APKMirror builds linked above. Save them once in this Chrome profile (about 285 MiB). On your next visit, load the set and review installation. Chrome rechecks the files each time. Clearing site data removes the copy.</p>
+        <div class="web-buttons">
+          <button type="button" id="web-pack-save">Save selected APKs</button>
+          <button type="button" id="web-pack-load">Load saved APKs</button>
+          <button type="button" id="web-pack-forget">Forget saved APKs</button>
+        </div>
+        <p id="web-pack-selection" hidden>Using the four verified APKs from this Chrome profile.</p>
         <div id="web-apk-results" hidden>
           <h4>File checks</h4>
           <ul class="web-results" id="web-apk-list"></ul>

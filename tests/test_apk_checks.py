@@ -67,6 +67,19 @@ class GoogleSignatureCheckTests(unittest.TestCase):
                       self.info.sha256, self.info.signer_sha256[0], 'No local scan record'):
             self.assertIn(field, report)
 
+    def test_bundled_cli_checks_the_hash_of_each_reviewed_file_after_selection(self):
+        from open_fire_toolkit.apk_pack import BUNDLED_HASHES
+        expected = next(iter(BUNDLED_HASHES))
+        selected = self.selected.rename(self.selected.with_name(expected))
+        with (patch('open_fire_toolkit.cli.bundled_apks', return_value=(selected,)),
+              patch('open_fire_toolkit.apk_checks.ApkVerifier') as factory):
+            factory.return_value.inspect.return_value = self.info
+            for args in (['check-apks', '--bundled'], [*self.options, '--bundled']):
+                with self.subTest(args=args):
+                    code, report = self.invoke(args)
+                    self.assertEqual(code, 1)
+                    self.assertIn('no longer matches its audited pack entry', report)
+
     def test_wrong_signer_package_sdk_split_and_replaced_selection_fail(self):
         from dataclasses import replace
         for metadata in ({'signer_sha256': ('a' * 64,)}, {'package': 'com.example.lookalike'},
